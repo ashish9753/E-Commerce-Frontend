@@ -1,45 +1,65 @@
 import { useNavigate } from 'react-router-dom';
 import { categories } from '../../data/categories';
 
+// Amazon-style: white card panels in a 5-col grid, each showing category + sub-items
+const FEATURED_CATS = [
+  { ...categories[2], subs: ['Smart TV', '4K TV', 'OLED', 'QLED'] },          // Televisions
+  { ...categories[6], subs: ['Android', 'iPhones', 'Tablets', 'Accessories'] }, // Smartphones
+  { ...categories[5], subs: ['Ultrabooks', 'Gaming', 'Business', '2-in-1'] },   // Laptops
+  { ...categories[1], subs: ['Single Door', 'Double Door', 'Side-by-Side', 'French Door'] }, // Refrigerators
+  { ...categories[0], subs: ['Split AC', 'Window AC', 'Tower AC', 'Cassette'] }, // AC
+  { ...categories[4], subs: ['Microwave', 'Mixer', 'Gas Stove', 'Coffee Maker'] }, // Kitchen
+  { ...categories[8], subs: ['Soundbars', 'Headphones', 'Earbuds', 'Speakers'] }, // Audio
+  { ...categories[7], subs: ['Consoles', 'Gaming PCs', 'Accessories', 'Chairs'] }, // Gaming
+];
+
 export default function CategoryGrid() {
   const navigate = useNavigate();
   return (
-    <section className="py-18">
-      <div className="wrap">
-        <div className="flex items-end justify-between mb-9 gap-6">
-          <div>
-            <div className="kicker">Categories</div>
-            <h2 className="font-serif text-[44px] leading-none tracking-[-0.025em] font-normal mt-2">Shop by <i className="text-accent">category</i></h2>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 12 }}>
+      {FEATURED_CATS.slice(0, 4).map(cat => (
+        <div key={cat.id} style={{ background: 'white', borderRadius: 8, padding: '16px 16px 0', cursor: 'pointer', boxShadow: '0 1px 3px #0000000d' }}
+          onClick={() => navigate(`/products?category=${encodeURIComponent(cat.name)}`)}>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12, color: '#0f172a' }}>
+            {cat.emo} Shop {cat.name}
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/products')}>View all</button>
-        </div>
-
-        <div className="grid grid-cols-6 gap-3.5 max-lg:grid-cols-4 max-md:grid-cols-3">
-          <div
-            className="col-span-2 bg-ink text-white rounded-[18px] p-6 relative overflow-hidden flex flex-col justify-between items-start cursor-pointer min-h-40 transition-all duration-250 hover:-translate-y-1 hover:shadow-lg"
-            onClick={() => navigate('/products?category=Televisions')}
-          >
-            <div className="absolute -right-7 -top-7 w-45 h-45 rounded-full bg-accent/18" />
-            <span className="text-[64px] leading-none relative">📺</span>
-            <div>
-              <div className="font-serif text-[22px] font-normal leading-[1.1]">Smart TVs</div>
-              <div className="text-white/50 text-[11px] font-medium mt-0.75">95 Products</div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 }}>
+            {cat.subs.map(sub => (
+              <div key={sub}
+                onClick={e => { e.stopPropagation(); navigate(`/products?category=${encodeURIComponent(cat.name)}`); }}
+                style={{ background: '#f8fafc', borderRadius: 6, padding: '10px 8px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151', cursor: 'pointer', border: '1px solid #f1f5f9' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
+                {sub}
+              </div>
+            ))}
           </div>
-
-          {categories.slice(0, 8).map(c => (
-            <div
-              key={c.id}
-              className="bg-surface rounded-[18px] px-4 py-5.5 pb-4.5 text-center relative overflow-hidden cursor-pointer transition-all duration-250 border border-transparent hover:bg-white hover:border-line-2 hover:-translate-y-0.75 hover:shadow-md"
-              onClick={() => navigate(`/products?category=${encodeURIComponent(c.name)}`)}
-            >
-              <span className="text-[42px] leading-none mb-3.5 block">{c.emo}</span>
-              <div className="text-[13px] font-bold tracking-[-0.01em]">{c.name}</div>
-              <div className="text-[11px] text-soft mt-0.75 font-medium">{c.count} Products</div>
-            </div>
-          ))}
+          <div style={{ padding: '10px 0 12px', fontSize: 12, color: '#007185', fontWeight: 600 }}>
+            See all →
+          </div>
         </div>
-      </div>
-    </section>
+      ))}
+      {FEATURED_CATS.slice(4, 8).map(cat => (
+        <div key={cat.id} style={{ background: 'white', borderRadius: 8, padding: '16px 16px 0', cursor: 'pointer', boxShadow: '0 1px 3px #0000000d' }}
+          onClick={() => navigate(`/products?category=${encodeURIComponent(cat.name)}`)}>
+          <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12, color: '#0f172a' }}>
+            {cat.emo} Shop {cat.name}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {cat.subs.map(sub => (
+              <div key={sub}
+                style={{ background: '#f8fafc', borderRadius: 6, padding: '10px 8px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151', border: '1px solid #f1f5f9' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}>
+                {sub}
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '10px 0 12px', fontSize: 12, color: '#007185', fontWeight: 600 }}>
+            See all →
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

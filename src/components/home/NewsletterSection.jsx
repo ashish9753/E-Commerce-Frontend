@@ -15,31 +15,37 @@ export default function NewsletterSection() {
   };
 
   return (
-    <section className="py-18">
-      <div className="wrap">
-        <div className="bg-surface rounded-3xl p-15 grid grid-cols-2 gap-12 items-center max-md:grid-cols-1 max-md:p-8">
-          <div>
-            <div className="kicker">Newsletter</div>
-            <h3 className="font-serif text-[42px] leading-[1.05] tracking-tight font-normal mt-2">
-              Get exclusive deals & <i>early access</i>
-            </h3>
-            <p className="text-mute mt-2.5">Join 50,000+ subscribers. Get the best deals, new arrivals, and exclusive offers right in your inbox.</p>
-          </div>
-          <div>
-            <form className="flex gap-2.5 mt-5" onSubmit={handleSubmit}>
-              <input
-                className="input h-12.5 flex-1"
-                type="email"
-                placeholder="Enter your email address"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary h-12.5">Subscribe</button>
-            </form>
-            <p className="text-xs text-mute mt-2.5">No spam. Unsubscribe anytime. By subscribing you agree to our privacy policy.</p>
-          </div>
+    <div style={{ background: 'white', borderRadius: 8, padding: '28px 24px', boxShadow: '0 1px 3px #0000000d',
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'center' }}>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: '#FF5A1F', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 8 }}>Newsletter</div>
+        <div style={{ fontWeight: 800, fontSize: 22, color: '#0f172a', lineHeight: 1.2, marginBottom: 8 }}>
+          Get exclusive deals &amp; early access
         </div>
+        <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6, margin: 0 }}>
+          Join 50,000+ subscribers. Get the best deals, new arrivals, and exclusive offers right in your inbox.
+        </p>
       </div>
-    </section>
+      <div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{ flex: 1, height: 40, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 6,
+              fontSize: 13, outline: 'none' }}
+          />
+          <button type="submit"
+            style={{ height: 40, padding: '0 20px', background: '#FF5A1F', color: 'white', border: 'none',
+              borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Subscribe
+          </button>
+        </form>
+        <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>
+          No spam. Unsubscribe anytime. By subscribing you agree to our privacy policy.
+        </p>
+      </div>
+    </div>
   );
 }

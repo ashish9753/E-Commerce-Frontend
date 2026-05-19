@@ -128,8 +128,19 @@ function NotificationDropdown({ onClose }) {
   );
 }
 
-const navBtn = 'px-3 py-2 rounded-[10px] flex items-center gap-1.75 text-[13px] font-semibold text-mute transition-all relative bg-transparent border-0 cursor-pointer hover:bg-surface hover:text-ink';
-const catBtn = (active) => `flex items-center gap-2 h-8 px-3.5 rounded-full text-[13px] font-semibold whitespace-nowrap transition-all cursor-pointer border-0 ${active ? 'bg-ink text-white' : 'text-mute bg-transparent hover:bg-surface hover:text-ink'}`;
+function CategoryBtn({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: '4px 12px', height: 36, background: 'transparent', border: `1px solid ${active ? 'white' : 'transparent'}`,
+      borderRadius: 3, color: 'white', fontSize: 13, fontWeight: active ? 700 : 400, cursor: 'pointer',
+      whiteSpace: 'nowrap', flexShrink: 0,
+    }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'white'; }}
+      onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'transparent'; }}>
+      {label}
+    </button>
+  );
+}
 
 export default function Header() {
   const navigate = useNavigate();
@@ -187,131 +198,163 @@ export default function Header() {
     navigate(`/product/${product._id || product.id}`);
   };
 
-  return (
-    <>
-      <div className="bg-ink text-white text-xs font-medium py-2.25 text-center tracking-[0.02em]">
-        Free delivery in Kathmandu Valley over Rs. 5,000
-        <span className="text-[#444] mx-3.5">·</span>
-        <strong className="text-[#FFB89B] font-bold">DASHAIN50</strong> for flat 50% off select appliances
-        <span className="text-[#444] mx-3.5">·</span>
-        Authorized dealer warranty on every product
-      </div>
+  const iconBtn = (onClick, children) => (
+    <button onClick={onClick} style={{
+      position: 'relative', display: 'flex', alignItems: 'center', gap: 5,
+      padding: '6px 10px', borderRadius: 4, background: 'transparent', border: '1px solid transparent',
+      color: 'white', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+    }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
+      {children}
+    </button>
+  );
 
-      <nav className="sticky top-0 z-50 bg-white/92 backdrop-saturate-180 backdrop-blur-sm border-b border-line">
-        <div className="wrap grid grid-cols-[auto_1fr_auto] gap-7 items-center h-18">
-          <div className="flex items-center gap-2.5 font-extrabold tracking-[-0.02em] text-[19px] cursor-pointer" onClick={() => navigate('/')}>
-            <div className="logo-mark" />
-            Trade<span className="text-accent">Engine</span>
+  return (
+    <nav style={{ position: 'sticky', top: 0, zIndex: 50 }}>
+      {/* Main dark bar */}
+      <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
+        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
+          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 20, alignItems: 'center', height: 64 }}>
+
+          {/* Logo */}
+          <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
+            fontWeight: 800, fontSize: 19, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
+            padding: '4px 8px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
+            Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
           </div>
 
-          <div className="relative max-w-140 mx-auto w-full" ref={searchRef}>
-            <form onSubmit={handleSearchSubmit}>
-              <Search className="absolute top-1/2 left-4 -translate-y-1/2 text-mute pointer-events-none" size={16} />
+          {/* Search */}
+          <div style={{ position: 'relative', maxWidth: 700, width: '100%', margin: '0 auto' }} ref={searchRef}>
+            <form onSubmit={handleSearchSubmit} style={{ display: 'flex' }}>
               <input
-                className="w-full h-11.5 border border-line-2 bg-surface-2 rounded-xl pl-11 pr-27.5 text-sm outline-none transition-all focus:border-ink focus:bg-white"
+                style={{ flex: 1, height: 40, padding: '0 12px 0 14px', border: 'none', borderRadius: '4px 0 0 4px',
+                  fontSize: 14, outline: 'none', background: 'white', color: '#0f172a' }}
                 placeholder="Search products, brands & categories…"
                 value={query}
                 onChange={handleSearch}
                 onFocus={() => query.trim().length > 1 && setShowResults(true)}
                 autoComplete="off"
               />
-              <button type="submit" className="absolute right-1.5 top-1.5 h-8.5 px-3 rounded-lg bg-ink text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer border-0">
-                Search
+              <button type="submit" style={{ height: 40, padding: '0 16px', background: '#FF5A1F',
+                border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <Search size={18} color="white" />
               </button>
             </form>
 
             {showResults && (
-              <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-line rounded-[14px] shadow-xl z-50 overflow-hidden max-h-80 overflow-y-auto">
+              <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'white',
+                border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px #00000022', zIndex: 200,
+                overflow: 'hidden', maxHeight: 320, overflowY: 'auto' }}>
                 {results.length > 0 ? results.map(p => (
-                  <div key={p._id || p.id} className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-surface transition-colors" onClick={() => selectResult(p)}>
-                    <div className="text-2xl w-10 h-10 bg-surface rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-                      {p.images?.[0] ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-contain" /> : '🛍️'}
+                  <div key={p._id || p.id} onClick={() => selectResult(p)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+                    <div style={{ width: 40, height: 40, background: '#f4f6f8', borderRadius: 6, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                      {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🛍️'}
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold">{p.name}</div>
-                      <div className="text-[11px] text-mute">{p.brand}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{p.brand}</div>
                     </div>
-                    <div className="text-sm font-bold ml-auto whitespace-nowrap">{formatPriceShort(p.price)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{formatPriceShort(p.price)}</div>
                   </div>
                 )) : (
-                  <div className="px-8 py-8 text-center text-mute">No products found for "{query}"</div>
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No products found for "{query}"</div>
                 )}
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {compareCount > 0 && (
-              <button className={navBtn} onClick={() => navigate('/compare')}>
+          {/* Right icons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {compareCount > 0 && iconBtn(() => navigate('/compare'), (
+              <>
                 <GitCompare size={18} />
-                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{compareCount}</span>
-              </button>
-            )}
-            <button className={navBtn} onClick={() => navigate('/wishlist')}>
-              <Heart size={18} />
-              {wishCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{wishCount}</span>}
-            </button>
+                <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
+                  background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center' }}>{compareCount}</span>
+              </>
+            ))}
+
+            {iconBtn(() => navigate('/wishlist'), (
+              <>
+                <Heart size={18} />
+                {wishCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                  borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{wishCount}</span>}
+              </>
+            ))}
+
             {user && (
-              <div style={{ position:'relative' }} ref={bellRef}>
-                <button className={navBtn} onClick={() => setShowNotifs(v => !v)}>
-                  <Bell size={18} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">
+              <div style={{ position: 'relative' }} ref={bellRef}>
+                {iconBtn(() => setShowNotifs(v => !v), (
+                  <>
+                    <Bell size={18} />
+                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                      borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </button>
+                    </span>}
+                  </>
+                ))}
                 {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
               </div>
             )}
-            <button className={navBtn} onClick={() => navigate('/cart')}>
-              <ShoppingCart size={18} />
-              {cartCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{cartCount}</span>}
-            </button>
+
+            {iconBtn(() => navigate('/cart'), (
+              <>
+                <ShoppingCart size={18} />
+                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                  borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartCount}</span>}
+              </>
+            ))}
+
             {user ? (
               <>
-                {user.role === 'admin' && (
-                  <button className={navBtn} onClick={() => navigate('/admin')} title="Admin Dashboard">
-                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 6, background: '#7c3aed22', color: '#7c3aed' }}>ADMIN</span>
-                  </button>
-                )}
-                {user.role === 'seller' && (
-                  <button className={navBtn} onClick={() => navigate('/seller')} title="Seller Dashboard">
-                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 6, background: '#f59e0b22', color: '#f59e0b' }}>SELLER</span>
-                  </button>
-                )}
-                <button className={navBtn} onClick={() => navigate('/support')} title="Support">
-                  <span style={{ fontSize:13 }}>🎫</span>
-                </button>
-                <button className={navBtn} onClick={() => navigate('/profile')}>
-                  <User size={18} />
-                  <span>{user.name.split(' ')[0]}</span>
-                </button>
+                {user.role === 'admin' && iconBtn(() => navigate('/admin'), (
+                  <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
+                    background: '#7c3aed33', color: '#c4b5fd' }}>ADMIN</span>
+                ))}
+                {user.role === 'seller' && iconBtn(() => navigate('/seller'), (
+                  <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
+                    background: '#f59e0b22', color: '#fcd34d' }}>SELLER</span>
+                ))}
+                {iconBtn(() => navigate('/support'), <span style={{ fontSize: 14 }}>🎫</span>)}
+                {iconBtn(() => navigate('/profile'), (
+                  <>
+                    <User size={18} />
+                    <span>{user.name.split(' ')[0]}</span>
+                  </>
+                ))}
               </>
             ) : (
-              <button className="btn btn-primary btn-sm" onClick={() => navigate('/login')}>Sign In</button>
+              <button onClick={() => navigate('/login')} style={{ padding: '7px 16px', background: 'transparent',
+                border: '1px solid white', borderRadius: 4, color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                Sign In
+              </button>
             )}
           </div>
         </div>
+      </div>
 
-        <div className="border-b border-line bg-white">
-          <div className="flex items-center gap-1 h-12 overflow-x-auto scrollbar-none px-8 max-w-330 mx-auto">
-            <button className={catBtn(activeCategory === 'All')} onClick={() => { setActiveCategory('All'); navigate('/products'); }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              All Products
-            </button>
-            {categories.map(c => (
-              <button
-                key={c.id}
-                className={catBtn(activeCategory === c.name)}
-                onClick={() => { setActiveCategory(c.name); navigate(`/products?category=${encodeURIComponent(c.name)}`); }}
-              >
-                {c.emo} {c.name}
-              </button>
-            ))}
-          </div>
+      {/* Category bar */}
+      <div style={{ background: '#232f3e', borderBottom: '1px solid #37475a' }}>
+        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 8px',
+          display: 'flex', alignItems: 'center', gap: 2, height: 40,
+          overflowX: 'auto', scrollbarWidth: 'none' }}>
+          <CategoryBtn label="All Products" active={activeCategory === 'All'} onClick={() => { setActiveCategory('All'); navigate('/products'); }} />
+          {categories.map(c => (
+            <CategoryBtn key={c.id} label={`${c.emo} ${c.name}`} active={activeCategory === c.name}
+              onClick={() => { setActiveCategory(c.name); navigate(`/products?category=${encodeURIComponent(c.name)}`); }} />
+          ))}
         </div>
-      </nav>
-    </>
+      </div>
+    </nav>
   );
 }

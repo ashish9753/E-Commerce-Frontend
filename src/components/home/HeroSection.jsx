@@ -1,63 +1,133 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+const SLIDES = [
+  {
+    src: '/Banner1.png',
+    badge: 'FLASH SALE',
+    title: 'Up to 20% Off',
+    sub: 'On Premium Home Appliances',
+    cta: 'Shop Now',
+    link: '/products',
+    align: 'left',
+  },
+  {
+    src: '/Banner2.png',
+    badge: 'NEW ARRIVALS',
+    title: 'Latest Electronics',
+    sub: 'Brand new 2024 models with warranty',
+    cta: 'Explore Now',
+    link: '/products?sort=newest',
+    align: 'left',
+  },
+  {
+    src: '/Banner3.png',
+    badge: 'DASHAIN SPECIAL',
+    title: 'Flat 50% Off',
+    sub: 'Select appliances — limited time only',
+    cta: 'View Deals',
+    link: '/products',
+    align: 'left',
+  },
+];
 
 export default function HeroSection() {
   const navigate = useNavigate();
-  return (
-    <section className="pt-12 pb-0">
-      <div className="wrap">
-        <div className="grid grid-cols-[1.05fr_.95fr] gap-12 items-stretch max-md:grid-cols-1">
-          <div className="flex flex-col justify-center gap-5">
-            <div className="inline-flex items-center gap-2.5 bg-surface rounded-full py-1.5 pl-1.5 pr-3.5 text-xs font-semibold text-ink w-fit">
-              <b className="bg-accent text-white text-[10px] tracking-[0.06em] px-2.25 py-0.75 rounded-full font-bold">NEW</b>
-              2024 Season Appliances
-            </div>
-            <h1 className="font-serif text-[clamp(48px,5.5vw,80px)] leading-[.98] tracking-[-0.035em] font-semibold text-ink">
-              Power your <i className="text-accent">home</i> with the <span className="hero-underline">best</span> tech
-            </h1>
-            <p className="text-[17px] text-mute max-w-120 leading-[1.55]">
-              Nepal's largest electronics & home appliances store. Authorized dealer warranty, EMI options, doorstep delivery across the Valley.
-            </p>
-            <div className="flex gap-3 mt-1">
-              <button className="btn btn-accent" onClick={() => navigate('/products')}>Shop Now</button>
-              <button className="btn btn-ghost" onClick={() => navigate('/products?category=Air Conditioners')}>View Deals</button>
-            </div>
-            <div className="flex gap-9 mt-6 pt-6 border-t border-line">
-              {[['50K+','Happy Customers'],['200+','Brands'],['10K+','Products']].map(([n,l]) => (
-                <div key={l}>
-                  <div className="text-[28px] font-bold tracking-[-0.02em]">{n}</div>
-                  <div className="text-xs text-mute font-medium tracking-[0.04em] uppercase mt-0.5">{l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+  const [slide, setSlide] = useState(0);
 
-          <div className="grid grid-cols-[1.3fr_1fr] grid-rows-[1fr_.8fr] gap-3.5 min-h-[540px] max-md:hidden">
-            <div className="row-span-2 rounded-[18px] relative overflow-hidden flex items-end justify-center p-6" style={{ background: 'linear-gradient(170deg,#FFF4EE 0%,#FFE8D9 100%)' }}>
-              <span className="text-[200px] leading-none absolute top-2/5 left-1/2 -translate-x-1/2 -translate-y-1/2">🧊</span>
-              <span className="absolute top-3.5 left-3.5 bg-accent text-white text-[10px] font-bold px-2.5 py-1.25 rounded-full uppercase tracking-[0.06em]">−42%</span>
-              <div className="relative z-10 w-full flex items-end justify-between">
-                <span className="text-sm font-bold">Samsung Refrigerator</span>
-                <span className="text-[13px] font-semibold"><s className="text-soft mr-1.5 font-normal">Rs. 64,900</s>Rs. 37,500</span>
+  useEffect(() => {
+    const id = setInterval(() => setSlide(s => (s + 1) % SLIDES.length), 4500);
+    return () => clearInterval(id);
+  }, []);
+
+  const prev = () => setSlide(s => (s - 1 + SLIDES.length) % SLIDES.length);
+  const next = () => setSlide(s => (s + 1) % SLIDES.length);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', overflow: 'hidden', background: '#131921', lineHeight: 0 }}>
+      {/* Sliding track */}
+      <div style={{
+        display: 'flex',
+        transform: `translateX(-${slide * 100}%)`,
+        transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+        willChange: 'transform',
+      }}>
+        {SLIDES.map((s, i) => (
+          <div key={i} style={{ position: 'relative', width: '100%', flexShrink: 0, lineHeight: 0 }}>
+            <img
+              src={s.src}
+              alt={`Banner ${i + 1}`}
+              style={{ width: '100%', display: 'block', objectFit: 'cover', maxHeight: 500 }}
+            />
+            {/* Dark gradient on left so text is readable */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 45%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+            {/* Text overlay */}
+            <div style={{
+              position: 'absolute', top: '50%', left: '6%', transform: 'translateY(-50%)',
+              color: 'white', lineHeight: 1,
+            }}>
+              <div style={{
+                display: 'inline-block', background: '#FF5A1F', color: 'white',
+                fontSize: 11, fontWeight: 800, padding: '4px 12px', borderRadius: 4,
+                letterSpacing: '.1em', marginBottom: 14, lineHeight: 1.4,
+              }}>
+                {s.badge}
               </div>
-            </div>
-            <div className="rounded-[18px] bg-ink text-white relative overflow-hidden flex items-end justify-center p-6">
-              <span className="text-[100px] leading-none absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2">📺</span>
-              <span className="absolute top-3.5 left-3.5 bg-white text-ink text-[10px] font-bold px-2.5 py-1.25 rounded-full uppercase tracking-[0.06em]">New</span>
-              <div className="relative z-10 w-full flex items-end justify-between">
-                <span className="text-sm font-bold">Sony 55" 4K TV</span>
-                <span className="text-[13px] font-semibold">Rs. 1,12,000</span>
+              <div style={{
+                fontSize: 'clamp(28px, 4vw, 52px)', fontWeight: 900,
+                lineHeight: 1.1, marginBottom: 10, letterSpacing: '-.02em',
+                textShadow: '0 2px 12px rgba(0,0,0,0.4)',
+              }}>
+                {s.title}
               </div>
-            </div>
-            <div className="rounded-[18px] bg-surface relative overflow-hidden flex items-end justify-center p-6">
-              <span className="text-[100px] leading-none absolute top-[48%] left-1/2 -translate-x-1/2 -translate-y-1/2">❄️</span>
-              <div className="relative z-10 w-full flex items-end justify-between">
-                <span className="text-sm font-bold">LG Inverter AC</span>
-                <span className="text-[13px] font-semibold">Rs. 72,500</span>
+              <div style={{
+                fontSize: 'clamp(13px, 1.4vw, 17px)', color: 'rgba(255,255,255,0.82)',
+                marginBottom: 22, fontWeight: 400, lineHeight: 1.5,
+                textShadow: '0 1px 6px rgba(0,0,0,0.3)',
+              }}>
+                {s.sub}
               </div>
+              <button onClick={() => navigate(s.link)} style={{
+                background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 6,
+                padding: '11px 26px', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                letterSpacing: '.01em', lineHeight: 1,
+              }}>
+                {s.cta} →
+              </button>
             </div>
           </div>
-        </div>
+        ))}
       </div>
-    </section>
+
+      {/* Left arrow */}
+      <button onClick={prev}
+        style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
+          background: 'rgba(0,0,0,.35)', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer',
+          padding: '28px 12px', lineHeight: 1 }}>
+        ‹
+      </button>
+
+      {/* Right arrow */}
+      <button onClick={next}
+        style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
+          background: 'rgba(0,0,0,.35)', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer',
+          padding: '28px 12px', lineHeight: 1 }}>
+        ›
+      </button>
+
+      {/* Dots */}
+      <div style={{ position: 'absolute', bottom: 14, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6 }}>
+        {SLIDES.map((_, i) => (
+          <button key={i} onClick={() => setSlide(i)}
+            style={{ width: i === slide ? 22 : 7, height: 7, borderRadius: 4,
+              background: i === slide ? 'white' : 'rgba(255,255,255,.4)',
+              border: 'none', cursor: 'pointer', transition: 'all .3s', padding: 0 }} />
+        ))}
+      </div>
+    </div>
   );
 }

@@ -1,19 +1,14 @@
 const brands = ['Samsung', 'LG', 'Sony', 'Bosch', 'Philips', 'Apple', 'Xiaomi', 'JBL', 'Asus', 'IFB', 'Prestige', 'Atomberg'];
 
-const styles = [
-  'font-serif text-[30px] font-normal',
-  'font-extrabold tracking-[-0.05em] uppercase text-[22px]',
-  'font-serif italic text-[28px]',
-  'font-light tracking-[0.4em] uppercase text-sm',
-];
-
 export default function BrandStrip() {
   const doubled = [...brands, ...brands];
   return (
-    <div className="py-9 border-t border-b border-line bg-white mt-18 overflow-hidden">
-      <div className="flex gap-16 items-center animate-marquee">
+    <div style={{ background: 'white', borderRadius: 8, padding: '14px 0', marginBottom: 12,
+      boxShadow: '0 1px 3px #0000000d', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', gap: 40, alignItems: 'center' }} className="animate-marquee">
         {doubled.map((b, i) => (
-          <span key={i} className={`text-soft italic whitespace-nowrap shrink-0 ${styles[i % 4]}`}>{b}</span>
+          <span key={i} style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: 13, fontWeight: 600,
+            color: '#9ca3af', letterSpacing: '.04em' }}>{b}</span>
         ))}
       </div>
     </div>

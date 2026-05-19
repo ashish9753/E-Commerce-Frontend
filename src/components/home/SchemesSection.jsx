@@ -1,41 +1,32 @@
 import { useNavigate } from 'react-router-dom';
 
-const schemes = [
-  { bg: 'linear-gradient(150deg,#FFE8D9 0%,#FFD4B5 100%)', color: 'text-ink', accentLabel: false, label: 'Limited Time', title: 'Dashain Offer', visual: '🪔', pct: '50' },
-  { bg: '#0A0A0A', color: 'text-white', accentLabel: true, label: 'Flash Sale', title: 'Flash Sale', visual: '⚡', pct: '30' },
-  { bg: 'linear-gradient(150deg,#E8F1FE 0%,#D5E5FC 100%)', color: 'text-info', accentLabel: false, label: 'Season Special', title: 'Summer Scheme', visual: '☀️', pct: '25' },
+const deals = [
+  { label: 'Up to 50% off', sub: 'On Samsung & LG Appliances', visual: '🧊', bg: 'linear-gradient(135deg,#FFF4EE,#FFE0CC)', color: '#c45500', badgeBg: '#FF5A1F', badge: '−50%', link: '/products?category=Refrigerators' },
+  { label: 'Up to 30% off', sub: 'Smart TVs — Sony, Samsung, LG', visual: '📺', bg: 'linear-gradient(135deg,#f0f9ff,#dbeafe)', color: '#1d4ed8', badgeBg: '#3b82f6', badge: '−30%', link: '/products?category=Televisions' },
+  { label: 'Up to 25% off', sub: 'Laptops & Smartphones', visual: '💻', bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', color: '#166534', badgeBg: '#22c55e', badge: '−25%', link: '/products?category=Laptops' },
+  { label: 'DASHAIN50', sub: 'Flat 50% off select appliances', visual: '🪔', bg: 'linear-gradient(135deg,#fefce8,#fef9c3)', color: '#854d0e', badgeBg: '#f59e0b', badge: 'COUPON', link: '/products' },
 ];
 
 export default function SchemesSection() {
   const navigate = useNavigate();
   return (
-    <section className="py-18">
-      <div className="wrap">
-        <div className="flex items-end justify-between mb-9 gap-6">
-          <div>
-            <div className="kicker">Offers</div>
-            <h2 className="font-serif text-[44px] leading-none tracking-[-0.025em] font-normal mt-2">Ongoing <i className="text-accent">schemes</i></h2>
-          </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 12 }}>
+      {deals.map((d, i) => (
+        <div key={i} onClick={() => navigate(d.link)}
+          style={{ background: d.bg, borderRadius: 8, padding: '18px 16px', cursor: 'pointer',
+            boxShadow: '0 1px 3px #0000000d', position: 'relative', overflow: 'hidden', minHeight: 140 }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+          <span style={{ display: 'inline-block', background: d.badgeBg, color: 'white', fontSize: 10,
+            fontWeight: 800, padding: '2px 8px', borderRadius: 4, letterSpacing: '.06em', marginBottom: 8 }}>
+            {d.badge}
+          </span>
+          <div style={{ fontWeight: 800, fontSize: 16, color: d.color, lineHeight: 1.2, marginBottom: 4 }}>{d.label}</div>
+          <div style={{ fontSize: 11, color: d.color, opacity: .8, marginBottom: 12 }}>{d.sub}</div>
+          <div style={{ fontSize: 12, color: d.color, fontWeight: 700 }}>Shop now →</div>
+          <span style={{ position: 'absolute', right: -8, bottom: -8, fontSize: 72, lineHeight: 1, opacity: .5, userSelect: 'none' }}>{d.visual}</span>
         </div>
-        <div className="grid grid-cols-3 gap-[18px] max-md:grid-cols-1">
-          {schemes.map((s, i) => (
-            <div
-              key={i}
-              className={`relative overflow-hidden rounded-[20px] p-7 min-h-50 flex flex-col justify-between cursor-pointer ${s.color}`}
-              style={{ background: s.bg }}
-              onClick={() => navigate('/products')}
-            >
-              <div>
-                <div className={`text-[11px] font-bold tracking-[0.12em] uppercase opacity-70 ${s.accentLabel ? '!text-accent !opacity-100' : ''}`}>{s.label}</div>
-                <h3 className="font-serif font-normal text-[34px] leading-[1.05] tracking-[-0.02em] mt-3">{s.title}</h3>
-                <div className="text-[80px] font-extrabold tracking-[-0.04em] leading-[0.9]">{s.pct}%</div>
-              </div>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${s.bg === '#0A0A0A' ? 'bg-white/12' : 'bg-black/8'}`}>→</div>
-              <span className="absolute -right-2.5 -bottom-5 text-[140px] leading-none opacity-85 pointer-events-none">{s.visual}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
+      ))}
+    </div>
   );
 }

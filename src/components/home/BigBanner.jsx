@@ -18,27 +18,41 @@ export default function BigBanner() {
   }, []);
 
   return (
-    <section className="py-18">
-      <div className="wrap">
-        <div className="bg-ink text-white rounded-3xl p-16 grid grid-cols-[1.2fr_1fr] gap-12 items-center relative overflow-hidden max-md:grid-cols-1 max-md:p-8">
-          <div className="absolute -right-25 -top-25 w-100 h-100 rounded-full pointer-events-none"
-            style={{ background: 'radial-gradient(circle,rgba(255,90,31,.2) 0%,transparent 70%)' }} />
-          <div>
-            <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-accent">Flash Sale</div>
-            <h2 className="font-serif text-[56px] leading-none tracking-[-0.025em] font-normal mt-3.5">Best deals, <i className="text-accent">limited</i> time</h2>
-            <p className="text-white/60 max-w-95 mt-3.5">Up to 50% off on top brands. Free delivery on all orders above Rs. 5,000. Don't miss out!</p>
-            <button className="btn btn-accent mt-6" onClick={() => navigate('/products')}>Shop the Sale →</button>
-          </div>
-          <div className="flex gap-3.5 justify-end relative z-10 max-md:justify-start">
-            {[['Days', time.d], ['Hours', time.h], ['Mins', time.m], ['Secs', time.s]].map(([label, val]) => (
-              <div key={label} className="bg-white/6 border border-white/10 rounded-[14px] p-4.5 min-w-22 text-center backdrop-blur-sm">
-                <div className="font-serif text-[48px] leading-none font-normal">{val}</div>
-                <div className="text-[10px] tracking-[0.14em] uppercase text-white/50 mt-1.5">{label}</div>
-              </div>
-            ))}
-          </div>
+    <div style={{ background: '#131921', borderRadius: 8, padding: '28px 32px', marginBottom: 12,
+      display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center',
+      boxShadow: '0 1px 3px #0000000d', position: 'relative', overflow: 'hidden' }}>
+      {/* Glow */}
+      <div style={{ position: 'absolute', right: -80, top: -80, width: 300, height: 300, borderRadius: '50%',
+        background: 'radial-gradient(circle,rgba(255,90,31,.18) 0%,transparent 70%)', pointerEvents: 'none' }} />
+
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'inline-block', background: '#FF5A1F', color: 'white', fontSize: 10,
+          fontWeight: 800, padding: '3px 10px', borderRadius: 4, letterSpacing: '.1em', marginBottom: 12 }}>
+          FLASH SALE
         </div>
+        <h2 style={{ color: 'white', fontWeight: 800, fontSize: 32, margin: '0 0 8px', lineHeight: 1.15 }}>
+          Best deals, <span style={{ color: '#FF5A1F' }}>limited</span> time
+        </h2>
+        <p style={{ color: 'rgba(255,255,255,.55)', fontSize: 14, margin: '0 0 20px', maxWidth: 400 }}>
+          Up to 50% off on top brands. Free delivery on all orders above Rs. 5,000.
+        </p>
+        <button onClick={() => navigate('/products')}
+          style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 6,
+            padding: '11px 24px', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+          Shop the Sale →
+        </button>
       </div>
-    </section>
+
+      {/* Countdown */}
+      <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+        {[['Days', time.d], ['Hrs', time.h], ['Min', time.m], ['Sec', time.s]].map(([label, val]) => (
+          <div key={label} style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)',
+            borderRadius: 8, padding: '14px 16px', minWidth: 64, textAlign: 'center' }}>
+            <div style={{ color: 'white', fontWeight: 800, fontSize: 32, lineHeight: 1 }}>{val}</div>
+            <div style={{ color: 'rgba(255,255,255,.4)', fontSize: 10, fontWeight: 600, letterSpacing: '.1em', marginTop: 6 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
