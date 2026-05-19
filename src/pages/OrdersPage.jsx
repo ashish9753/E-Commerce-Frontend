@@ -2,7 +2,107 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
+import { reviewsApi } from '../api/reviews';
 import { formatPriceShort, formatDate } from '../utils/formatters';
+
+function StarPicker({ value, onChange }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div style={{ display:'flex', gap:4 }}>
+      {[1,2,3,4,5].map(n => (
+        <span key={n} onMouseEnter={() => setHovered(n)} onMouseLeave={() => setHovered(0)}
+          onClick={() => onChange(n)}
+          style={{ fontSize:32, cursor:'pointer', color: n <= (hovered || value) ? '#FFA41C' : '#ddd', transition:'color .1s' }}>
+          ★
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ReviewModal({ item, orderId, onClose, onDone }) {
+  const [rating, setRating]   = useState(0);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [done, setDone]       = useState(false);
+
+  const labels = ['','Terrible','Poor','Okay','Good','Excellent'];
+
+  const submit = async () => {
+    if (!rating) { setError('Please select a star rating.'); return; }
+    setSaving(true); setError('');
+    try {
+      await reviewsApi.create({
+        productId: item.product?._id || item.product,
+        orderId,
+        rating,
+        comment,
+      });
+      setDone(true);
+      setTimeout(() => { onDone(); onClose(); }, 1200);
+    } catch(e) {
+      setError(e?.response?.data?.message || 'Failed to submit review.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background:'white', borderRadius:16, width:'100%', maxWidth:480, boxShadow:'0 20px 60px #0003', overflow:'hidden' }}>
+        {/* Header */}
+        <div style={{ background:'#131921', padding:'16px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ color:'white', fontWeight:700, fontSize:15 }}>Write a Review</span>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:'#aaa', fontSize:20, cursor:'pointer', lineHeight:1 }}>✕</button>
+        </div>
+
+        {done ? (
+          <div style={{ padding:40, textAlign:'center' }}>
+            <div style={{ fontSize:48, marginBottom:12 }}>🎉</div>
+            <div style={{ fontWeight:700, fontSize:16 }}>Review submitted!</div>
+            <div style={{ color:'#888', marginTop:6, fontSize:13 }}>Thank you for your feedback.</div>
+          </div>
+        ) : (
+          <div style={{ padding:24 }}>
+            {/* Product */}
+            <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:20, padding:'12px 14px', background:'#f8fafc', borderRadius:10 }}>
+              <div style={{ width:52, height:52, border:'1px solid #eee', borderRadius:8, overflow:'hidden', flexShrink:0, background:'white', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                {item.image ? <img src={item.image} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} /> : <span style={{ fontSize:24 }}>📦</span>}
+              </div>
+              <div>
+                <div style={{ fontWeight:600, fontSize:14 }}>{item.title}</div>
+                <div style={{ fontSize:12, color:'#888', marginTop:2 }}>Qty: {item.quantity} · {formatPriceShort(item.price)} each</div>
+              </div>
+            </div>
+
+            {/* Stars */}
+            <div style={{ marginBottom:16, textAlign:'center' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#555', marginBottom:8, textTransform:'uppercase', letterSpacing:'.05em' }}>Your Rating</div>
+              <StarPicker value={rating} onChange={setRating} />
+              {rating > 0 && <div style={{ fontSize:13, fontWeight:700, color:'#FFA41C', marginTop:6 }}>{labels[rating]}</div>}
+            </div>
+
+            {/* Comment */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#555', marginBottom:6, textTransform:'uppercase', letterSpacing:'.05em' }}>Your Review (optional)</div>
+              <textarea rows={4} value={comment} onChange={e=>setComment(e.target.value)}
+                placeholder="What did you like or dislike? How was the quality?"
+                style={{ width:'100%', border:'1px solid #ddd', borderRadius:8, padding:'10px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+              <div style={{ fontSize:11, color:'#aaa', textAlign:'right', marginTop:2 }}>{comment.length}/500</div>
+            </div>
+
+            {error && <div style={{ color:'#dc2626', fontSize:13, fontWeight:600, marginBottom:12, padding:'8px 12px', background:'#fef2f2', borderRadius:8 }}>{error}</div>}
+
+            <button onClick={submit} disabled={saving || !rating}
+              style={{ width:'100%', padding:'12px', borderRadius:10, background: rating ? '#FF5A1F' : '#ddd', color:'white', border:'none', fontWeight:700, fontSize:14, cursor: rating ? 'pointer' : 'not-allowed', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Submitting…' : 'Submit Review'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const STATUS_META = {
   PLACED:           { label: 'Order Placed',       color: '#f59e0b', bg: '#fef3c7' },
@@ -32,10 +132,11 @@ export default function OrdersPage() {
   const navigate  = useNavigate();
   const { user }  = useAuth();
   const { getMyOrders } = useOrders();
-  const [orders, setOrders]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState('All Orders');
-  const [search, setSearch]   = useState('');
+  const [orders, setOrders]       = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState('All Orders');
+  const [search, setSearch]       = useState('');
+  const [reviewTarget, setReview] = useState(null); // { item, orderId }
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -62,6 +163,14 @@ export default function OrdersPage() {
 
   return (
     <div style={{ background:'#f0f2f2', minHeight:'100vh', padding:'24px 0 60px' }}>
+      {reviewTarget && (
+        <ReviewModal
+          item={reviewTarget.item}
+          orderId={reviewTarget.orderId}
+          onClose={() => setReview(null)}
+          onDone={() => setReview(null)}
+        />
+      )}
       <div style={{ maxWidth:1000, margin:'0 auto', padding:'0 16px' }}>
 
         {/* Header */}
@@ -188,44 +297,76 @@ export default function OrdersPage() {
                         </div>
 
                         {/* Actions per item */}
-                        <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0 }}>
-                          <button onClick={()=>navigate(`/track?id=${order._id}`)}
-                            style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer',whiteSpace:'nowrap' }}>
-                            Track Package
-                          </button>
-                          {isDelivered && (
-                            <button onClick={()=>navigate(`/returns?orderId=${order._id}`)}
-                              style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer' }}>
-                              Return / Refund
-                            </button>
-                          )}
-                          <button onClick={()=>navigate(`/product/${item.product?._id||item.product}`)}
-                            style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer' }}>
-                            Buy Again
-                          </button>
-                        </div>
+                        {(() => {
+                          const prod = item.product || {};
+                          const isReturnable = prod.returnable !== false;
+                          const returnWindow = prod.returnWindow || 7;
+                          const deliveredAt = order.deliveredAt || order.updatedAt;
+                          const daysElapsed = deliveredAt ? Math.floor((Date.now() - new Date(deliveredAt).getTime()) / 86400000) : 0;
+                          const windowExpired = daysElapsed > returnWindow;
+                          const canReturn = isDelivered && isReturnable && !windowExpired;
+                          return (
+                            <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0, alignItems:'stretch' }}>
+                              <button onClick={()=>navigate(`/track?id=${order._id}`)}
+                                style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer',whiteSpace:'nowrap' }}>
+                                Track Package
+                              </button>
+                              {isDelivered && !isReturnable && (
+                                <span style={{ fontSize:11,fontWeight:600,padding:'6px 10px',borderRadius:20,background:'#fef2f2',color:'#dc2626',textAlign:'center',border:'1px solid #fecaca' }}>
+                                  🚫 Non-returnable
+                                </span>
+                              )}
+                              {isDelivered && isReturnable && windowExpired && (
+                                <span style={{ fontSize:11,fontWeight:600,padding:'6px 10px',borderRadius:20,background:'#fef2f2',color:'#dc2626',textAlign:'center',border:'1px solid #fecaca' }}>
+                                  Window expired
+                                </span>
+                              )}
+                              {canReturn && (
+                                <button onClick={()=>navigate(`/returns?orderId=${order._id}`)}
+                                  style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer' }}>
+                                  Return / Refund
+                                </button>
+                              )}
+                              {isDelivered && (
+                                <button onClick={() => setReview({ item, orderId: order._id })}
+                                  style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #FF5A1F',background:'linear-gradient(to bottom,#fff8f5,#ffe8d6)',color:'#FF5A1F',cursor:'pointer' }}>
+                                  ✍️ Review
+                                </button>
+                              )}
+                              <button onClick={()=>navigate(`/product/${prod._id||item.product}`)}
+                                style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer' }}>
+                                Buy Again
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
 
                   {/* Footer */}
-                  <div style={{ borderTop:'1px solid #eee', padding:'12px 20px', display:'flex', gap:12, alignItems:'center' }}>
+                  <div style={{ borderTop:'1px solid #eee', padding:'12px 20px', display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
                     <span style={{ fontSize:12, color:'#888' }}>
                       Payment: <strong style={{ color:'#333' }}>{order.paymentMethod}</strong>
                       {' · '}
                       <strong style={{ color: order.paymentStatus==='PAID'?'#007600':'#c7a200' }}>{order.paymentStatus}</strong>
                     </span>
-                    <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+                    <div style={{ marginLeft:'auto', display:'flex', gap:8, flexWrap:'wrap' }}>
                       <button onClick={()=>navigate(`/track?id=${order._id}`)}
                         style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',cursor:'pointer' }}>
                         Order Details
                       </button>
-                      {isDelivered && (
-                        <button onClick={()=>navigate(`/returns?orderId=${order._id}`)}
-                          style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',cursor:'pointer' }}>
-                          Write a Review
+                      {isDelivered && order.orderItems?.length > 0 && (
+                        <button
+                          onClick={() => setReview({ item: order.orderItems[0], orderId: order._id })}
+                          style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #FF5A1F',background:'linear-gradient(to bottom,#fff8f5,#ffe8d6)',color:'#FF5A1F',cursor:'pointer' }}>
+                          ✍️ Write a Review
                         </button>
                       )}
+                      <button onClick={() => navigate(`/support?orderId=${order._id}`)}
+                        style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #007185',background:'linear-gradient(to bottom,#f0f9fb,#d9f2f5)',color:'#007185',cursor:'pointer' }}>
+                        🎫 Get Help
+                      </button>
                     </div>
                   </div>
                 </div>

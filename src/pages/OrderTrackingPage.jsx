@@ -292,12 +292,23 @@ export default function OrderTrackingPage() {
                       {cancelling ? 'Cancelling…' : 'Cancel Order'}
                     </button>
                   )}
-                  {isDelivered && (
-                    <button onClick={()=>navigate(`/returns?orderId=${order._id}`)}
-                      style={{ padding:'10px 20px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',fontWeight:600,fontSize:13,cursor:'pointer' }}>
-                      Return / Refund
-                    </button>
-                  )}
+                  {isDelivered && (() => {
+                    const firstItem = order.orderItems?.[0];
+                    const prod = firstItem?.product || {};
+                    const isReturnable = prod.returnable !== false;
+                    const returnWindow = prod.returnWindow || 7;
+                    const deliveredAt = order.deliveredAt || order.updatedAt;
+                    const daysElapsed = deliveredAt ? Math.floor((Date.now() - new Date(deliveredAt).getTime()) / 86400000) : 0;
+                    const windowExpired = daysElapsed > returnWindow;
+                    if (!isReturnable) return <span style={{ padding:'10px 16px',borderRadius:20,background:'#fef2f2',color:'#dc2626',fontWeight:600,fontSize:12,border:'1px solid #fecaca' }}>🚫 Non-returnable</span>;
+                    if (windowExpired) return <span style={{ padding:'10px 16px',borderRadius:20,background:'#fef2f2',color:'#dc2626',fontWeight:600,fontSize:12,border:'1px solid #fecaca' }}>Return window expired</span>;
+                    return (
+                      <button onClick={()=>navigate(`/returns?orderId=${order._id}`)}
+                        style={{ padding:'10px 20px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',fontWeight:600,fontSize:13,cursor:'pointer' }}>
+                        Return / Refund
+                      </button>
+                    );
+                  })()}
                   {isReturned && (
                     <button onClick={()=>navigate('/returns')}
                       style={{ padding:'10px 20px',borderRadius:20,border:'1px solid #FF5A1F',background:'#FF5A1F',color:'white',fontWeight:700,fontSize:13,cursor:'pointer' }}>

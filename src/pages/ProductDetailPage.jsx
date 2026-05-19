@@ -24,7 +24,7 @@ export default function ProductDetailPage() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [qty, setQty] = useState(1);
-  const [activeTab, setActiveTab] = useState('specs');
+  const [activeTab, setActiveTab] = useState('reviews');
   const [activeThumb, setActiveThumb] = useState(0);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function ProductDetailPage() {
         }
         // Fetch reviews
         reviewsApi.getForProduct(p._id)
-          .then(({ data: rData }) => setReviews(rData.data?.reviews || []))
+          .then(({ data: rData }) => setReviews(rData.data?.data || rData.data?.reviews || []))
           .catch(() => {});
       })
       .catch(() => setProduct(null))
@@ -187,11 +187,21 @@ export default function ProductDetailPage() {
           </div>
 
           <div className="bg-surface-2 border border-line rounded-[14px] p-4.5">
-            {['Free delivery on orders above Rs. 5,000', 'Brand authorized warranty included', '7-day easy return policy'].map(t => (
-              <div key={t} className="flex items-center gap-3 py-1.5 text-[13px] text-mute">
-                <span className="text-ok">✓</span> {t}
+            <div className="flex items-center gap-3 py-1.5 text-[13px] text-mute">
+              <span className="text-ok">✓</span> Free delivery on orders above Rs. 5,000
+            </div>
+            <div className="flex items-center gap-3 py-1.5 text-[13px] text-mute">
+              <span className="text-ok">✓</span> Brand authorized warranty included
+            </div>
+            {product?.returnable === false ? (
+              <div className="flex items-center gap-3 py-1.5 text-[13px]" style={{ color: '#dc2626' }}>
+                <span>🚫</span> <strong>Non-returnable</strong> — This item cannot be returned
               </div>
-            ))}
+            ) : (
+              <div className="flex items-center gap-3 py-1.5 text-[13px] text-mute">
+                <span className="text-ok">✓</span> {product?.returnWindow || 7}-day easy return policy
+              </div>
+            )}
           </div>
 
           <div className="pt-10 border-t border-line mt-10">
@@ -227,20 +237,60 @@ export default function ProductDetailPage() {
                     </div>
                   ) : (
                     <div>
-                      <div className="flex items-center gap-4 mb-6">
-                        <div className="text-[48px] font-extrabold">{product.rating}</div>
-                        <div>
-                          <div className="text-[#F5A623] text-2xl">{stars(product.rating)}</div>
-                          <div className="text-mute text-sm">{product.reviews.toLocaleString()} verified reviews</div>
+                      {/* Rating summary */}
+                      <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:24, padding:'16px 20px', background:'#f8fafc', borderRadius:12 }}>
+                        <div style={{ textAlign:'center' }}>
+                          <div style={{ fontSize:48, fontWeight:900, lineHeight:1 }}>{Number(product.rating || 0).toFixed(1)}</div>
+                          <div style={{ color:'#F5A623', fontSize:18, marginTop:4 }}>{stars(product.rating)}</div>
+                          <div style={{ fontSize:12, color:'#888', marginTop:2 }}>{reviews.length} review{reviews.length !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div style={{ flex:1 }}>
+                          {[5,4,3,2,1].map(n => {
+                            const count = reviews.filter(r => r.rating === n).length;
+                            const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
+                            return (
+                              <div key={n} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                                <span style={{ fontSize:11, color:'#555', width:8 }}>{n}</span>
+                                <span style={{ color:'#F5A623', fontSize:11 }}>★</span>
+                                <div style={{ flex:1, height:6, background:'#e5e7eb', borderRadius:99, overflow:'hidden' }}>
+                                  <div style={{ width:`${pct}%`, height:'100%', background:'#F5A623', borderRadius:99 }} />
+                                </div>
+                                <span style={{ fontSize:11, color:'#888', width:28 }}>{count}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      {reviews.slice(0, 5).map((r, i) => (
-                        <div key={i} className="border-b border-line py-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[#F5A623]">{stars(r.rating)}</span>
-                            <span className="font-semibold text-sm">{r.user?.name || 'Customer'}</span>
+
+                      {/* Review cards */}
+                      {reviews.map((r, i) => (
+                        <div key={i} style={{ borderBottom:'1px solid #f0f0f0', padding:'16px 0' }}>
+                          <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                            {/* Avatar */}
+                            <div style={{ width:36, height:36, borderRadius:'50%', background:'#FF5A1F', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700, fontSize:15, flexShrink:0 }}>
+                              {(r.user?.name || 'C')[0].toUpperCase()}
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                                <span style={{ fontWeight:700, fontSize:13 }}>{r.user?.name || 'Customer'}</span>
+                                {r.isVerifiedPurchase && (
+                                  <span style={{ fontSize:10, fontWeight:700, color:'#16a34a', background:'#dcfce7', padding:'2px 7px', borderRadius:99 }}>✓ Verified Purchase</span>
+                                )}
+                                <span style={{ fontSize:11, color:'#aaa', marginLeft:'auto' }}>
+                                  {new Date(r.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}
+                                </span>
+                              </div>
+                              <div style={{ color:'#F5A623', fontSize:15, margin:'4px 0' }}>{stars(r.rating)}</div>
+                              {r.comment && <p style={{ margin:0, fontSize:13, color:'#444', lineHeight:1.6 }}>{r.comment}</p>}
+                              {r.images?.length > 0 && (
+                                <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                                  {r.images.map((img, j) => (
+                                    <img key={j} src={img} alt="" style={{ width:60, height:60, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-sm text-mute">{r.comment}</p>
                         </div>
                       ))}
                     </div>

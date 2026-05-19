@@ -19,6 +19,8 @@ import ReturnStatusPage from './pages/ReturnStatusPage';
 import ComparePage from './pages/ComparePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import SellerDashboard from './pages/seller/SellerDashboard';
+import NotificationsPage from './pages/NotificationsPage';
+import SupportPage from './pages/SupportPage';
 
 const Spinner = () => <div className="min-h-screen flex items-center justify-center"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
 
@@ -80,6 +82,8 @@ export default function App() {
         <Route path="/track" element={<Layout><PrivateRoute><OrderTrackingPage /></PrivateRoute></Layout>} />
         <Route path="/returns" element={<Layout><PrivateRoute><ReturnsPage /></PrivateRoute></Layout>} />
         <Route path="/return-status/:returnId" element={<Layout><PrivateRoute><ReturnStatusPage /></PrivateRoute></Layout>} />
+        <Route path="/notifications" element={<Layout><PrivateRoute><NotificationsPage /></PrivateRoute></Layout>} />
+        <Route path="/support" element={<Layout><PrivateRoute><SupportPage /></PrivateRoute></Layout>} />
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

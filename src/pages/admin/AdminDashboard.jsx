@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { adminApi } from '../../api/admin';
 import { returnsApi } from '../../api/returns';
+import { couponsApi } from '../../api/coupons';
+import { notificationsApi } from '../../api/notifications';
+import { supportApi } from '../../api/support';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -904,18 +908,706 @@ function AdminReturnsTab() {
 /* ══════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   COUPONS TAB
+══════════════════════════════════════════════════════ */
+const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true };
+
+function AdminCouponsTab() {
+  const [coupons, setCoupons]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [form, setForm]         = useState(EMPTY_COUPON);
+  const [editId, setEditId]     = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    couponsApi.getAll({ limit: 100 })
+      .then(r => setCoupons(r.data?.data?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const openCreate = () => { setForm(EMPTY_COUPON); setEditId(null); setError(''); setShowForm(true); };
+  const openEdit   = (c) => {
+    setForm({
+      code: c.code, discountType: c.discountType, discountValue: c.discountValue,
+      minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
+      expiryDate: c.expiryDate ? c.expiryDate.slice(0,10) : '',
+      usageLimit: c.usageLimit || '', isActive: c.isActive,
+    });
+    setEditId(c._id); setError(''); setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.code || !form.discountValue || !form.expiryDate) {
+      setError('Code, discount value and expiry date are required.'); return;
+    }
+    setSaving(true); setError('');
+    try {
+      const payload = {
+        code: form.code.toUpperCase(),
+        discountType: form.discountType,
+        discountValue: Number(form.discountValue),
+        minimumAmount: form.minimumAmount ? Number(form.minimumAmount) : 0,
+        maximumDiscount: form.maximumDiscount ? Number(form.maximumDiscount) : undefined,
+        expiryDate: form.expiryDate,
+        usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+        isActive: form.isActive,
+      };
+      if (editId) await couponsApi.update(editId, payload);
+      else        await couponsApi.create(payload);
+      setShowForm(false); load();
+    } catch(e) {
+      setError(e?.response?.data?.message || 'Failed to save coupon.');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this coupon?')) return;
+    setDeleting(id);
+    try { await couponsApi.delete(id); load(); }
+    catch(e) { alert(e?.response?.data?.message || 'Delete failed'); }
+    finally { setDeleting(null); }
+  };
+
+  const handleToggle = async (c) => {
+    try { await couponsApi.update(c._id, { isActive: !c.isActive }); load(); }
+    catch(e) { alert('Update failed'); }
+  };
+
+  const now = new Date();
+  const active  = coupons.filter(c => c.isActive && new Date(c.expiryDate) > now).length;
+  const expired = coupons.filter(c => new Date(c.expiryDate) <= now).length;
+  const inactive = coupons.filter(c => !c.isActive).length;
+
+  const LabelStyle = { display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' };
+  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:'#f8fafc', width:'100%', boxSizing:'border-box' };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+      {/* KPIs */}
+      <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+        <KpiCard label="Total Coupons" value={coupons.length} color={C.blue}   icon="🎟️" />
+        <KpiCard label="Active"        value={active}         color={C.green}  icon="✅" />
+        <KpiCard label="Expired"       value={expired}        color={C.red}    icon="⏰" />
+        <KpiCard label="Inactive"      value={inactive}       color={C.mute}   icon="🔒" />
+      </div>
+
+      {/* Create button */}
+      <div style={{ display:'flex', justifyContent:'flex-end' }}>
+        <button onClick={openCreate}
+          style={{ padding:'10px 22px', borderRadius:10, background:C.accent, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+          + Create Coupon
+        </button>
+      </div>
+
+      {/* Create / Edit Form */}
+      {showForm && (
+        <Card title={editId ? '✏️ Edit Coupon' : '🎟️ New Coupon'}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+            <div>
+              <label style={LabelStyle}>Coupon Code *</label>
+              <input value={form.code} onChange={e=>set('code',e.target.value.toUpperCase())} placeholder="e.g. SAVE20"
+                style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase' }} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Discount Type *</label>
+              <select value={form.discountType} onChange={e=>set('discountType',e.target.value)}
+                style={{ ...InpStyle, cursor:'pointer' }}>
+                <option value="PERCENTAGE">Percentage (%)</option>
+                <option value="FIXED">Fixed Amount (Rs.)</option>
+              </select>
+            </div>
+            <div>
+              <label style={LabelStyle}>Discount Value * {form.discountType==='PERCENTAGE'?'(%)':'(Rs.)'}</label>
+              <input type="number" min="0" value={form.discountValue} onChange={e=>set('discountValue',e.target.value)}
+                placeholder={form.discountType==='PERCENTAGE'?'e.g. 20':'e.g. 500'} style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Expiry Date *</label>
+              <input type="date" value={form.expiryDate} onChange={e=>set('expiryDate',e.target.value)}
+                min={new Date().toISOString().slice(0,10)} style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Minimum Order (Rs.)</label>
+              <input type="number" min="0" value={form.minimumAmount} onChange={e=>set('minimumAmount',e.target.value)}
+                placeholder="0 = no minimum" style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Max Discount Cap (Rs.) <span style={{color:C.mute,fontWeight:400}}>— for % coupons</span></label>
+              <input type="number" min="0" value={form.maximumDiscount} onChange={e=>set('maximumDiscount',e.target.value)}
+                placeholder="Leave blank = no cap" style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Usage Limit</label>
+              <input type="number" min="1" value={form.usageLimit} onChange={e=>set('usageLimit',e.target.value)}
+                placeholder="Leave blank = unlimited" style={InpStyle} />
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, paddingTop:22 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontWeight:600, fontSize:13 }}>
+                <input type="checkbox" checked={form.isActive} onChange={e=>set('isActive',e.target.checked)} />
+                Active (users can apply this coupon)
+              </label>
+            </div>
+          </div>
+
+          {error && <div style={{ marginTop:12, color:C.red, fontSize:13, fontWeight:600, background:C.red+'10', padding:'8px 12px', borderRadius:8 }}>{error}</div>}
+
+          <div style={{ display:'flex', gap:10, marginTop:18 }}>
+            <button onClick={handleSubmit} disabled={saving}
+              style={{ padding:'10px 24px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1 }}>
+              {saving ? 'Saving…' : editId ? 'Save Changes' : 'Create Coupon'}
+            </button>
+            <button onClick={()=>setShowForm(false)}
+              style={{ padding:'10px 18px', borderRadius:8, background:'white', border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+              Cancel
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Coupons table */}
+      <Card title={`All Coupons (${coupons.length})`}>
+        {loading ? <div style={{ padding:40, textAlign:'center', color:C.mute }}>Loading…</div> :
+         coupons.length === 0 ? <div style={{ padding:40, textAlign:'center', color:C.mute }}>No coupons yet. Create one above.</div> : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead><tr>
+                {['Code','Type','Value','Min Order','Cap','Usage','Expiry','Status','Actions'].map(h=>(
+                  <th key={h} style={{ textAlign:'left', padding:'8px 12px', fontSize:11, fontWeight:700, color:C.mute, letterSpacing:'.06em', textTransform:'uppercase', borderBottom:`1px solid ${C.line}`, whiteSpace:'nowrap' }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {coupons.map(c => {
+                  const isExpired  = new Date(c.expiryDate) <= now;
+                  const daysLeft   = Math.ceil((new Date(c.expiryDate) - now) / 86400000);
+                  const statusColor = isExpired ? C.red : !c.isActive ? C.mute : C.green;
+                  const statusLabel = isExpired ? 'Expired' : !c.isActive ? 'Inactive' : 'Active';
+                  return (
+                    <tr key={c._id} style={{ background: isExpired ? '#fff5f5' : 'white' }}>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:13, background:'#f1f5f9', padding:'3px 8px', borderRadius:6, letterSpacing:'.08em' }}>
+                          {c.code}
+                        </span>
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
+                        {c.discountType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontWeight:700, fontSize:13, color:C.green }}>
+                        {c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : `Rs. ${c.discountValue}`}
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
+                        {c.minimumAmount > 0 ? `Rs. ${c.minimumAmount}` : '—'}
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
+                        {c.maximumDiscount ? `Rs. ${c.maximumDiscount}` : '—'}
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12 }}>
+                        <span style={{ color: c.usageLimit && c.usedCount >= c.usageLimit ? C.red : C.mute }}>
+                          {c.usedCount}{c.usageLimit ? `/${c.usageLimit}` : ' used'}
+                        </span>
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, whiteSpace:'nowrap' }}>
+                        <div style={{ color: isExpired ? C.red : daysLeft <= 3 ? C.yellow : '#333', fontWeight: isExpired||daysLeft<=3 ? 700 : 400 }}>
+                          {new Date(c.expiryDate).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })}
+                        </div>
+                        {!isExpired && <div style={{ fontSize:11, color: daysLeft<=3 ? C.red : C.mute }}>{daysLeft}d left</div>}
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:99, background:statusColor+'20', color:statusColor }}>
+                          <span style={{ width:5, height:5, borderRadius:'50%', background:statusColor }} />{statusLabel}
+                        </span>
+                      </td>
+                      <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
+                        <div style={{ display:'flex', gap:6 }}>
+                          <button onClick={()=>openEdit(c)}
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background:'#f1f5f9', border:`1px solid ${C.line}`, cursor:'pointer', color:'#333' }}>
+                            ✏️ Edit
+                          </button>
+                          <button onClick={()=>handleToggle(c)}
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background: c.isActive?'#fef2f2':'#f0fdf4', border:`1px solid ${c.isActive?C.red:C.green}`, cursor:'pointer', color:c.isActive?C.red:C.green }}>
+                            {c.isActive ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={()=>handleDelete(c._id)} disabled={deleting===c._id}
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background:'#fef2f2', border:`1px solid ${C.red}`, cursor:'pointer', color:C.red, opacity:deleting===c._id?0.5:1 }}>
+                            🗑
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ══════════════════ Admin Notifications Tab ══════════════════ */
+const EMPTY_NOTIF = { sendMode:'broadcast', targetRole:'user', userEmail:'', title:'', message:'', type:'SYSTEM', link:'', couponCode:'' };
+
+function AdminNotificationsTab() {
+  const [form, setForm]         = useState(EMPTY_NOTIF);
+  const [sending, setSending]   = useState(false);
+  const [result, setResult]     = useState(null);
+  const [history, setHistory]   = useState([]);
+  const [copied, setCopied]     = useState(null);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSend = async () => {
+    if (!form.title.trim() || !form.message.trim()) {
+      setResult({ ok: false, text: 'Title and message are required.' }); return;
+    }
+    if (form.sendMode === 'personal' && !form.userEmail.trim()) {
+      setResult({ ok: false, text: 'User email is required for personal notification.' }); return;
+    }
+    setSending(true); setResult(null);
+    try {
+      const payload = {
+        title:      form.title,
+        message:    form.message,
+        type:       form.type,
+        link:       form.link.trim() || undefined,
+        couponCode: form.couponCode.trim().toUpperCase() || undefined,
+      };
+      if (form.sendMode === 'personal') {
+        payload.userEmail = form.userEmail.trim();
+      } else {
+        payload.targetRole = form.targetRole;
+      }
+      const resp = await notificationsApi.broadcast(payload);
+      const count = resp.data?.data?.count || 0;
+      setResult({ ok: true, text: `✅ Sent to ${count} user${count !== 1 ? 's' : ''}!` });
+      setHistory(prev => [{ ...form, sentAt: new Date().toISOString(), count }, ...prev.slice(0, 9)]);
+      setForm(EMPTY_NOTIF);
+    } catch(e) {
+      setResult({ ok: false, text: e?.response?.data?.message || e.message || 'Failed to send.' });
+    } finally { setSending(false); }
+  };
+
+  const LabelStyle = { display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' };
+  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:'#f8fafc', width:'100%', boxSizing:'border-box' };
+
+  const TARGET_OPTIONS = [
+    { value:'user',   label:'👤 All Customers', desc:'Every registered buyer' },
+    { value:'seller', label:'🏪 All Sellers',    desc:'Every registered seller' },
+    { value:'all',    label:'📢 Everyone',       desc:'All users on the platform' },
+  ];
+  const TYPE_OPTIONS = ['SYSTEM','ORDER','OFFER','PAYMENT','REFUND'];
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+      {/* Compose card */}
+      <Card title="📢 Send Notification">
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+
+          {/* Send mode toggle */}
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={LabelStyle}>Send to</label>
+            <div style={{ display:'flex', gap:0, border:`1px solid ${C.line}`, borderRadius:10, overflow:'hidden', width:'fit-content' }}>
+              {[
+                { mode:'broadcast', label:'📢 Broadcast (group)' },
+                { mode:'personal',  label:'👤 Personal (one user)' },
+              ].map(opt => (
+                <button key={opt.mode} onClick={() => set('sendMode', opt.mode)}
+                  style={{ padding:'9px 20px', border:'none', cursor:'pointer', fontWeight:700, fontSize:13, transition:'all .15s',
+                    background: form.sendMode===opt.mode ? C.accent : 'white',
+                    color:      form.sendMode===opt.mode ? 'white' : C.mute }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Broadcast: pick role */}
+          {form.sendMode === 'broadcast' && (
+            <div style={{ gridColumn:'1/-1', display:'flex', gap:10, flexWrap:'wrap' }}>
+              {TARGET_OPTIONS.map(opt => (
+                <div key={opt.value} onClick={() => set('targetRole', opt.value)}
+                  style={{ flex:'1 1 150px', padding:'12px 16px', borderRadius:10,
+                    border:`2px solid ${form.targetRole===opt.value ? C.accent : C.line}`,
+                    background: form.targetRole===opt.value ? C.accent+'10' : 'white', cursor:'pointer', transition:'all .15s' }}>
+                  <div style={{ fontWeight:700, fontSize:13 }}>{opt.label}</div>
+                  <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{opt.desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Personal: user email */}
+          {form.sendMode === 'personal' && (
+            <div style={{ gridColumn:'1/-1' }}>
+              <label style={LabelStyle}>User Email *</label>
+              <input value={form.userEmail} onChange={e=>set('userEmail',e.target.value)}
+                placeholder="user@example.com" type="email" style={InpStyle} />
+              <div style={{ fontSize:11, color:C.mute, marginTop:4 }}>The notification will be sent only to this user.</div>
+            </div>
+          )}
+
+          {/* Type */}
+          <div>
+            <label style={LabelStyle}>Notification Type</label>
+            <select value={form.type} onChange={e=>set('type',e.target.value)} style={{ ...InpStyle, cursor:'pointer' }}>
+              {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {/* Link */}
+          <div>
+            <label style={LabelStyle}>Clickable Link <span style={{ fontWeight:400, textTransform:'none', color:C.mute }}>— optional, e.g. /products</span></label>
+            <input value={form.link} onChange={e=>set('link',e.target.value)} placeholder="/products?category=Electronics" style={InpStyle} />
+          </div>
+
+          {/* Coupon code */}
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={LabelStyle}>Coupon Code <span style={{ fontWeight:400, textTransform:'none', color:C.mute }}>— optional, user gets a Copy button in the notification</span></label>
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={form.couponCode} onChange={e=>set('couponCode',e.target.value.toUpperCase())}
+                placeholder="e.g. SAVE20" style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', flex:1 }} />
+              {form.couponCode && (
+                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 14px', borderRadius:8,
+                  background:'#f0fdf4', border:`1px solid ${C.green}`, fontSize:13, fontWeight:700, color:C.green, whiteSpace:'nowrap' }}>
+                  🎟️ {form.couponCode}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Title */}
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={LabelStyle}>Title *</label>
+            <input value={form.title} onChange={e=>set('title',e.target.value)} placeholder="e.g. Your exclusive coupon is here! 🎉" style={InpStyle} />
+          </div>
+
+          {/* Message */}
+          <div style={{ gridColumn:'1/-1' }}>
+            <label style={LabelStyle}>Message *</label>
+            <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3}
+              placeholder="Write your notification message here..."
+              style={{ ...InpStyle, height:'auto', padding:'10px 12px', resize:'vertical', lineHeight:1.6 }} />
+          </div>
+        </div>
+
+        {result && (
+          <div style={{ marginTop:14, padding:'10px 14px', borderRadius:8, fontSize:13, fontWeight:700,
+            background: result.ok ? C.green+'15' : C.red+'15', color: result.ok ? C.green : C.red }}>
+            {result.text}
+          </div>
+        )}
+
+        <div style={{ marginTop:18, display:'flex', gap:10 }}>
+          <button onClick={handleSend} disabled={sending}
+            style={{ padding:'11px 28px', borderRadius:8, background:C.accent, color:'white', border:'none', fontWeight:700, fontSize:14, cursor:'pointer', opacity:sending?0.6:1 }}>
+            {sending ? 'Sending…' : '📤 Send Notification'}
+          </button>
+          <button onClick={() => { setForm(EMPTY_NOTIF); setResult(null); }}
+            style={{ padding:'11px 18px', borderRadius:8, background:'white', border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+            Clear
+          </button>
+        </div>
+      </Card>
+
+      {/* Send history */}
+      {history.length > 0 && (
+        <Card title="Recent Sends">
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ display:'flex', gap:12, alignItems:'center', padding:'10px 14px', background:'#f8fafc', borderRadius:8, fontSize:13 }}>
+                <span style={{ fontSize:20 }}>{ {SYSTEM:'🔔',ORDER:'📦',OFFER:'🎁',PAYMENT:'💳',REFUND:'↩️'}[h.type] }</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700 }}>{h.title}</div>
+                  <div style={{ color:C.mute, fontSize:12 }}>{h.message.slice(0,80)}{h.message.length>80?'…':''}</div>
+                </div>
+                <div style={{ textAlign:'right', flexShrink:0 }}>
+                  <div style={{ fontWeight:700, color:C.green }}>{h.count} sent</div>
+                  <div style={{ fontSize:11, color:C.mute }}>{new Date(h.sentAt).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   ADMIN SUPPORT TAB
+══════════════════════════════════════════════════════ */
+const TICKET_STATUS_META = {
+  OPEN:        { label: 'Open',        color: '#3b82f6', bg: '#dbeafe' },
+  IN_PROGRESS: { label: 'In Progress', color: '#f59e0b', bg: '#fef3c7' },
+  RESOLVED:    { label: 'Resolved',    color: '#16a34a', bg: '#dcfce7' },
+  CLOSED:      { label: 'Closed',      color: '#6b7280', bg: '#f3f4f6' },
+};
+
+function TicketStatusBadge({ status }) {
+  const m = TICKET_STATUS_META[status] || TICKET_STATUS_META.OPEN;
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700,
+      padding:'3px 9px', borderRadius:99, background:m.bg, color:m.color }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background:m.color }} />
+      {m.label}
+    </span>
+  );
+}
+
+function AdminSupportTab() {
+  const { user }            = useAuth();
+  const { lastSupportMsg }  = useNotifications();
+  const [tickets, setTickets]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filterStatus, setFilterSt] = useState('');
+  const [activeTicket, setActive]   = useState(null);
+  const [reply, setReply]           = useState('');
+  const [sending, setSend]          = useState(false);
+  const [updatingStatus, setUpdSt]  = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { fetchAll(); }, [filterStatus]);
+
+  // Append incoming message directly from SSE payload — zero extra API calls
+  useEffect(() => {
+    if (!lastSupportMsg || !activeTicket) return;
+    if (lastSupportMsg.ticketId !== activeTicket._id) return;
+    setActive(prev => ({
+      ...prev,
+      status:   lastSupportMsg.status,
+      messages: [...(prev.messages || []), lastSupportMsg.message],
+    }));
+  }, [lastSupportMsg]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeTicket?.messages]);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const res = await supportApi.getAllTickets({ status: filterStatus || undefined, limit: 100 });
+      setTickets(res.data?.data?.data || []);
+    } catch { /* ignore */ } finally { setLoading(false); }
+  };
+
+  const openTicket = async (id) => {
+    try {
+      const res = await supportApi.getTicket(id);
+      setActive(res.data?.data?.ticket);
+    } catch { /* ignore */ }
+  };
+
+  const sendReply = async () => {
+    if (!reply.trim() || !activeTicket) return;
+    setSend(true);
+    try {
+      const res = await supportApi.replyToTicket(activeTicket._id, { message: reply.trim() });
+      setReply('');
+      const updated = res.data?.data?.ticket;
+      setActive(updated);
+      setTickets(prev => prev.map(t => t._id === updated._id ? { ...t, status: updated.status, updatedAt: updated.updatedAt } : t));
+    } catch { /* ignore */ } finally { setSend(false); }
+  };
+
+  const changeStatus = async (status) => {
+    if (!activeTicket) return;
+    setUpdSt(true);
+    try {
+      const res = await supportApi.updateStatus(activeTicket._id, { status });
+      const updated = res.data?.data?.ticket;
+      setActive(prev => ({ ...prev, status: updated.status }));
+      setTickets(prev => prev.map(t => t._id === updated._id ? { ...t, status: updated.status } : t));
+    } catch { /* ignore */ } finally { setUpdSt(false); }
+  };
+
+  const isClosed = activeTicket && ['RESOLVED','CLOSED'].includes(activeTicket.status);
+
+  if (activeTicket) {
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {/* Ticket header */}
+        <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+          <Btn onClick={() => { setActive(null); fetchAll(); }}>← Back to tickets</Btn>
+          <div style={{ flex:1, fontWeight:800, fontSize:16 }}>{activeTicket.subject}</div>
+          <TicketStatusBadge status={activeTicket.status} />
+          <Select value={activeTicket.status} onChange={e => changeStatus(e.target.value)}
+            style={{ opacity: updatingStatus ? 0.6 : 1 }}>
+            {Object.keys(TICKET_STATUS_META).map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+          </Select>
+        </div>
+
+        <div style={{ fontSize:13, color:C.mute }}>
+          From: <strong style={{ color:'#0f172a' }}>{activeTicket.user?.name}</strong> ({activeTicket.user?.email})
+          {activeTicket.order && <> · Order #{activeTicket.order.orderNumber || activeTicket.order._id?.slice(-8).toUpperCase()}</>}
+          {' · '}#{activeTicket._id?.slice(-8).toUpperCase()}
+        </div>
+
+        {/* Messages */}
+        <Card>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:420, overflowY:'auto' }}>
+            {(activeTicket.messages || []).map((msg, i) => {
+              const isAdmin = msg.senderRole === 'admin';
+              return (
+                <div key={i} style={{ display:'flex', justifyContent: isAdmin ? 'flex-end' : 'flex-start' }}>
+                  <div style={{ maxWidth:'72%' }}>
+                    {!isAdmin && (
+                      <div style={{ fontSize:11, fontWeight:700, color:'#555', marginBottom:4, paddingLeft:4 }}>
+                        {msg.sender?.name || activeTicket.user?.name}
+                      </div>
+                    )}
+                    <div style={{
+                      padding:'10px 14px',
+                      borderRadius: isAdmin ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                      background: isAdmin ? C.accent : C.surf,
+                      color: isAdmin ? 'white' : '#1a1a1a',
+                      border: isAdmin ? 'none' : `1px solid ${C.line}`,
+                      fontSize:13, lineHeight:1.6,
+                    }}>
+                      {msg.text}
+                    </div>
+                    <div style={{ fontSize:10, color:'#aaa', marginTop:3,
+                      textAlign: isAdmin ? 'right' : 'left', paddingLeft:4 }}>
+                      {new Date(msg.createdAt).toLocaleString('en-IN',{ hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        </Card>
+
+        {/* Reply box */}
+        {isClosed ? (
+          <div style={{ background:C.surf, border:`1px solid ${C.line}`, borderRadius:10,
+            padding:'12px 16px', textAlign:'center', color:C.mute, fontSize:13 }}>
+            This ticket is {activeTicket.status.toLowerCase()}. No further replies.
+          </div>
+        ) : (
+          <Card>
+            <div style={{ marginBottom:8, fontWeight:700, fontSize:13 }}>Reply as Support Team</div>
+            <textarea value={reply} onChange={e => setReply(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+              placeholder="Type your reply… (Enter to send)"
+              rows={4}
+              style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'10px 12px',
+                fontSize:13, resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10 }} />
+            <Btn variant="primary" onClick={sendReply} disabled={sending || !reply.trim()}>
+              {sending ? 'Sending…' : 'Send Reply'}
+            </Btn>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+        <Select value={filterStatus} onChange={e => setFilterSt(e.target.value)}>
+          <option value="">All Status</option>
+          {Object.keys(TICKET_STATUS_META).map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+        </Select>
+        <Btn onClick={fetchAll}>Refresh</Btn>
+      </div>
+
+      {loading ? <Loader /> : tickets.length === 0 ? (
+        <Empty text="No support tickets found" />
+      ) : (
+        <Card>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                <Th>Ticket</Th>
+                <Th>User</Th>
+                <Th>Order</Th>
+                <Th>Status</Th>
+                <Th>Last Updated</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map(t => (
+                <tr key={t._id}>
+                  <Td>
+                    <div style={{ fontWeight:700, fontSize:13 }}>{t.subject}</div>
+                    <div style={{ fontSize:11, color:C.mute }}>#{t._id?.slice(-8).toUpperCase()}</div>
+                  </Td>
+                  <Td>
+                    <div style={{ fontWeight:600, fontSize:13 }}>{t.user?.name}</div>
+                    <div style={{ fontSize:11, color:C.mute }}>{t.user?.email}</div>
+                  </Td>
+                  <Td>{t.order ? `#${t.order.orderNumber || t.order._id?.slice(-8).toUpperCase()}` : '—'}</Td>
+                  <Td><TicketStatusBadge status={t.status} /></Td>
+                  <Td style={{ color:C.mute, fontSize:12 }}>
+                    {new Date(t.updatedAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+                  </Td>
+                  <Td>
+                    <Btn variant="primary" onClick={() => openTicket(t._id)}>Open</Btn>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+
 const TABS = [
-  { id: 'Overview', icon: '📊' },
-  { id: 'Users',    icon: '👥' },
-  { id: 'Sellers',  icon: '🏪' },
-  { id: 'Orders',   icon: '📦' },
-  { id: 'Returns',  icon: '↩️' },
+  { id: 'Overview',      icon: '📊' },
+  { id: 'Users',         icon: '👥' },
+  { id: 'Sellers',       icon: '🏪' },
+  { id: 'Orders',        icon: '📦' },
+  { id: 'Returns',       icon: '↩️' },
+  { id: 'Coupons',       icon: '🎟️' },
+  { id: 'Notifications', icon: '🔔' },
+  { id: 'Support',       icon: '🎫' },
 ];
 
 export default function AdminDashboard() {
-  const [tab, setTab] = useState('Overview');
-  const navigate      = useNavigate();
-  const { user }      = useAuth();
+  const [tab, setTab]               = useState('Overview');
+  const [openTicketCount, setOTC]   = useState(0);
+  const navigate                    = useNavigate();
+  const { user }                    = useAuth();
+  const { notifications }           = useNotifications();
+
+  // Fetch open ticket count on mount
+  useEffect(() => {
+    supportApi.getAllTickets({ status: 'OPEN', limit: 1 })
+      .then(res => setOTC(res.data?.data?.pagination?.total ?? 0))
+      .catch(() => {});
+  }, []);
+
+  // Increment badge when a new support ticket SSE notification arrives
+  useEffect(() => {
+    const latest = notifications[0];
+    if (latest && latest.title?.includes('Support Ticket') && tab !== 'Support') {
+      setOTC(prev => prev + 1);
+    }
+  }, [notifications]);
+
+  // Clear badge when Support tab is opened
+  const handleTabClick = (id) => {
+    setTab(id);
+    if (id === 'Support') setOTC(0);
+  };
 
   if (user && user.role !== 'admin') { navigate('/'); return null; }
 
@@ -944,7 +1636,7 @@ export default function AdminDashboard() {
         {/* Nav */}
         <nav style={{ flex: 1, padding: '12px 0' }}>
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => handleTabClick(t.id)}
               style={{
                 width: '100%', textAlign: 'left', padding: '11px 20px',
                 background: tab === t.id ? C.accent + '22' : 'none',
@@ -954,7 +1646,17 @@ export default function AdminDashboard() {
                 borderLeft: tab === t.id ? `3px solid ${C.accent}` : '3px solid transparent',
                 transition: 'all .15s',
               }}>
-              <span>{t.icon}</span> {t.id}
+              <span>{t.icon}</span>
+              <span style={{ flex: 1 }}>{t.id}</span>
+              {t.id === 'Support' && openTicketCount > 0 && (
+                <span style={{
+                  background: C.accent, color: 'white', fontSize: 11, fontWeight: 800,
+                  minWidth: 20, height: 20, borderRadius: 99, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', padding: '0 5px',
+                }}>
+                  {openTicketCount > 99 ? '99+' : openTicketCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -981,14 +1683,20 @@ export default function AdminDashboard() {
             {tab === 'Sellers'  && 'Manage and verify seller accounts'}
             {tab === 'Orders'   && 'View and manage all customer orders'}
             {tab === 'Returns'  && 'Monitor and take action on all return & refund requests'}
+            {tab === 'Coupons'       && 'Create and manage discount coupons for customers'}
+            {tab === 'Notifications' && 'Broadcast notifications to customers, sellers, or everyone'}
+            {tab === 'Support'       && 'View and respond to customer support tickets'}
           </p>
         </div>
 
-        {tab === 'Overview' && <OverviewTab />}
-        {tab === 'Users'    && <UsersTab />}
-        {tab === 'Sellers'  && <SellersTab />}
-        {tab === 'Orders'   && <OrdersTab />}
-        {tab === 'Returns'  && <AdminReturnsTab />}
+        {tab === 'Overview'      && <OverviewTab />}
+        {tab === 'Users'         && <UsersTab />}
+        {tab === 'Sellers'       && <SellersTab />}
+        {tab === 'Orders'        && <OrdersTab />}
+        {tab === 'Returns'       && <AdminReturnsTab />}
+        {tab === 'Coupons'       && <AdminCouponsTab />}
+        {tab === 'Notifications' && <AdminNotificationsTab />}
+        {tab === 'Support'       && <AdminSupportTab />}
       </div>
     </div>
   );

@@ -484,23 +484,50 @@ export default function ReturnsPage() {
                   </div>
                   {step === 2 ? (
                     <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:10 }}>
-                      {(selectedOrder?.orderItems || []).map((item, i) => (
-                        <div key={i} onClick={() => setSelItem(item)}
-                          style={{ border:`2px solid ${selectedItem===item?'#FF5A1F':'#e5e7eb'}`, borderRadius:8, padding:'12px 14px', cursor:'pointer',
-                            background: selectedItem===item ? '#fff8f0' : 'white', display:'flex', gap:12, alignItems:'center', transition:'all .15s' }}>
-                          <div style={{ width:64, height:64, border:'1px solid #ddd', borderRadius:6, overflow:'hidden', flexShrink:0, background:'#fafafa', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                            {item.image ? <img src={item.image} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} /> : <span style={{ fontSize:28 }}>📦</span>}
+                      {(selectedOrder?.orderItems || []).map((item, i) => {
+                        const prod = item.product || {};
+                        const isReturnable = prod.returnable !== false;
+                        const returnWindow = prod.returnWindow || 7;
+                        const deliveredAt = selectedOrder.deliveredAt || selectedOrder.updatedAt;
+                        const daysElapsed = deliveredAt ? Math.floor((Date.now() - new Date(deliveredAt).getTime()) / 86400000) : 0;
+                        const windowExpired = daysElapsed > returnWindow;
+                        const blocked = !isReturnable || windowExpired;
+                        const blockReason = !isReturnable ? 'Non-returnable item' : `Return window expired (${returnWindow}-day limit)`;
+
+                        return (
+                          <div key={i} onClick={() => !blocked && setSelItem(item)}
+                            style={{ border:`2px solid ${selectedItem===item?'#FF5A1F':blocked?'#fecaca':'#e5e7eb'}`, borderRadius:8, padding:'12px 14px',
+                              cursor: blocked ? 'not-allowed' : 'pointer',
+                              background: selectedItem===item ? '#fff8f0' : blocked ? '#fef2f2' : 'white',
+                              display:'flex', gap:12, alignItems:'center', transition:'all .15s',
+                              opacity: blocked ? 0.75 : 1 }}>
+                            <div style={{ width:64, height:64, border:'1px solid #ddd', borderRadius:6, overflow:'hidden', flexShrink:0, background:'#fafafa', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              {item.image ? <img src={item.image} alt="" style={{ width:'100%', height:'100%', objectFit:'contain' }} /> : <span style={{ fontSize:28 }}>📦</span>}
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontWeight:600, fontSize:14 }}>{item.title}</div>
+                              <div style={{ fontSize:12, color:'#888', marginTop:3 }}>Qty: {item.quantity} · {formatPriceShort(item.price)} each</div>
+                              <div style={{ fontSize:14, fontWeight:700, marginTop:3 }}>{formatPriceShort(item.price * item.quantity)}</div>
+                              {!blocked && isReturnable && (
+                                <div style={{ fontSize:11, color:'#16a34a', marginTop:3, fontWeight:600 }}>
+                                  ↩️ {returnWindow}-day return · {Math.max(0, returnWindow - daysElapsed)} day(s) left
+                                </div>
+                              )}
+                              {blocked && (
+                                <div style={{ fontSize:11, color:'#dc2626', marginTop:3, fontWeight:700 }}>
+                                  🚫 {blockReason}
+                                </div>
+                              )}
+                            </div>
+                            {!blocked && (
+                              <div style={{ width:20, height:20, borderRadius:'50%', border:`2px solid ${selectedItem===item?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                {selectedItem===item && <div style={{ width:10, height:10, borderRadius:'50%', background:'#FF5A1F' }} />}
+                              </div>
+                            )}
+                            {blocked && <span style={{ fontSize:18 }}>🔒</span>}
                           </div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontWeight:600, fontSize:14 }}>{item.title}</div>
-                            <div style={{ fontSize:12, color:'#888', marginTop:3 }}>Qty: {item.quantity} · {formatPriceShort(item.price)} each</div>
-                            <div style={{ fontSize:14, fontWeight:700, marginTop:3 }}>{formatPriceShort(item.price * item.quantity)}</div>
-                          </div>
-                          <div style={{ width:20, height:20, borderRadius:'50%', border:`2px solid ${selectedItem===item?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                            {selectedItem===item && <div style={{ width:10, height:10, borderRadius:'50%', background:'#FF5A1F' }} />}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {selectedItem && (
                         <button onClick={()=>setStep(3)} style={{ width:'100%', padding:'11px', borderRadius:8, background:'#FFD814', border:'1px solid #FBA131', fontWeight:700, fontSize:14, cursor:'pointer' }}>
                           Continue →

@@ -34,6 +34,8 @@ export function normalizeProduct(p) {
     specs,
     seller: p.seller || null,
     badge: off >= 20 ? 'sale' : p.isFeatured ? 'featured' : null,
+    returnable:   p.returnable !== false,
+    returnWindow: p.returnWindow || 7,
   };
 }
 

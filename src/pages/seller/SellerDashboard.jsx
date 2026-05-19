@@ -610,7 +610,7 @@ function OrdersTab({ onViewReturns }) {
    PRODUCT FORM (Add / Edit)
 ══════════════════════════════════════════════════════ */
 function ProductForm({ initial, categories, onSave, onCancel }) {
-  const empty = { title:'',description:'',shortDescription:'',brand:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true };
+  const empty = { title:'',description:'',shortDescription:'',brand:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7 };
   const [form, setForm] = useState(initial ? {
     title: initial.title||'', description: initial.description||'',
     shortDescription: initial.shortDescription||'', brand: initial.brand||'',
@@ -618,6 +618,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     stock: initial.stock??'',
     category: (typeof initial.category==='object'?initial.category?._id:initial.category)||'',
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
+    returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
   } : empty);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
@@ -635,7 +636,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     }
     setSaving(true); setError('');
     try {
-      const payload = { ...form, price:Number(form.price), stock:Number(form.stock), discountPrice:form.discountPrice?Number(form.discountPrice):undefined };
+      const payload = { ...form, price:Number(form.price), stock:Number(form.stock), discountPrice:form.discountPrice?Number(form.discountPrice):undefined, returnWindow: form.returnable ? Number(form.returnWindow) : undefined };
       await onSave(payload);
     } catch(err) { setError(getErrorMessage(err)); }
     finally { setSaving(false); }
@@ -687,7 +688,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
           <textarea className="input" rows={4} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product description…" style={{ resize:'vertical',width:'100%' }} />
         </div>
 
-        <div style={{ display:'flex',gap:24,marginTop:16 }}>
+        <div style={{ display:'flex',gap:24,marginTop:16,flexWrap:'wrap',alignItems:'center' }}>
           <label style={{ display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontWeight:600,fontSize:13 }}>
             <input type="checkbox" checked={form.isFeatured} onChange={e=>set('isFeatured',e.target.checked)} />
             Mark as Featured
@@ -696,6 +697,37 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
             <input type="checkbox" checked={form.isPublished} onChange={e=>set('isPublished',e.target.checked)} />
             Publish immediately
           </label>
+        </div>
+
+        {/* Return Policy */}
+        <div style={{ marginTop:18, padding:'14px 16px', borderRadius:10, border:`1px solid ${C.line}`, background:'#f8fafc' }}>
+          <div style={{ fontWeight:700, fontSize:13, marginBottom:10, color:'#0f172a' }}>↩️ Return Policy</div>
+          <div style={{ display:'flex', alignItems:'center', gap:24, flexWrap:'wrap' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontWeight:600, fontSize:13 }}>
+              <input type="checkbox" checked={form.returnable} onChange={e=>set('returnable',e.target.checked)} />
+              Allow Returns
+            </label>
+            {form.returnable && (
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:'#374151' }}>Return window:</span>
+                {[7, 10].map(days => (
+                  <button key={days} type="button"
+                    onClick={() => set('returnWindow', days)}
+                    style={{ padding:'5px 16px', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
+                      background: form.returnWindow === days ? C.accent : 'white',
+                      color:      form.returnWindow === days ? 'white'  : C.mute,
+                      border: `1px solid ${form.returnWindow === days ? C.accent : C.line}` }}>
+                    {days} days
+                  </button>
+                ))}
+              </div>
+            )}
+            {!form.returnable && (
+              <span style={{ fontSize:12, color:C.red, fontWeight:600, background:C.red+'10', padding:'4px 10px', borderRadius:6 }}>
+                ⚠️ Non-returnable — customers cannot raise return requests
+              </span>
+            )}
+          </div>
         </div>
 
         {error && <div style={{ marginTop:14,color:C.red,fontSize:13,fontWeight:600,background:C.red+'10',padding:'8px 12px',borderRadius:8 }}>{error}</div>}
@@ -782,7 +814,7 @@ function SellerReturnsTab() {
 
   const stats = {
     pending:   returns.filter(r => r.status === 'REQUESTED').length,
-    approved:  returns.filter(r => ['PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(r.status)).length,
+    approved:  returns.filter(r => ['APPROVED','PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(r.status)).length,
     completed: returns.filter(r => r.status === 'REFUND_COMPLETED').length,
     rejected:  returns.filter(r => r.status === 'SELLER_REJECTED').length,
     total:     returns.length,
@@ -809,6 +841,7 @@ function SellerReturnsTab() {
           {[
             { key:'ALL',              label:'All' },
             { key:'REQUESTED',        label:'Pending' },
+            { key:'APPROVED',         label:'Admin OK' },
             { key:'PICKUP_SCHEDULED', label:'Pickup' },
             { key:'ITEM_RECEIVED',    label:'Received' },
             { key:'REFUND_INITIATED', label:'Refunding' },
@@ -837,13 +870,14 @@ function SellerReturnsTab() {
             {filtered.map(req => {
               const isOpen = actionId === req._id;
               const canAct     = req.status === 'REQUESTED';
-              const canAdvance = ['PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status);
+              const canAdvance = ['APPROVED','PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status);
               const isDone     = ['REFUND_COMPLETED','REPLACEMENT_SENT','COMPLETED','SELLER_REJECTED'].includes(req.status);
 
               const ADVANCE_LABELS = {
-                PICKUP_SCHEDULED: { icon:'📦', label:'Mark Item Received',    next:'ITEM_RECEIVED'    },
-                ITEM_RECEIVED:    { icon:'💸', label:'Initiate Refund',        next:'REFUND_INITIATED' },
-                REFUND_INITIATED: { icon:'✅', label:'Mark Refund Completed',  next:'REFUND_COMPLETED' },
+                APPROVED:         { icon:'📦', label:'Schedule Pickup',        next:'PICKUP_SCHEDULED' },
+                PICKUP_SCHEDULED: { icon:'✓',  label:'Mark Item Received',     next:'ITEM_RECEIVED'    },
+                ITEM_RECEIVED:    { icon:'💸', label:'Initiate Refund',         next:'REFUND_INITIATED' },
+                REFUND_INITIATED: { icon:'✅', label:'Mark Refund Completed',   next:'REFUND_COMPLETED' },
               };
               const adv = ADVANCE_LABELS[req.status];
 
