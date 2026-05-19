@@ -12,6 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   LineChart, Line, AreaChart, Area,
 } from 'recharts';
+import SupportIcon from '../../components/icons/SupportIcon';
 
 /* ── palette ── */
 const C = {
@@ -1578,7 +1579,7 @@ const TABS = [
   { id: 'Returns',       icon: '↩️' },
   { id: 'Coupons',       icon: '🎟️' },
   { id: 'Notifications', icon: '🔔' },
-  { id: 'Support',       icon: '🎫' },
+  { id: 'Support',       icon: null },
 ];
 
 export default function AdminDashboard() {
@@ -1646,7 +1647,9 @@ export default function AdminDashboard() {
                 borderLeft: tab === t.id ? `3px solid ${C.accent}` : '3px solid transparent',
                 transition: 'all .15s',
               }}>
-              <span>{t.icon}</span>
+              <span style={{ display:'flex', alignItems:'center' }}>
+                {t.id === 'Support' ? <SupportIcon size={18} color={tab === t.id ? C.accent : '#6b7280'} /> : t.icon}
+              </span>
               <span style={{ flex: 1 }}>{t.id}</span>
               {t.id === 'Support' && openTicketCount > 0 && (
                 <span style={{
@@ -1674,8 +1677,11 @@ export default function AdminDashboard() {
       <div style={{ marginLeft: 220, padding: '32px 36px' }}>
         {/* Page title */}
         <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            {TABS.find(t => t.id === tab)?.icon} {tab}
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, display:'flex', alignItems:'center', gap:8 }}>
+            {tab === 'Support'
+              ? <SupportIcon size={24} color="#0f172a" />
+              : TABS.find(t => t.id === tab)?.icon}
+            {tab}
           </h1>
           <p style={{ color: C.mute, margin: '4px 0 0', fontSize: 13 }}>
             {tab === 'Overview' && 'Platform performance at a glance'}

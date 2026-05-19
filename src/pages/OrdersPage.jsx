@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
 import { reviewsApi } from '../api/reviews';
 import { formatPriceShort, formatDate } from '../utils/formatters';
+import SupportIcon from '../components/icons/SupportIcon';
 
 function StarPicker({ value, onChange }) {
   const [hovered, setHovered] = useState(0);
@@ -365,7 +366,7 @@ export default function OrdersPage() {
                       )}
                       <button onClick={() => navigate(`/support?orderId=${order._id}`)}
                         style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #007185',background:'linear-gradient(to bottom,#f0f9fb,#d9f2f5)',color:'#007185',cursor:'pointer' }}>
-                        🎫 Get Help
+                        <SupportIcon size={13} color="#007185" /> Get Help
                       </button>
                     </div>
                   </div>

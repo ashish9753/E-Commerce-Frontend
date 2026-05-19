@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Search, GitCompare, Bell } from 'lucide-react';
+import { ShoppingCart, Heart, User, Search, GitCompare, Bell, Package } from 'lucide-react';
+import SupportIcon from '../icons/SupportIcon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
@@ -215,12 +216,12 @@ export default function Header() {
       {/* Main dark bar */}
       <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
         <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
-          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 20, alignItems: 'center', height: 64 }}>
+          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 20, alignItems: 'center', height: 76 }}>
 
           {/* Logo */}
           <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
-            fontWeight: 800, fontSize: 19, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
-            padding: '4px 8px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+            fontWeight: 800, fontSize: 22, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
+            padding: '6px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
             Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
@@ -230,7 +231,7 @@ export default function Header() {
           <div style={{ position: 'relative', maxWidth: 700, width: '100%', margin: '0 auto' }} ref={searchRef}>
             <form onSubmit={handleSearchSubmit} style={{ display: 'flex' }}>
               <input
-                style={{ flex: 1, height: 40, padding: '0 12px 0 14px', border: 'none', borderRadius: '4px 0 0 4px',
+                style={{ flex: 1, height: 46, padding: '0 12px 0 16px', border: 'none', borderRadius: '4px 0 0 4px',
                   fontSize: 14, outline: 'none', background: 'white', color: '#0f172a' }}
                 placeholder="Search products, brands & categories…"
                 value={query}
@@ -238,9 +239,9 @@ export default function Header() {
                 onFocus={() => query.trim().length > 1 && setShowResults(true)}
                 autoComplete="off"
               />
-              <button type="submit" style={{ height: 40, padding: '0 16px', background: '#FF5A1F',
+              <button type="submit" style={{ height: 46, padding: '0 18px', background: '#FF5A1F',
                 border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Search size={18} color="white" />
+                <Search size={20} color="white" />
               </button>
             </form>
 
@@ -274,8 +275,8 @@ export default function Header() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {compareCount > 0 && iconBtn(() => navigate('/compare'), (
               <>
-                <GitCompare size={18} />
-                <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
+                <GitCompare size={22} />
+                <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17, borderRadius: '50%',
                   background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800, display: 'flex',
                   alignItems: 'center', justifyContent: 'center' }}>{compareCount}</span>
               </>
@@ -283,8 +284,8 @@ export default function Header() {
 
             {iconBtn(() => navigate('/wishlist'), (
               <>
-                <Heart size={18} />
-                {wishCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                <Heart size={22} />
+                {wishCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
                   borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{wishCount}</span>}
               </>
@@ -294,8 +295,8 @@ export default function Header() {
               <div style={{ position: 'relative' }} ref={bellRef}>
                 {iconBtn(() => setShowNotifs(v => !v), (
                   <>
-                    <Bell size={18} />
-                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                    <Bell size={22} />
+                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
                       borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
                       display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -308,8 +309,8 @@ export default function Header() {
 
             {iconBtn(() => navigate('/cart'), (
               <>
-                <ShoppingCart size={18} />
-                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16,
+                <ShoppingCart size={22} />
+                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
                   borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartCount}</span>}
               </>
@@ -317,6 +318,7 @@ export default function Header() {
 
             {user ? (
               <>
+                {iconBtn(() => navigate('/orders'), <Package size={22} />)}
                 {user.role === 'admin' && iconBtn(() => navigate('/admin'), (
                   <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
                     background: '#7c3aed33', color: '#c4b5fd' }}>ADMIN</span>
@@ -325,17 +327,17 @@ export default function Header() {
                   <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
                     background: '#f59e0b22', color: '#fcd34d' }}>SELLER</span>
                 ))}
-                {iconBtn(() => navigate('/support'), <span style={{ fontSize: 14 }}>🎫</span>)}
+                {iconBtn(() => navigate('/support'), <SupportIcon size={22} color="white" />)}
                 {iconBtn(() => navigate('/profile'), (
                   <>
-                    <User size={18} />
+                    <User size={22} />
                     <span>{user.name.split(' ')[0]}</span>
                   </>
                 ))}
               </>
             ) : (
-              <button onClick={() => navigate('/login')} style={{ padding: '7px 16px', background: 'transparent',
-                border: '1px solid white', borderRadius: 4, color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              <button onClick={() => navigate('/login')} style={{ padding: '8px 18px', background: 'transparent',
+                border: '1px solid white', borderRadius: 4, color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 Sign In
               </button>
             )}

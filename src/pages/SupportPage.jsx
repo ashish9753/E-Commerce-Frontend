@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { supportApi } from '../api/support';
 import { ordersApi } from '../api/orders';
+import SupportIcon from '../components/icons/SupportIcon';
 
 const STATUS_META = {
   OPEN:        { label: 'Open',        color: '#3b82f6', bg: '#dbeafe' },
@@ -531,7 +532,7 @@ export default function SupportPage() {
         ) : tickets.length === 0 ? (
           <div style={{ background:'white', borderRadius:8, border:'1px solid #ddd',
             padding:'60px 24px', textAlign:'center' }}>
-            <div style={{ fontSize:56, marginBottom:16 }}>🎫</div>
+            <div style={{ marginBottom:16, display:'flex', justifyContent:'center' }}><SupportIcon size={56} color="#9ca3af" /></div>
             <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>No support tickets yet</div>
             <div style={{ color:'#888', marginBottom:24, fontSize:14 }}>Have a question or issue? Open a ticket and our team will help you.</div>
             <button onClick={() => setShowNew(true)}
@@ -551,8 +552,8 @@ export default function SupportPage() {
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px #0001'}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
                 <div style={{ width:40, height:40, borderRadius:10, background:'#f0f2f2',
-                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
-                  🎫
+                  display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <SupportIcon size={22} color="#6b7280" />
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:700, fontSize:14, marginBottom:3, overflow:'hidden',
