@@ -10,7 +10,8 @@ import { useNotifications } from '../../context/NotificationContext';
 import { productsApi } from '../../api/products';
 import { normalizeProducts } from '../../utils/normalizers';
 import { formatPriceShort } from '../../utils/formatters';
-import { categories } from '../../data/categories';
+import { useCatalog, getCatEmoji } from '../../context/CatalogContext';
+import { categories as FALLBACK_CATS } from '../../data/categories';
 
 const TYPE_ICON = { ORDER:'📦', PAYMENT:'💳', OFFER:'🎁', REFUND:'↩️', SYSTEM:'🔔' };
 
@@ -150,6 +151,10 @@ export default function Header() {
   const { count: compareCount } = useCompare();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
+  const { topCategories } = useCatalog();
+  const navCats = topCategories.length > 0
+    ? topCategories.map(c => ({ id: c._id, name: c.name, emo: getCatEmoji(c.name) }))
+    : FALLBACK_CATS;
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -323,9 +328,9 @@ export default function Header() {
                   <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
                     background: '#7c3aed33', color: '#c4b5fd' }}>ADMIN</span>
                 ))}
-                {user.role === 'seller' && iconBtn(() => navigate('/seller'), (
+                {user.role === 'employee' && iconBtn(() => navigate('/employee'), (
                   <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
-                    background: '#f59e0b22', color: '#fcd34d' }}>SELLER</span>
+                    background: '#f59e0b22', color: '#fcd34d' }}>EMPLOYEE</span>
                 ))}
                 {iconBtn(() => navigate('/support'), <SupportIcon size={22} color="white" />)}
                 {iconBtn(() => navigate('/profile'), (
@@ -351,7 +356,7 @@ export default function Header() {
           display: 'flex', alignItems: 'center', gap: 2, height: 40,
           overflowX: 'auto', scrollbarWidth: 'none' }}>
           <CategoryBtn label="All Products" active={activeCategory === 'All'} onClick={() => { setActiveCategory('All'); navigate('/products'); }} />
-          {categories.map(c => (
+          {navCats.map(c => (
             <CategoryBtn key={c.id} label={`${c.emo} ${c.name}`} active={activeCategory === c.name}
               onClick={() => { setActiveCategory(c.name); navigate(`/products?category=${encodeURIComponent(c.name)}`); }} />
           ))}

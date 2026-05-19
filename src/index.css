@@ -31,6 +31,11 @@
 html { scroll-behavior: smooth; }
 body { font-feature-settings: "ss01","cv11"; -webkit-font-smoothing: antialiased; }
 
+/* Remove number input spinners globally */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #DDD; border-radius: 99px; }
 ::-webkit-scrollbar-track { background: transparent; }

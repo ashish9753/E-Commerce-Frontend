@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
+import { useCatalog } from '../../context/CatalogContext';
 
-const BRANDS = ['Samsung', 'LG', 'Sony', 'Bosch', 'Philips', 'Apple', 'Xiaomi', 'JBL', 'Asus'];
+const FALLBACK_BRANDS = ['Samsung', 'LG', 'Sony', 'Bosch', 'Philips', 'Apple', 'Xiaomi', 'JBL', 'Asus'];
 const PRICE_RANGES = [
   { label: 'Under Rs. 10,000', min: 0, max: 10000 },
   { label: 'Rs. 10,000 – 30,000', min: 10000, max: 30000 },
@@ -11,6 +12,8 @@ const PRICE_RANGES = [
 const RATINGS = [4, 3, 2];
 
 export default function FilterBar({ filters, onChange }) {
+  const { brands: apiBrands } = useCatalog();
+  const BRANDS = apiBrands.length > 0 ? apiBrands.map(b => b.name) : FALLBACK_BRANDS;
   const toggle = (key, val) => {
     const cur = filters[key] || [];
     const next = cur.includes(val) ? cur.filter(v => v !== val) : [...cur, val];

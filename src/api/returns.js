@@ -7,10 +7,10 @@ export const returnsApi = {
   getById:          (id)       => client.get(`/returns/${id}`),
   updateRefundMethod:(id, data) => client.patch(`/returns/${id}/refund-method`, data),
 
-  // Seller
-  getSellerReturns: (params)   => client.get('/returns/seller', { params }),
-  sellerAction:     (id, data) => client.patch(`/returns/${id}/seller-action`, data),
-  sellerAdvance:    (id, data) => client.patch(`/returns/${id}/seller-advance`, data),
+  // Employee
+  getEmployeeReturns: (params)   => client.get('/returns/employee', { params }),
+  employeeAction:     (id, data) => client.patch(`/returns/${id}/employee-action`, data),
+  employeeAdvance:    (id, data) => client.patch(`/returns/${id}/employee-advance`, data),
 
   // Admin
   getAll:   (params)   => client.get('/returns', { params }),

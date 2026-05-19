@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { sellerApi } from '../../api/seller';
+import { employeeApi } from '../../api/seller';
 import { categoriesApi } from '../../api/categories';
 import { returnsApi } from '../../api/returns';
 import { getErrorMessage } from '../../api/client';
+import { useCatalog } from '../../context/CatalogContext';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -79,8 +80,8 @@ function OverviewTab({ profile }) {
 
   useEffect(() => {
     Promise.all([
-      sellerApi.getMyProducts({ limit: 200 }),
-      sellerApi.getMyOrders({ limit: 200 }),
+      employeeApi.getMyProducts({ limit: 200 }),
+      employeeApi.getMyOrders({ limit: 200 }),
     ]).then(([pRes, oRes]) => {
       setProducts(pRes.data?.data?.data || []);
       setOrdersData(oRes.data?.data || {});
@@ -90,7 +91,7 @@ function OverviewTab({ profile }) {
   if (loading) return <Loader />;
 
   const orders = ordersData?.data || [];
-  const revenue = ordersData?.sellerRevenue || 0;
+  const revenue = ordersData?.employeeRevenue || 0;
   const breakdown = ordersData?.statusBreakdown || [];
 
   const totalStock  = products.reduce((a, p) => a + (p.stock || 0), 0);
@@ -114,7 +115,7 @@ function OverviewTab({ profile }) {
 
       {/* KPIs */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Revenue"    value={fmtRs(revenue)}       sub="From paid orders"      color={C.green}  icon="💰" />
+        <KpiCard label="Total Revenue"    value={fmtRs(revenue)}       sub="Full order amount"     color={C.green}  icon="💰" />
         <KpiCard label="Total Orders"     value={fmt(orders.length)}   sub={`${delivered} delivered`} color={C.blue} icon="📦" />
         <KpiCard label="Active Products"  value={publishedN}           sub={`${products.length} total`} color={C.accent} icon="🛒" />
         <KpiCard label="Pending Orders"   value={fmt(pending)}         sub="To be processed"       color={C.yellow} icon="⏳" />
@@ -222,7 +223,7 @@ function ProductsTab({ onEdit }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    sellerApi.getMyProducts({ limit: 200 }).then(r => setAll(r.data?.data?.data || [])).catch(()=>{}).finally(()=>setLoading(false));
+    employeeApi.getMyProducts({ limit: 200 }).then(r => setAll(r.data?.data?.data || [])).catch(()=>{}).finally(()=>setLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -241,14 +242,14 @@ function ProductsTab({ onEdit }) {
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Delete "${title}"?`)) return;
     setBusy(id);
-    await sellerApi.deleteProduct(id).catch(()=>{});
+    await employeeApi.deleteProduct(id).catch(()=>{});
     setAll(prev => prev.filter(x => x._id !== id));
     setBusy(null);
   };
 
   const handleTogglePublish = async (p) => {
     setBusy(p._id);
-    await sellerApi.updateProduct(p._id, { isPublished: !p.isPublished }).catch(()=>{});
+    await employeeApi.updateProduct(p._id, { isPublished: !p.isPublished }).catch(()=>{});
     setAll(prev => prev.map(x => x._id === p._id ? {...x, isPublished: !p.isPublished} : x));
     setBusy(null);
   };
@@ -356,7 +357,7 @@ function ProductsTab({ onEdit }) {
 /* ══════════════════════════════════════════════════════
    ORDERS TAB
 ══════════════════════════════════════════════════════ */
-const SELLER_STATUSES = ['CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED'];
+const EMPLOYEE_STATUSES = ['CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED'];
 const STATUS_NEXT = {
   PLACED:           'CONFIRMED',
   CONFIRMED:        'PACKED',
@@ -380,7 +381,7 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
   const doUpdate = async (status) => {
     setSaving(true);
     try {
-      await sellerApi.updateOrderStatus(order._id, { status, trackingId: tracking || undefined });
+      await employeeApi.updateOrderStatus(order._id, { status, trackingId: tracking || undefined });
       onUpdated(order._id, status, tracking);
       setOpen(false);
     } catch(e) {
@@ -416,7 +417,7 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
         </button>
       )}
 
-      {/* RETURNED — prompt seller to handle via Returns tab */}
+      {/* RETURNED — prompt employee to handle via Returns tab */}
       {isReturned && (
         <button onClick={onViewReturns}
           style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6,
@@ -442,7 +443,7 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
           border:`1px solid ${C.line}`, borderRadius:10, padding:14, boxShadow:'0 4px 20px #0002', width:240, marginTop:4 }}>
           <div style={{ fontSize:11, fontWeight:700, color:C.mute, marginBottom:8, textTransform:'uppercase' }}>Set Status</div>
           <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
-            {SELLER_STATUSES.map(s => (
+            {EMPLOYEE_STATUSES.map(s => (
               <button key={s} onClick={() => doUpdate(s)} disabled={saving || s === current}
                 style={{ textAlign:'left', padding:'7px 10px', borderRadius:7,
                   background: s === current ? STATUS_COLORS[s]+'22' : 'white',
@@ -478,10 +479,10 @@ function OrdersTab({ onViewReturns }) {
   const [payF, setPayF]     = useState('');
 
   useEffect(() => {
-    sellerApi.getMyOrders({ limit: 200 }).then(r => {
+    employeeApi.getMyOrders({ limit: 200 }).then(r => {
       const d = r.data?.data || {};
       setAll(d.data || []);
-      setRev(d.sellerRevenue || 0);
+      setRev(d.employeeRevenue || 0);
       setBD(d.statusBreakdown || []);
     }).catch(()=>{}).finally(()=>setLoading(false));
   }, []);
@@ -511,7 +512,7 @@ function OrdersTab({ onViewReturns }) {
     <div style={{ display:'flex',flexDirection:'column',gap:20 }}>
       <div style={{ display:'flex',gap:16,flexWrap:'wrap' }}>
         <KpiCard label="Total Orders"   value={fmt(all.length)}  sub={`${delivered} delivered`}    color={C.blue}   icon="📦" />
-        <KpiCard label="Revenue Earned" value={fmtRs(revenue)}   sub="From delivered orders"       color={C.green}  icon="💰" />
+        <KpiCard label="Revenue Earned" value={fmtRs(revenue)}   sub="From paid orders"            color={C.green}  icon="💰" />
         <KpiCard label="Pending"        value={fmt(pending)}     sub="Awaiting fulfilment"          color={C.yellow} icon="⏳" />
         <KpiCard label="Cancelled"      value={fmt(all.filter(o=>o.orderStatus==='CANCELLED').length)} sub="" color={C.red} icon="❌" />
       </div>
@@ -610,6 +611,7 @@ function OrdersTab({ onViewReturns }) {
    PRODUCT FORM (Add / Edit)
 ══════════════════════════════════════════════════════ */
 function ProductForm({ initial, categories, onSave, onCancel }) {
+  const { brands: catalogBrands } = useCatalog();
   const empty = { title:'',description:'',shortDescription:'',brand:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7 };
   const [form, setForm] = useState(initial ? {
     title: initial.title||'', description: initial.description||'',
@@ -659,7 +661,13 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
       <Card title={initial ? 'Edit Product' : 'Add New Product'}>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
           <div><label style={LabelStyle}>Title *</label><Inp value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Product name" /></div>
-          <div><label style={LabelStyle}>Brand</label><Inp value={form.brand} onChange={e=>set('brand',e.target.value)} placeholder="Brand name" /></div>
+          <div>
+            <label style={LabelStyle}>Brand</label>
+            <Sel value={form.brand} onChange={e=>set('brand',e.target.value)}>
+              <option value="">— Select Brand —</option>
+              {catalogBrands.map(b => <option key={b._id} value={b.name}>{b.name}</option>)}
+            </Sel>
+          </div>
           <div>
             <label style={LabelStyle}>Category *</label>
             <Sel value={form.category} onChange={e=>set('category',e.target.value)} style={{ width:'100%' }}>
@@ -744,12 +752,12 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
 }
 
 /* ══════════════════════════════════════════════════════
-   RETURNS TAB — seller
+   RETURNS TAB — employee
 ══════════════════════════════════════════════════════ */
 const RETURN_STATUS_META = {
-  REQUESTED:        { label:'Requested',        color:'#f59e0b' },
-  SELLER_APPROVED:  { label:'You Approved',     color:'#22c55e' },
-  SELLER_REJECTED:  { label:'You Rejected',     color:'#ef4444' },
+  REQUESTED:         { label:'Requested',        color:'#f59e0b' },
+  EMPLOYEE_APPROVED: { label:'You Approved',     color:'#22c55e' },
+  EMPLOYEE_REJECTED: { label:'You Rejected',     color:'#ef4444' },
   APPROVED:         { label:'Admin Approved',   color:'#22c55e' },
   REJECTED:         { label:'Admin Rejected',   color:'#dc2626' },
   PICKUP_SCHEDULED: { label:'Pickup Scheduled', color:'#8b5cf6' },
@@ -760,7 +768,7 @@ const RETURN_STATUS_META = {
   COMPLETED:        { label:'Completed',        color:'#16a34a' },
 };
 
-function SellerReturnBadge({ status }) {
+function EmployeeReturnBadge({ status }) {
   const m = RETURN_STATUS_META[status] || { label: status, color: '#888' };
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700,
@@ -770,7 +778,7 @@ function SellerReturnBadge({ status }) {
   );
 }
 
-function SellerReturnsTab() {
+function EmployeeReturnsTab() {
   const [returns, setReturns]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [filter, setFilter]       = useState('ALL');
@@ -781,7 +789,7 @@ function SellerReturnsTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    returnsApi.getSellerReturns({ limit: 100 })
+    returnsApi.getEmployeeReturns({ limit: 100 })
       .then(r => setReturns(r.data?.data?.data || r.data?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -792,7 +800,7 @@ function SellerReturnsTab() {
   const doAction = async (id, action) => {
     setSaving(true);
     try {
-      await returnsApi.sellerAction(id, { action, note });
+      await returnsApi.employeeAction(id, { action, note });
       setActionId(null); setNote('');
       load();
     } catch(e) {
@@ -803,7 +811,7 @@ function SellerReturnsTab() {
   const doAdvance = async (id) => {
     setSaving(true);
     try {
-      await returnsApi.sellerAdvance(id, {});
+      await returnsApi.employeeAdvance(id, {});
       load();
     } catch(e) {
       alert(e?.response?.data?.message || 'Failed to update');
@@ -816,7 +824,7 @@ function SellerReturnsTab() {
     pending:   returns.filter(r => r.status === 'REQUESTED').length,
     approved:  returns.filter(r => ['APPROVED','PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(r.status)).length,
     completed: returns.filter(r => r.status === 'REFUND_COMPLETED').length,
-    rejected:  returns.filter(r => r.status === 'SELLER_REJECTED').length,
+    rejected:  returns.filter(r => r.status === 'EMPLOYEE_REJECTED').length,
     total:     returns.length,
   };
 
@@ -846,7 +854,7 @@ function SellerReturnsTab() {
             { key:'ITEM_RECEIVED',    label:'Received' },
             { key:'REFUND_INITIATED', label:'Refunding' },
             { key:'REFUND_COMPLETED', label:'Done' },
-            { key:'SELLER_REJECTED',  label:'Rejected' },
+            { key:'EMPLOYEE_REJECTED',  label:'Rejected' },
           ].map(f => (
             <button key={f.key} onClick={() => setFilter(f.key)}
               style={{ padding:'5px 16px', borderRadius:99, border:'1px solid', fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap',
@@ -871,7 +879,7 @@ function SellerReturnsTab() {
               const isOpen = actionId === req._id;
               const canAct     = req.status === 'REQUESTED';
               const canAdvance = ['APPROVED','PICKUP_SCHEDULED','ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status);
-              const isDone     = ['REFUND_COMPLETED','REPLACEMENT_SENT','COMPLETED','SELLER_REJECTED'].includes(req.status);
+              const isDone     = ['REFUND_COMPLETED','REPLACEMENT_SENT','COMPLETED','EMPLOYEE_REJECTED'].includes(req.status);
 
               const ADVANCE_LABELS = {
                 APPROVED:         { icon:'📦', label:'Schedule Pickup',        next:'PICKUP_SCHEDULED' },
@@ -897,7 +905,7 @@ function SellerReturnsTab() {
                         {req.user?.name} · {req.user?.email}
                       </div>
                     </div>
-                    <SellerReturnBadge status={req.status} />
+                    <EmployeeReturnBadge status={req.status} />
                     {canAct && (
                       <button onClick={() => setActionId(isOpen ? null : req._id)}
                         style={{ padding:'5px 14px', borderRadius:8, background:isOpen?'#f1f5f9':'#FF5A1F', color:isOpen?C.mute:'white',
@@ -1001,16 +1009,16 @@ function SellerReturnsTab() {
                       ✅ Refund completed — this return is closed
                     </div>
                   )}
-                  {req.status === 'SELLER_REJECTED' && (
+                  {req.status === 'EMPLOYEE_REJECTED' && (
                     <div style={{ padding:'10px 16px', background:'#fef2f2', borderTop:`1px solid ${C.line}`, fontSize:12, color:'#dc2626', fontWeight:600 }}>
                       Return rejected. Admin may review and override.
                     </div>
                   )}
 
                   {/* Notes */}
-                  {(req.sellerNote || req.adminNote) && (
+                  {(req.employeeNote || req.adminNote) && (
                     <div style={{ padding:'10px 16px', background:'#f8fafc', borderTop:`1px solid ${C.line}`, fontSize:12, color:'#555' }}>
-                      {req.sellerNote && <div><strong>Your note:</strong> {req.sellerNote}</div>}
+                      {req.employeeNote && <div><strong>Your note:</strong> {req.employeeNote}</div>}
                       {req.adminNote  && <div style={{ marginTop:4 }}><strong>Admin note:</strong> {req.adminNote}</div>}
                     </div>
                   )}
@@ -1036,17 +1044,17 @@ function RegisterForm({ onDone }) {
   const handleSubmit = async () => {
     if (!form.shopName) { setError('Shop name is required.'); return; }
     setSaving(true); setError('');
-    try { await sellerApi.registerSeller(form); onDone(); }
+    try { await employeeApi.registerEmployee(form); onDone(); }
     catch(err) { setError(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
 
   return (
     <div style={{ maxWidth:560,margin:'0 auto' }}>
-      <Card title="Register as Seller">
+      <Card title="Register as Employee">
         <div style={{ textAlign:'center',padding:'12px 0 24px' }}>
           <div style={{ fontSize:48 }}>🏪</div>
-          <div style={{ fontWeight:800,fontSize:18,marginTop:8 }}>Set up your seller account</div>
+          <div style={{ fontWeight:800,fontSize:18,marginTop:8 }}>Set up your employee account</div>
           <div style={{ color:C.mute,fontSize:13,marginTop:4 }}>Complete your shop profile to start listing products</div>
         </div>
         {[['Shop Name *','shopName'],['GST Number','gstNumber'],['Business Address','businessAddress']].map(([l,k])=>(
@@ -1061,7 +1069,7 @@ function RegisterForm({ onDone }) {
         </div>
         {error && <div style={{ color:C.red,fontSize:13,marginBottom:12,background:C.red+'10',padding:'8px 12px',borderRadius:8 }}>{error}</div>}
         <button className="btn btn-accent" onClick={handleSubmit} disabled={saving} style={{ width:'100%',height:44 }}>
-          {saving ? <span className="spinner" /> : 'Create Seller Account'}
+          {saving ? <span className="spinner" /> : 'Create Employee Account'}
         </button>
       </Card>
     </div>
@@ -1069,7 +1077,7 @@ function RegisterForm({ onDone }) {
 }
 
 /* ══════════════════════════════════════════════════════
-   MAIN SELLER DASHBOARD
+   MAIN EMPLOYEE DASHBOARD
 ══════════════════════════════════════════════════════ */
 const TABS = [
   { id:'Overview',    icon:'📊' },
@@ -1090,8 +1098,8 @@ export default function SellerDashboard() {
 
   const loadProfile = useCallback(() => {
     setLoading(true);
-    sellerApi.getMyProfile()
-      .then(r => setProfile(r.data?.data?.seller || null))
+    employeeApi.getMyProfile()
+      .then(r => setProfile(r.data?.data?.employee || null))
       .catch(() => setProfile(null))
       .finally(() => setLoading(false));
   }, []);
@@ -1102,12 +1110,12 @@ export default function SellerDashboard() {
   }, [loadProfile]);
 
   const handleAddProduct = async (data) => {
-    await sellerApi.createProduct(data);
+    await employeeApi.createProduct(data);
     setTab('My Products');
   };
 
   const handleEditSave = async (data) => {
-    await sellerApi.updateProduct(editProduct._id, data);
+    await employeeApi.updateProduct(editProduct._id, data);
     setEdit(null);
     setTab('My Products');
   };
@@ -1120,7 +1128,7 @@ export default function SellerDashboard() {
       <div style={{ position:'fixed',left:0,top:0,bottom:0,width:220,background:'#0f172a',display:'flex',flexDirection:'column',zIndex:100 }}>
         <div style={{ padding:'24px 20px',borderBottom:'1px solid #1e293b' }}>
           <div style={{ fontWeight:800,fontSize:17,color:'white' }}><span style={{ color:C.accent }}>Trade</span>Engine</div>
-          <div style={{ fontSize:11,color:'#64748b',marginTop:3 }}>Seller Panel</div>
+          <div style={{ fontSize:11,color:'#64748b',marginTop:3 }}>Employee Panel</div>
         </div>
 
         <div style={{ padding:'16px 20px',borderBottom:'1px solid #1e293b' }}>
@@ -1177,7 +1185,7 @@ export default function SellerDashboard() {
             {tab==='My Products' && !editProduct && <ProductsTab onEdit={p=>setEdit(p)} />}
             {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} categories={categories} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
             {tab==='Orders'      && !editProduct && <OrdersTab onViewReturns={() => setTab('Returns')} />}
-            {tab==='Returns'     && !editProduct && <SellerReturnsTab />}
+            {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
             {tab==='Add Product' && !editProduct && <ProductForm categories={categories} onSave={handleAddProduct} />}
           </>
         )}
@@ -1185,3 +1193,4 @@ export default function SellerDashboard() {
     </div>
   );
 }
+

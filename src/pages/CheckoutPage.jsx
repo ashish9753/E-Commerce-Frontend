@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
 import { useToast } from '../context/ToastContext';
 import { usersApi } from '../api/users';
+import { settingsApi } from '../api/settings';
 import { formatPriceShort } from '../utils/formatters';
 import { getErrorMessage } from '../api/client';
 
@@ -68,7 +69,7 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
 }
 
 /* ── Order summary sidebar ── */
-function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, onPlace, loading, canPlace, step }) {
+function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, onPlace, loading, canPlace, step, codBookingAmount, utrConfirmed }) {
   return (
     <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden', position: 'sticky', top: 20 }}>
       {/* Place order button at top — Amazon style */}
@@ -111,6 +112,21 @@ function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, 
             <span>Order Total:</span>
             <span>{formatPriceShort(total)}</span>
           </div>
+          {codBookingAmount > 0 && (
+            <>
+              <div style={{ borderTop: '1px dashed #fde68a', paddingTop: 8, marginTop: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#b45309', fontWeight: 700 }}>
+                  <span>⚡ Pay now (UPI booking):</span>
+                  <span>{formatPriceShort(codBookingAmount)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#555', marginTop: 4 }}>
+                  <span>Pay on delivery (cash):</span>
+                  <span>{formatPriceShort(total - codBookingAmount)}</span>
+                </div>
+                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>* Booking amount is non-refundable</div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -162,6 +178,9 @@ export default function CheckoutPage() {
   const [showAddForm, setShowAddForm]          = useState(false);
   const [loading, setLoading]                 = useState(false);
   const [addrLoading, setAddrLoading]         = useState(true);
+  const [codCfg, setCodCfg]                   = useState(null);
+  const [utrNumber, setUtrNumber]             = useState('');
+  const [utrConfirmed, setUtrConfirmed]       = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -174,7 +193,18 @@ export default function CheckoutPage() {
       })
       .catch(() => {})
       .finally(() => setAddrLoading(false));
+    settingsApi.getCodSettings()
+      .then(r => setCodCfg(r.data?.data?.codSettings))
+      .catch(() => {});
   }, [user, navigate]);
+
+  // Calculate COD booking amount based on admin settings
+  const codBookingRequired = codCfg?.enabled && total >= (codCfg?.minOrderAmount || 0);
+  const codBookingAmount = codBookingRequired
+    ? (codCfg.bookingType === 'percent'
+        ? Math.round((total * codCfg.bookingValue) / 100)
+        : codCfg.bookingValue)
+    : 0;
 
   if (items.length === 0) { navigate('/cart'); return null; }
 
@@ -195,8 +225,15 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!selectedAddressId) { toast('Please select a delivery address', 'error'); return; }
+    if (codBookingRequired && !utrConfirmed) {
+      toast('Please complete the UPI booking payment first', 'error'); return;
+    }
     setLoading(true);
-    const result = await placeOrder({ shippingAddressId: selectedAddressId, paymentMethod: 'COD' });
+    const result = await placeOrder({
+      shippingAddressId: selectedAddressId,
+      paymentMethod: 'COD',
+      codBookingUtr: utrConfirmed ? utrNumber : '',
+    });
     setLoading(false);
     if (result.success) {
       await clearCart();
@@ -330,40 +367,133 @@ export default function CheckoutPage() {
 
           {/* ── Step 2: Payment ── */}
           {step === 2 && (
-            <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden' }}>
-              <div style={{ background: '#232F3E', padding: '12px 20px' }}>
-                <div style={{ color: 'white', fontWeight: 700, fontSize: 16 }}>Step 2: Choose a payment method</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ background: '#232F3E', padding: '12px 20px' }}>
+                  <div style={{ color: 'white', fontWeight: 700, fontSize: 16 }}>Step 2: Payment method</div>
+                </div>
+                <div style={{ padding: 20 }}>
+                  {/* COD badge */}
+                  <div style={{ border: '2px solid #FF9900', borderRadius: 6, padding: '16px 18px', background: '#fffbf0', display: 'flex', gap: 14, alignItems: 'center' }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 8, background: '#FF9900', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>💵</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>Cash on Delivery (COD)</div>
+                      <div style={{ fontSize: 13, color: '#555', marginTop: 3 }}>
+                        Pay the remaining amount in cash when your order is delivered.
+                      </div>
+                      {codBookingRequired ? (
+                        <div style={{ fontSize: 12, color: '#c2410c', fontWeight: 700, marginTop: 4 }}>
+                          ⚠ Booking amount of {formatPriceShort(codBookingAmount)} required via UPI (non-refundable)
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: '#007600', fontWeight: 600, marginTop: 4 }}>✓ No advance payment needed</div>
+                      )}
+                    </div>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #FF9900', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF9900' }} />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div style={{ padding: 20 }}>
-                {/* COD option */}
-                <div style={{ border: '2px solid #FF9900', borderRadius: 6, padding: '16px 18px', background: '#fffbf0', display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: '#FF9900', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>💵</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>Cash on Delivery (COD)</div>
-                    <div style={{ fontSize: 13, color: '#555', marginTop: 3 }}>Pay in cash when your order is delivered to your door.</div>
-                    <div style={{ fontSize: 12, color: '#007600', fontWeight: 600, marginTop: 4 }}>✓ No extra charge · Safe & convenient</div>
+
+              {/* UPI booking payment block */}
+              {codBookingRequired && (
+                <div style={{ background: 'white', border: `2px solid ${utrConfirmed ? '#16a34a' : '#f59e0b'}`, borderRadius: 6, overflow: 'hidden' }}>
+                  <div style={{ background: utrConfirmed ? '#16a34a' : '#f59e0b', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>{utrConfirmed ? '✅' : '📲'}</span>
+                    <div>
+                      <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>
+                        {utrConfirmed ? 'Booking Amount Confirmed' : 'Pay Booking Amount via UPI'}
+                      </div>
+                      <div style={{ color: 'rgba(255,255,255,.8)', fontSize: 12 }}>Non-refundable · Required to confirm your COD order</div>
+                    </div>
                   </div>
-                  <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #FF9900', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF9900' }} />
+
+                  <div style={{ padding: '20px 24px' }}>
+                    {/* Amount highlight */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20, padding: '16px', background: '#fefce8', borderRadius: 8, border: '1px solid #fde68a' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', letterSpacing: '.06em' }}>Pay Now (UPI)</div>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: '#b45309' }}>{formatPriceShort(codBookingAmount)}</div>
+                        <div style={{ fontSize: 11, color: '#92400e' }}>Non-refundable booking</div>
+                      </div>
+                      <div style={{ width: 1, height: 60, background: '#fde68a' }} />
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '.06em' }}>Pay on Delivery</div>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>{formatPriceShort(total - codBookingAmount)}</div>
+                        <div style={{ fontSize: 11, color: '#6b7280' }}>Cash at doorstep</div>
+                      </div>
+                    </div>
+
+                    {/* UPI details */}
+                    {codCfg?.upiId && (
+                      <div style={{ marginBottom: 20, padding: '14px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>Pay to</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: 8, background: '#131921', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📲</div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{codCfg.upiName || 'TradeEngine'}</div>
+                            <div style={{ fontFamily: 'monospace', fontSize: 14, color: '#FF5A1F', fontWeight: 700, marginTop: 2 }}>{codCfg.upiId}</div>
+                          </div>
+                          <button onClick={() => { navigator.clipboard.writeText(codCfg.upiId); toast('UPI ID copied!'); }}
+                            style={{ marginLeft: 'auto', padding: '6px 14px', background: '#f1f5f9', border: '1px solid #e5e7eb',
+                              borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', color: '#374151' }}>
+                            Copy UPI ID
+                          </button>
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>
+                          Open any UPI app (GPay, PhonePe, Paytm, BHIM) → Send money → Enter UPI ID above → Pay {formatPriceShort(codBookingAmount)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* UTR entry */}
+                    {!utrConfirmed ? (
+                      <div>
+                        <label style={{ fontSize: 13, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 8 }}>
+                          Enter UPI Transaction ID / UTR Number *
+                        </label>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <input value={utrNumber} onChange={e => setUtrNumber(e.target.value)}
+                            placeholder="12-digit UTR number from your UPI app"
+                            style={{ flex: 1, height: 42, padding: '0 14px', border: '1px solid #d1d5db', borderRadius: 6,
+                              fontSize: 13, fontFamily: 'monospace', outline: 'none', letterSpacing: '.04em' }} />
+                          <button onClick={() => { if (utrNumber.trim().length >= 8) { setUtrConfirmed(true); } else { toast('Enter a valid UTR number (min 8 characters)', 'error'); } }}
+                            style={{ padding: '0 20px', background: '#16a34a', color: 'white', border: 'none',
+                              borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Confirm Payment
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
+                          You'll find the UTR/Transaction ID in your UPI app after the payment is successful.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18, flexShrink: 0 }}>✓</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: '#166534' }}>Payment Confirmed</div>
+                          <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>UTR: <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{utrNumber}</span></div>
+                        </div>
+                        <button onClick={() => { setUtrConfirmed(false); }}
+                          style={{ fontSize: 12, color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                          Edit
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
+              )}
 
-                {total > 10000 && (
-                  <div style={{ background: '#fff8e7', border: '1px solid #f59e0b', borderRadius: 6, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
-                    ⚠️ A booking amount may be required for COD orders above Rs. 10,000.
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => setStep(1)}
-                    style={{ padding: '11px 22px', border: '1px solid #aaa', borderRadius: 6, background: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#555' }}>
-                    ← Back
-                  </button>
-                  <button onClick={() => setStep(3)}
-                    style={{ flex: 1, padding: '12px', background: '#FFD814', border: '1px solid #FBA131', borderRadius: 6, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
-                    Review your order →
-                  </button>
-                </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setStep(1)}
+                  style={{ padding: '11px 22px', border: '1px solid #aaa', borderRadius: 6, background: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer', color: '#555' }}>
+                  ← Back
+                </button>
+                <button onClick={() => { if (codBookingRequired && !utrConfirmed) { toast('Please confirm your UPI booking payment first', 'error'); return; } setStep(3); }}
+                  style={{ flex: 1, padding: '12px', background: '#FFD814', border: '1px solid #FBA131', borderRadius: 6, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
+                  Review your order →
+                </button>
               </div>
             </div>
           )}
@@ -402,7 +532,14 @@ export default function CheckoutPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>Payment method</div>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>Cash on Delivery</div>
-                    <div style={{ fontSize: 12, color: '#007600', marginTop:2 }}>Pay when delivered · No advance payment needed</div>
+                    {codBookingRequired && utrConfirmed ? (
+                      <div style={{ fontSize: 12, marginTop: 4 }}>
+                        <span style={{ color: '#16a34a', fontWeight: 700 }}>✓ Booking {formatPriceShort(codBookingAmount)} paid (UTR: {utrNumber})</span>
+                        <span style={{ color: '#555', marginLeft: 6 }}>· {formatPriceShort(total - codBookingAmount)} on delivery</span>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#007600', marginTop: 2 }}>Pay when delivered · No advance payment needed</div>
+                    )}
                   </div>
                   <button onClick={() => setStep(2)}
                     style={{ fontSize: 13, color: '#007185', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
@@ -468,6 +605,8 @@ export default function CheckoutPage() {
           loading={loading}
           canPlace={!!selectedAddressId}
           step={step}
+          codBookingAmount={codBookingAmount}
+          utrConfirmed={utrConfirmed}
         />
       </div>
     </div>

@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 
 const STEPS = [
   { key:'PLACED',           label:'Order Placed',       icon:'📋', desc:'We have received your order' },
-  { key:'CONFIRMED',        label:'Confirmed',          icon:'✅', desc:'Seller has confirmed your order' },
+  { key:'CONFIRMED',        label:'Confirmed',          icon:'✅', desc:'Employee has confirmed your order' },
   { key:'PACKED',           label:'Packed',             icon:'📦', desc:'Your items have been packed' },
   { key:'SHIPPED',          label:'Shipped',            icon:'🚚', desc:'Your order is on its way' },
   { key:'OUT_FOR_DELIVERY', label:'Out for Delivery',   icon:'🛵', desc:'Your order is out for delivery' },

@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { returnsApi } from '../api/returns';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 
-/* ── status pipeline — seller-first flow ── */
+/* ── status pipeline — employee-first flow ── */
 const REFUND_PIPELINE = [
-  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received by the seller' },
-  { key: 'SELLER_APPROVED',  label: 'Seller Reviewed',    icon: '🏪', desc: 'Seller approved your return request' },
+  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
+  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
   { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
@@ -16,8 +16,8 @@ const REFUND_PIPELINE = [
 ];
 
 const REPLACEMENT_PIPELINE = [
-  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received by the seller' },
-  { key: 'SELLER_APPROVED',  label: 'Seller Reviewed',    icon: '🏪', desc: 'Seller approved your return request' },
+  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
+  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
   { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
@@ -26,8 +26,8 @@ const REPLACEMENT_PIPELINE = [
 ];
 
 const STORE_CREDIT_PIPELINE = [
-  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received by the seller' },
-  { key: 'SELLER_APPROVED',  label: 'Seller Reviewed',    icon: '🏪', desc: 'Seller approved your return request' },
+  { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
+  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
   { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
@@ -36,8 +36,8 @@ const STORE_CREDIT_PIPELINE = [
 
 const STATUS_META = {
   REQUESTED:        { label: 'Requested',        color: '#f59e0b', bg: '#fef3c7' },
-  SELLER_APPROVED:  { label: 'Seller Approved',  color: '#3b82f6', bg: '#dbeafe' },
-  SELLER_REJECTED:  { label: 'Seller Rejected',  color: '#ef4444', bg: '#fee2e2' },
+  EMPLOYEE_APPROVED:  { label: 'Employee Approved', color: '#3b82f6', bg: '#dbeafe' },
+  EMPLOYEE_REJECTED:  { label: 'Employee Rejected', color: '#ef4444', bg: '#fee2e2' },
   APPROVED:         { label: 'Approved',         color: '#22c55e', bg: '#dcfce7' },
   REJECTED:         { label: 'Rejected',         color: '#dc2626', bg: '#fee2e2' },
   PICKUP_SCHEDULED: { label: 'Pickup Scheduled', color: '#8b5cf6', bg: '#ede9fe' },
@@ -206,10 +206,10 @@ function Tracker({ status, resolution }) {
     resolution === 'replacement' ? REPLACEMENT_PIPELINE :
     resolution === 'store_credit' ? STORE_CREDIT_PIPELINE : REFUND_PIPELINE;
 
-  // Map seller-approved → approved stage visually
-  const mappedStatus = status === 'SELLER_APPROVED' ? 'REQUESTED' : status;
+  // Map employee-approved → approved stage visually
+  const mappedStatus = status === 'EMPLOYEE_APPROVED' ? 'REQUESTED' : status;
   const activeIdx = pipeline.findIndex(p => p.key === mappedStatus);
-  const isRejected = ['REJECTED', 'SELLER_REJECTED'].includes(status);
+  const isRejected = ['REJECTED', 'EMPLOYEE_REJECTED'].includes(status);
 
   return (
     <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '24px 20px' }}>
@@ -217,7 +217,7 @@ function Tracker({ status, resolution }) {
 
       {isRejected && (
         <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', marginBottom: 20, color: '#dc2626', fontWeight: 600, fontSize: 13 }}>
-          ❌ This return was {status === 'SELLER_REJECTED' ? 'rejected by the seller' : 'rejected'}. Contact support to appeal.
+          ❌ This return was {status === 'EMPLOYEE_REJECTED' ? 'rejected by the employee' : 'rejected'}. Contact support to appeal.
         </div>
       )}
 
@@ -350,8 +350,8 @@ export default function ReturnStatusPage() {
   const sm = STATUS_META[ret.status] || STATUS_META.REQUESTED;
   const order = ret.order;
   const isRefund = ret.resolution === 'refund' || ret.resolution === 'store_credit';
-  const isTerminal = ['REFUND_COMPLETED', 'REPLACEMENT_SENT', 'COMPLETED', 'REJECTED', 'SELLER_REJECTED'].includes(ret.status);
-  const needsRefundMethod = isRefund && !['REJECTED', 'SELLER_REJECTED'].includes(ret.status) && !['REFUND_COMPLETED', 'COMPLETED'].includes(ret.status);
+  const isTerminal = ['REFUND_COMPLETED', 'REPLACEMENT_SENT', 'COMPLETED', 'REJECTED', 'EMPLOYEE_REJECTED'].includes(ret.status);
+  const needsRefundMethod = isRefund && !['REJECTED', 'EMPLOYEE_REJECTED'].includes(ret.status) && !['REFUND_COMPLETED', 'COMPLETED'].includes(ret.status);
 
   return (
     <div style={{ background: '#f0f2f2', minHeight: '100vh', padding: '24px 0 60px' }}>
@@ -404,7 +404,7 @@ export default function ReturnStatusPage() {
         </div>
 
         {/* Completed / Rejected banner */}
-        {isTerminal && !['REJECTED','SELLER_REJECTED'].includes(ret.status) && (
+        {isTerminal && !['REJECTED','EMPLOYEE_REJECTED'].includes(ret.status) && (
           <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 32 }}>🎉</div>
             <div>
@@ -493,13 +493,13 @@ export default function ReturnStatusPage() {
             )}
 
             {/* Notes */}
-            {(ret.sellerNote || ret.adminNote) && (
+            {(ret.employeeNote || ret.adminNote) && (
               <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '18px 20px' }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📝 Notes</div>
-                {ret.sellerNote && (
+                {ret.employeeNote && (
                   <div style={{ fontSize: 13, marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 3 }}>From Seller</div>
-                    <div style={{ color: '#333' }}>{ret.sellerNote}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 3 }}>From Employee</div>
+                    <div style={{ color: '#333' }}>{ret.employeeNote}</div>
                   </div>
                 )}
                 {ret.adminNote && (

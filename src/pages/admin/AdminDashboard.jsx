@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
@@ -13,6 +13,8 @@ import {
   LineChart, Line, AreaChart, Area,
 } from 'recharts';
 import SupportIcon from '../../components/icons/SupportIcon';
+import AdminCatalogTab from './AdminCatalogTab';
+import { settingsApi } from '../../api/settings';
 
 /* ── palette ── */
 const C = {
@@ -35,7 +37,7 @@ const STATUS_COLORS = {
   CANCELLED: C.red, RETURNED: C.mute,
 };
 
-const ROLE_COLORS = { admin: C.purple, seller: C.yellow, user: C.blue };
+const ROLE_COLORS = { admin: C.purple, employee: C.yellow, user: C.blue };
 
 /* ── shared helpers ── */
 const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
@@ -238,7 +240,7 @@ function UsersTab() {
     return matchQ && matchR && matchS;
   });
 
-  const roleCounts = { admin: 0, seller: 0, user: 0 };
+  const roleCounts = { admin: 0, employee: 0, user: 0 };
   all.forEach(u => { if (roleCounts[u.role] !== undefined) roleCounts[u.role]++; });
 
   const handleBlock = async (id, isBlocked) => {
@@ -263,7 +265,7 @@ function UsersTab() {
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <KpiCard label="Total Users"   value={fmt(all.length)}            sub="All accounts"            color={C.blue}   icon="👥" />
         <KpiCard label="Admins"        value={fmt(roleCounts.admin)}      sub="Admin accounts"          color={C.purple} icon="🛡️" />
-        <KpiCard label="Sellers"       value={fmt(roleCounts.seller)}     sub="Seller accounts"         color={C.yellow} icon="🏪" />
+        <KpiCard label="Employees"       value={fmt(roleCounts.employee)}     sub="Employee accounts"         color={C.yellow} icon="🏪" />
         <KpiCard label="Customers"     value={fmt(roleCounts.user)}       sub="Regular users"           color={C.green}  icon="🛍️" />
       </div>
 
@@ -293,7 +295,7 @@ function UsersTab() {
             <Select value={roleFilter} onChange={e => setRole(e.target.value)}>
               <option value="">All Roles</option>
               <option value="user">User</option>
-              <option value="seller">Seller</option>
+              <option value="employee">Employee</option>
               <option value="admin">Admin</option>
             </Select>
             <Select value={statusFilter} onChange={e => setSt(e.target.value)}>
@@ -363,7 +365,7 @@ function UsersTab() {
 /* ══════════════════════════════════════════════════════
    SELLERS TAB
 ══════════════════════════════════════════════════════ */
-function SellersTab() {
+function EmployeesTab() {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null);
@@ -371,12 +373,12 @@ function SellersTab() {
   const [verFilter, setVer]   = useState('');
 
   useEffect(() => {
-    adminApi.getSellers({ limit: 200 })
+    adminApi.getEmployees({ limit: 200 })
       .then(r => setAll(r.data?.data?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const sellers = all.filter(s => {
+  const employees = all.filter(s => {
     const q = search.toLowerCase();
     const matchQ = !q || s.shopName?.toLowerCase().includes(q) || s.user?.name?.toLowerCase().includes(q) || s.user?.email?.toLowerCase().includes(q);
     const matchV = !verFilter || (verFilter === 'verified' ? s.isVerified : !s.isVerified);
@@ -387,7 +389,7 @@ function SellersTab() {
 
   const handleVerify = async (id, isVerified) => {
     setBusy(id);
-    await adminApi.verifySeller(id).catch(() => {});
+    await adminApi.verifyEmployee(id).catch(() => {});
     setAll(prev => prev.map(x => x._id === id ? { ...x, isVerified: !isVerified } : x));
     setBusy(null);
   };
@@ -402,8 +404,8 @@ function SellersTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Sellers" value={fmt(all.length)} sub="Registered shops" color={C.yellow} icon="🏪" />
-        <KpiCard label="Verified"      value={fmt(verified)}   sub="Approved sellers" color={C.green}  icon="✅" />
+        <KpiCard label="Total Employees" value={fmt(all.length)} sub="Registered employees" color={C.yellow} icon="🏪" />
+        <KpiCard label="Verified"      value={fmt(verified)}   sub="Approved employees" color={C.green}  icon="✅" />
         <KpiCard label="Pending"       value={fmt(all.length - verified)} sub="Awaiting approval" color={C.red} icon="⏳" />
       </div>
 
@@ -433,21 +435,21 @@ function SellersTab() {
             {(search || verFilter) && <Btn onClick={() => { setSearch(''); setVer(''); }}>Clear</Btn>}
           </div>
           <div style={{ marginTop: 12, fontSize: 13, color: C.mute }}>
-            Showing <strong>{sellers.length}</strong> of <strong>{all.length}</strong> sellers
+            Showing <strong>{employees.length}</strong> of <strong>{all.length}</strong> employees
           </div>
         </Card>
       </div>
 
-      <Card title={`Sellers (${sellers.length})`}>
-        {sellers.length === 0
-          ? <Empty text="No sellers match your filters" />
+      <Card title={`Employees (${employees.length})`}>
+        {employees.length === 0
+          ? <Empty text="No employees match your filters" />
           : <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
                   <Th>Shop</Th><Th>Owner</Th><Th>Contact</Th><Th>Rating</Th><Th>Total Sales</Th><Th>Registered</Th><Th>Status</Th><Th>Action</Th>
                 </tr></thead>
                 <tbody>
-                  {sellers.map(s => (
+                  {employees.map(s => (
                     <tr key={s._id}>
                       <Td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -500,6 +502,9 @@ function OrdersTab() {
   const [search, setSearch]   = useState('');
   const [statusF, setStatusF] = useState('');
   const [paymentF, setPayF]   = useState('');
+  const [refundModal, setRefundModal] = useState(null); // order object
+  const [refundForm, setRefundForm]   = useState({ reason: '', adminNote: '', refundAmount: '' });
+  const [refunding, setRefunding]     = useState(false);
 
   useEffect(() => {
     adminApi.getOrders({ limit: 200 })
@@ -522,10 +527,80 @@ function OrdersTab() {
     setUpd(null);
   };
 
+  const openRefund = (o) => {
+    setRefundForm({ reason: 'Admin initiated refund', adminNote: '', refundAmount: o.totalPrice });
+    setRefundModal(o);
+  };
+
+  const submitForceRefund = async () => {
+    if (!refundForm.reason) return;
+    setRefunding(true);
+    try {
+      await adminApi.forceRefund(refundModal._id, {
+        reason: refundForm.reason,
+        adminNote: refundForm.adminNote,
+        refundAmount: Number(refundForm.refundAmount) || refundModal.totalPrice,
+      });
+      setAll(prev => prev.map(x => x._id === refundModal._id ? { ...x, orderStatus: 'RETURNED' } : x));
+      setRefundModal(null);
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to initiate refund');
+    } finally { setRefunding(false); }
+  };
+
   if (loading) return <Loader />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Force Refund Modal */}
+      {refundModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'white', borderRadius:14, padding:28, width:440, boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+            <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>↩ Force Refund</div>
+            <div style={{ fontSize:12, color:C.mute, marginBottom:20 }}>
+              Order <strong>{refundModal.orderNumber}</strong> · {refundModal.user?.name} · {fmtRs(refundModal.totalPrice)}
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Reason *</label>
+                <input value={refundForm.reason} onChange={e => setRefundForm(f => ({...f, reason: e.target.value}))}
+                  placeholder="Reason for refund"
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Refund Amount (Rs.)</label>
+                <input type="number" value={refundForm.refundAmount}
+                  onChange={e => setRefundForm(f => ({...f, refundAmount: e.target.value === '' ? '' : Number(e.target.value)}))}
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, fontWeight:700, outline:'none', boxSizing:'border-box' }} />
+                <div style={{ fontSize:11, color:C.mute, marginTop:3 }}>Default: full order amount</div>
+              </div>
+              <div>
+                <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Admin Note (optional)</label>
+                <input value={refundForm.adminNote} onChange={e => setRefundForm(f => ({...f, adminNote: e.target.value}))}
+                  placeholder="Internal note for records"
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+              </div>
+            </div>
+
+            <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:8, padding:'10px 14px', marginTop:16, fontSize:12, color:'#9a3412' }}>
+              ⚠ This will mark the order as RETURNED and create an approved refund request. The customer will be notified.
+            </div>
+
+            <div style={{ display:'flex', gap:10, marginTop:20, justifyContent:'flex-end' }}>
+              <button onClick={() => setRefundModal(null)} disabled={refunding}
+                style={{ padding:'8px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:'white', fontSize:13, cursor:'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={submitForceRefund} disabled={refunding || !refundForm.reason}
+                style={{ padding:'8px 18px', borderRadius:8, border:'none', background:C.red, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', opacity: !refundForm.reason ? .5 : 1 }}>
+                {refunding ? 'Processing…' : 'Confirm Refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter bar */}
       <Card>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -553,7 +628,7 @@ function OrdersTab() {
           : <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>Order #</Th><Th>Customer</Th><Th>Items</Th><Th>Total</Th><Th>Method</Th><Th>Payment</Th><Th>Date</Th><Th>Status</Th><Th>Update</Th>
+                  <Th>Order #</Th><Th>Customer</Th><Th>Items</Th><Th>Total</Th><Th>Method</Th><Th>Payment</Th><Th>Date</Th><Th>Status</Th><Th>Update</Th><Th>Action</Th>
                 </tr></thead>
                 <tbody>
                   {orders.map(o => (
@@ -575,6 +650,15 @@ function OrdersTab() {
                           style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', cursor: 'pointer' }}>
                           {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
+                      </Td>
+                      <Td>
+                        {o.orderStatus === 'DELIVERED' && o.orderStatus !== 'RETURNED' && (
+                          <button onClick={() => openRefund(o)}
+                            title="Force refund (non-returnable override)"
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, border:`1px solid ${C.red}`, background:'#fff1f0', color:C.red, cursor:'pointer', whiteSpace:'nowrap' }}>
+                            ↩ Refund
+                          </button>
+                        )}
                       </Td>
                     </tr>
                   ))}
@@ -604,16 +688,16 @@ function Empty({ text }) {
    ADMIN RETURNS TAB
 ══════════════════════════════════════════════════════ */
 const ADMIN_RETURN_STATUSES = [
-  'REQUESTED','SELLER_APPROVED','SELLER_REJECTED',
+  'REQUESTED','EMPLOYEE_APPROVED','EMPLOYEE_REJECTED',
   'APPROVED','REJECTED','PICKUP_SCHEDULED',
   'ITEM_RECEIVED','REFUND_INITIATED','REFUND_COMPLETED',
   'REPLACEMENT_SENT','COMPLETED',
 ];
 
 const RETURN_STATUS_META = {
-  REQUESTED:        { label:'Requested',        color:'#f59e0b' },
-  SELLER_APPROVED:  { label:'Seller Approved',  color:'#3b82f6' },
-  SELLER_REJECTED:  { label:'Seller Rejected',  color:'#ef4444' },
+  REQUESTED:         { label:'Requested',          color:'#f59e0b' },
+  EMPLOYEE_APPROVED: { label:'Employee Approved',  color:'#3b82f6' },
+  EMPLOYEE_REJECTED: { label:'Employee Rejected',  color:'#ef4444' },
   APPROVED:         { label:'Approved',         color:'#22c55e' },
   REJECTED:         { label:'Rejected',         color:'#dc2626' },
   PICKUP_SCHEDULED: { label:'Pickup Scheduled', color:'#8b5cf6' },
@@ -667,12 +751,12 @@ function AdminReturnsTab() {
   const filtered = filter === 'ALL' ? returns : returns.filter(r => r.status === filter);
 
   const stats = {
-    total:          returns.length,
-    sellerPending:  returns.filter(r => r.status === 'REQUESTED').length,
-    sellerRejected: returns.filter(r => r.status === 'SELLER_REJECTED').length,
-    adminPending:   returns.filter(r => r.status === 'SELLER_APPROVED').length,
-    done:           returns.filter(r => ['COMPLETED','REJECTED','REFUND_COMPLETED','REPLACEMENT_SENT'].includes(r.status)).length,
-    value:          returns.reduce((s, r) => s + (r.refundAmount || 0), 0),
+    total:            returns.length,
+    employeePending:  returns.filter(r => r.status === 'REQUESTED').length,
+    employeeRejected: returns.filter(r => r.status === 'EMPLOYEE_REJECTED').length,
+    adminPending:     returns.filter(r => r.status === 'EMPLOYEE_APPROVED').length,
+    done:             returns.filter(r => ['COMPLETED','REJECTED','REFUND_COMPLETED','REPLACEMENT_SENT'].includes(r.status)).length,
+    value:            returns.reduce((s, r) => s + (r.refundAmount || 0), 0),
   };
 
   return (
@@ -682,7 +766,7 @@ function AdminReturnsTab() {
         {[
           { icon:'📤', label:'Customer Submits', color:C.blue },
           { icon:'→', label:'', color:'#aaa' },
-          { icon:'🏪', label:'Seller Approves/Rejects', color:C.yellow },
+          { icon:'🏪', label:'Employee Approves/Rejects', color:C.yellow },
           { icon:'→', label:'', color:'#aaa' },
           { icon:'🛡️', label:'Admin Confirms/Overrides', color:C.accent },
           { icon:'→', label:'', color:'#aaa' },
@@ -698,22 +782,22 @@ function AdminReturnsTab() {
 
       {/* KPIs */}
       <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-        <KpiCard label="Total Returns"      value={stats.total}          color={C.blue}   icon="↩️" />
-        <KpiCard label="Awaiting Seller"    value={stats.sellerPending}  color={C.yellow} icon="🏪" sub="Seller hasn't responded" />
-        <KpiCard label="Seller Rejected"    value={stats.sellerRejected} color={C.red}    icon="⚠️" sub="May need admin override" />
-        <KpiCard label="Awaiting You"       value={stats.adminPending}   color={C.accent} icon="🛡️" sub="Seller approved — confirm" />
+        <KpiCard label="Total Returns"       value={stats.total}             color={C.blue}   icon="↩️" />
+        <KpiCard label="Awaiting Employee"   value={stats.employeePending}   color={C.yellow} icon="🏪" sub="Employee hasn't responded" />
+        <KpiCard label="Employee Rejected"   value={stats.employeeRejected}  color={C.red}    icon="⚠️" sub="May need admin override" />
+        <KpiCard label="Awaiting You"        value={stats.adminPending}      color={C.accent} icon="🛡️" sub="Employee approved — confirm" />
         <KpiCard label="Refund Value"       value={fmtRs(stats.value)}   color={C.green}  icon="💳" />
       </div>
 
-      {/* Seller-rejected alert banner */}
-      {stats.sellerRejected > 0 && (
+      {/* Employee-rejected alert banner */}
+      {stats.employeeRejected > 0 && (
         <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:12, padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:24 }}>⚠️</span>
           <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:'#dc2626' }}>{stats.sellerRejected} return{stats.sellerRejected > 1 ? 's' : ''} rejected by seller — needs your review</div>
-            <div style={{ fontSize:12, color:'#b91c1c', marginTop:2 }}>You can override the seller's decision and approve these returns if warranted.</div>
+            <div style={{ fontWeight:700, fontSize:14, color:'#dc2626' }}>{stats.employeeRejected} return{stats.employeeRejected > 1 ? 's' : ''} rejected by employee — needs your review</div>
+            <div style={{ fontSize:12, color:'#b91c1c', marginTop:2 }}>You can override the employee's decision and approve these returns if warranted.</div>
           </div>
-          <button onClick={() => setFilter('SELLER_REJECTED')}
+          <button onClick={() => setFilter('EMPLOYEE_REJECTED')}
             style={{ padding:'7px 16px', borderRadius:8, background:'#dc2626', color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
             Review Now
           </button>
@@ -802,15 +886,15 @@ function AdminReturnsTab() {
                         {req.resolution === 'refund' && !req.bankDetails?.accountNumber && !req.bankDetails?.upiId && req.refundMethod !== 'original_payment' && (
                           <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background:'#fee2e2', color:'#dc2626' }}>Bank details pending</span>
                         )}
-                        {req.sellerNote && <span style={{ color:'#007185' }}>Seller replied</span>}
+                        {req.employeeNote && <span style={{ color:'#007185' }}>Employee replied</span>}
                       </div>
                     </div>
                   </div>
 
-                  {/* Notes from seller */}
-                  {(req.sellerNote || req.adminNote) && (
+                  {/* Notes from employee */}
+                  {(req.employeeNote || req.adminNote) && (
                     <div style={{ padding:'8px 18px', background:'#f8fafc', borderTop:`1px solid ${C.line}`, fontSize:12, color:'#555', display:'flex', gap:16, flexWrap:'wrap' }}>
-                      {req.sellerNote && <span><strong>Seller:</strong> {req.sellerNote}</span>}
+                      {req.employeeNote && <span><strong>Employee:</strong> {req.employeeNote}</span>}
                       {req.adminNote  && <span><strong>Admin:</strong> {req.adminNote}</span>}
                     </div>
                   )}
@@ -832,10 +916,10 @@ function AdminReturnsTab() {
                     <div style={{ padding:'16px 18px', background:'#fffbf5', borderTop:`1px solid ${C.line}` }}>
                       <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>Admin Action</div>
 
-                      {/* Seller-rejection override notice */}
-                      {req.status === 'SELLER_REJECTED' && (
+                      {/* Employee-rejection override notice */}
+                      {req.status === 'EMPLOYEE_REJECTED' && (
                         <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12, color:'#854d0e' }}>
-                          ⚠️ <strong>Seller rejected this return.</strong> You can override and set status to <em>Approved</em> if the customer's claim is valid.
+                          ⚠️ <strong>Employee rejected this return.</strong> You can override and set status to <em>Approved</em> if the customer's claim is valid.
                         </div>
                       )}
 
@@ -1203,9 +1287,9 @@ function AdminNotificationsTab() {
   const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:'#f8fafc', width:'100%', boxSizing:'border-box' };
 
   const TARGET_OPTIONS = [
-    { value:'user',   label:'👤 All Customers', desc:'Every registered buyer' },
-    { value:'seller', label:'🏪 All Sellers',    desc:'Every registered seller' },
-    { value:'all',    label:'📢 Everyone',       desc:'All users on the platform' },
+    { value:'user',     label:'👤 All Customers', desc:'Every registered buyer' },
+    { value:'employee', label:'🏪 All Employees', desc:'Every registered employee' },
+    { value:'all',      label:'📢 Everyone',      desc:'All users on the platform' },
   ];
   const TYPE_OPTIONS = ['SYSTEM','ORDER','OFFER','PAYMENT','REFUND'];
 
@@ -1571,15 +1655,160 @@ function AdminSupportTab() {
 
 /* ════════════════════════════════════════════════════════════════ */
 
+/* ════════════════════ SETTINGS TAB ════════════════════ */
+function AdminSettingsTab() {
+  const [cfg, setCfg] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    settingsApi.getCodSettings()
+      .then(r => setCfg(r.data?.data?.codSettings))
+      .catch(() => {});
+  }, []);
+
+  const set = (k, v) => setCfg(prev => ({ ...prev, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    await settingsApi.updateCodSettings(cfg).catch(() => {});
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const fmtRs = n => `Rs. ${Number(n || 0).toLocaleString('en-IN')}`;
+
+  if (!cfg) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Loading settings…</div>;
+
+  const bookingAmt = cfg.bookingType === 'percent'
+    ? `${cfg.bookingValue}% of order total`
+    : fmtRs(cfg.bookingValue);
+
+  return (
+    <div style={{ maxWidth: 680 }}>
+      {/* COD Booking Amount */}
+      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ background: '#131921', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>💵</span>
+          <div>
+            <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>COD Booking Amount</div>
+            <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 12 }}>Require partial UPI payment for Cash on Delivery orders</div>
+          </div>
+          <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <div style={{ position: 'relative', width: 42, height: 24 }} onClick={() => set('enabled', !cfg.enabled)}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 12,
+                background: cfg.enabled ? '#FF5A1F' : '#6b7280', transition: 'background .2s' }} />
+              <div style={{ position: 'absolute', top: 3, left: cfg.enabled ? 21 : 3, width: 18, height: 18,
+                borderRadius: '50%', background: 'white', transition: 'left .2s' }} />
+            </div>
+            <span style={{ color: 'white', fontSize: 13, fontWeight: 600 }}>{cfg.enabled ? 'Enabled' : 'Disabled'}</span>
+          </label>
+        </div>
+
+        <div style={{ padding: '24px 24px', opacity: cfg.enabled ? 1 : .45, pointerEvents: cfg.enabled ? 'auto' : 'none' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            {/* Min order amount */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>
+                Minimum Order Amount (Rs.)
+              </label>
+              <input type="number" min="0" value={cfg.minOrderAmount}
+                onChange={e => set('minOrderAmount', e.target.value === '' ? '' : Number(e.target.value))}
+                style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
+                  borderRadius: 6, fontSize: 14, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>Booking required only for orders ≥ this amount</div>
+            </div>
+
+            {/* Booking amount type */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>Booking Amount Type</label>
+              <select value={cfg.bookingType} onChange={e => set('bookingType', e.target.value)}
+                style={{ width: '100%', height: 40, padding: '0 10px', border: '1px solid #e5e7eb',
+                  borderRadius: 6, fontSize: 13, outline: 'none', background: 'white', boxSizing: 'border-box' }}>
+                <option value="flat">Flat Amount (Rs.)</option>
+                <option value="percent">Percentage (%)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+            {/* Booking value */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>
+                {cfg.bookingType === 'percent' ? 'Percentage (%)' : 'Flat Amount (Rs.)'}
+              </label>
+              <input type="number" min="0" max={cfg.bookingType === 'percent' ? 100 : undefined}
+                value={cfg.bookingValue} onChange={e => set('bookingValue', e.target.value === '' ? '' : Number(e.target.value))}
+                style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
+                  borderRadius: 6, fontSize: 14, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+
+            {/* Preview */}
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#9a3412', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.06em' }}>Preview</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#c2410c' }}>
+                  Booking: {bookingAmt}
+                </div>
+                <div style={{ fontSize: 11, color: '#9a3412', marginTop: 2 }}>
+                  ⚠ Non-refundable · Paid via UPI
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* UPI details */}
+          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20, marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>UPI Payment Details</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>UPI ID</label>
+                <input value={cfg.upiId || ''} onChange={e => set('upiId', e.target.value)}
+                  placeholder="yourshop@upi"
+                  style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
+                    borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>Account / Business Name</label>
+                <input value={cfg.upiName || ''} onChange={e => set('upiName', e.target.value)}
+                  placeholder="TradeEngine Pvt. Ltd."
+                  style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
+                    borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '10px 14px', fontSize: 12, color: '#166534' }}>
+              ℹ️ ZeroPay integration will be added later. Customers will see your UPI ID and enter the UTR number after payment.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={save} disabled={saving}
+            style={{ padding: '10px 28px', background: '#FF5A1F', color: 'white', border: 'none',
+              borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            {saving ? 'Saving…' : 'Save Settings'}
+          </button>
+          {saved && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 13 }}>✓ Saved!</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+
 const TABS = [
   { id: 'Overview',      icon: '📊' },
   { id: 'Users',         icon: '👥' },
-  { id: 'Sellers',       icon: '🏪' },
+  { id: 'Employees',       icon: '🏪' },
   { id: 'Orders',        icon: '📦' },
   { id: 'Returns',       icon: '↩️' },
   { id: 'Coupons',       icon: '🎟️' },
   { id: 'Notifications', icon: '🔔' },
   { id: 'Support',       icon: null },
+  { id: 'Catalog',       icon: '🗂️' },
+  { id: 'Settings',      icon: '⚙️' },
 ];
 
 export default function AdminDashboard() {
@@ -1680,30 +1909,37 @@ export default function AdminDashboard() {
           <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, display:'flex', alignItems:'center', gap:8 }}>
             {tab === 'Support'
               ? <SupportIcon size={24} color="#0f172a" />
+              : tab === 'Catalog' ? '🗂️'
               : TABS.find(t => t.id === tab)?.icon}
             {tab}
           </h1>
           <p style={{ color: C.mute, margin: '4px 0 0', fontSize: 13 }}>
             {tab === 'Overview' && 'Platform performance at a glance'}
             {tab === 'Users'    && 'Manage all registered accounts'}
-            {tab === 'Sellers'  && 'Manage and verify seller accounts'}
+            {tab === 'Employees'  && 'Manage and verify employee accounts'}
             {tab === 'Orders'   && 'View and manage all customer orders'}
             {tab === 'Returns'  && 'Monitor and take action on all return & refund requests'}
             {tab === 'Coupons'       && 'Create and manage discount coupons for customers'}
-            {tab === 'Notifications' && 'Broadcast notifications to customers, sellers, or everyone'}
+            {tab === 'Notifications' && 'Broadcast notifications to customers, employees, or everyone'}
             {tab === 'Support'       && 'View and respond to customer support tickets'}
+            {tab === 'Catalog'       && 'Manage brands, categories, sub-categories, attributes and events'}
+            {tab === 'Settings'      && 'Configure COD booking amount, UPI details and payment rules'}
           </p>
         </div>
 
         {tab === 'Overview'      && <OverviewTab />}
         {tab === 'Users'         && <UsersTab />}
-        {tab === 'Sellers'       && <SellersTab />}
+        {tab === 'Employees'       && <EmployeesTab />}
         {tab === 'Orders'        && <OrdersTab />}
         {tab === 'Returns'       && <AdminReturnsTab />}
         {tab === 'Coupons'       && <AdminCouponsTab />}
         {tab === 'Notifications' && <AdminNotificationsTab />}
         {tab === 'Support'       && <AdminSupportTab />}
+        {tab === 'Catalog'       && <AdminCatalogTab />}
+        {tab === 'Settings'      && <AdminSettingsTab />}
       </div>
     </div>
   );
 }
+
+

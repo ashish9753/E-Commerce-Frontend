@@ -1,15 +1,15 @@
 import client from './client';
 
-export const sellerApi = {
-  getMyProfile: () => client.get('/sellers/me'),
-  updateProfile: (data) => client.patch('/sellers/me', data),
-  registerSeller: (data) => client.post('/sellers/register', data),
+export const employeeApi = {
+  getMyProfile: () => client.get('/employees/me'),
+  updateProfile: (data) => client.patch('/employees/me', data),
+  registerEmployee: (data) => client.post('/employees/register', data),
 
-  getMyProducts: (params) => client.get('/products/seller/my-products', { params }),
+  getMyProducts: (params) => client.get('/products/employee/my-products', { params }),
   createProduct: (data) => client.post('/products', data),
   updateProduct: (id, data) => client.patch(`/products/${id}`, data),
   deleteProduct: (id) => client.delete(`/products/${id}`),
 
-  getMyOrders:         (params)     => client.get('/orders/seller/my-orders', { params }),
-  updateOrderStatus:   (id, data)   => client.patch(`/orders/${id}/seller-status`, data),
+  getMyOrders:         (params)     => client.get('/orders/employee/my-orders', { params }),
+  updateOrderStatus:   (id, data)   => client.patch(`/orders/${id}/employee-status`, data),
 };

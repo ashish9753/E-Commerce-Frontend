@@ -40,11 +40,11 @@ function AdminRoute({ children }) {
   return children;
 }
 
-function SellerRoute({ children }) {
+function EmployeeRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'seller' && user.role !== 'admin') return <Navigate to="/" replace />;
+  if (user.role !== 'employee' && user.role !== 'admin') return <Navigate to="/" replace />;
   return children;
 }
 
@@ -88,8 +88,8 @@ export default function App() {
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
-        {/* Seller */}
-        <Route path="/seller" element={<SellerRoute><SellerDashboard /></SellerRoute>} />
+        {/* Employee */}
+        <Route path="/employee" element={<EmployeeRoute><SellerDashboard /></EmployeeRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

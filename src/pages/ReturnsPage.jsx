@@ -28,7 +28,7 @@ const STEPS = ['Select Order', 'Choose Item', 'Reason', 'Resolution'];
 /* Status pipeline — ordered for the tracker */
 const STATUS_PIPELINE = [
   { key: 'REQUESTED',        label: 'Return Requested',    icon: '📤' },
-  { key: 'SELLER_APPROVED',  label: 'Seller Approved',     icon: '🏪' },
+  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Approved',   icon: '🏪' },
   { key: 'APPROVED',         label: 'Admin Approved',      icon: '✅' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',    icon: '🚚' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',       icon: '📦' },
@@ -38,7 +38,7 @@ const STATUS_PIPELINE = [
 
 const REPL_PIPELINE = [
   { key: 'REQUESTED',          label: 'Return Requested',   icon: '📤' },
-  { key: 'SELLER_APPROVED',    label: 'Seller Approved',    icon: '🏪' },
+  { key: 'EMPLOYEE_APPROVED',    label: 'Employee Approved',  icon: '🏪' },
   { key: 'APPROVED',           label: 'Admin Approved',     icon: '✅' },
   { key: 'PICKUP_SCHEDULED',   label: 'Pickup Scheduled',   icon: '🚚' },
   { key: 'ITEM_RECEIVED',      label: 'Item Received',      icon: '📦' },
@@ -48,8 +48,8 @@ const REPL_PIPELINE = [
 
 const STATUS_META = {
   REQUESTED:        { label: 'Requested',        color: '#f59e0b', bg: '#fef3c7' },
-  SELLER_APPROVED:  { label: 'Seller Approved',  color: '#3b82f6', bg: '#dbeafe' },
-  SELLER_REJECTED:  { label: 'Seller Rejected',  color: '#ef4444', bg: '#fee2e2' },
+  EMPLOYEE_APPROVED:  { label: 'Employee Approved', color: '#3b82f6', bg: '#dbeafe' },
+  EMPLOYEE_REJECTED:  { label: 'Employee Rejected', color: '#ef4444', bg: '#fee2e2' },
   APPROVED:         { label: 'Approved',         color: '#22c55e', bg: '#dcfce7' },
   REJECTED:         { label: 'Rejected',         color: '#dc2626', bg: '#fee2e2' },
   PICKUP_SCHEDULED: { label: 'Pickup Scheduled', color: '#8b5cf6', bg: '#ede9fe' },
@@ -74,7 +74,7 @@ function StatusBadge({ status }) {
 
 function ReturnTracker({ status, resolution }) {
   const pipeline = resolution === 'replacement' ? REPL_PIPELINE : STATUS_PIPELINE;
-  const terminal = ['REJECTED', 'SELLER_REJECTED'];
+  const terminal = ['REJECTED', 'EMPLOYEE_REJECTED'];
   const isTerminal = terminal.includes(status);
 
   const activeIdx = pipeline.findIndex(p => p.key === status);
@@ -84,8 +84,8 @@ function ReturnTracker({ status, resolution }) {
     <div style={{ padding:'20px 24px' }}>
       {isTerminal && (
         <div style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:8, padding:'12px 16px', marginBottom:20, color:'#dc2626', fontWeight:600, fontSize:13 }}>
-          ❌ This return has been {status === 'SELLER_REJECTED' ? 'rejected by the seller' : 'rejected by admin'}.
-          {status === 'SELLER_REJECTED' && ' You may contact support for an appeal.'}
+          ❌ This return has been {status === 'EMPLOYEE_REJECTED' ? 'rejected by the employee' : 'rejected by admin'}.
+          {status === 'EMPLOYEE_REJECTED' && ' You may contact support for an appeal.'}
         </div>
       )}
       <div style={{ position:'relative', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
@@ -234,10 +234,10 @@ function MyReturnsView({ onNewReturn }) {
                   </div>
                 )}
 
-                {/* Admin/Seller notes */}
-                {(req.adminNote || req.sellerNote) && (
+                {/* Admin/Employee notes */}
+                {(req.adminNote || req.employeeNote) && (
                   <div style={{ margin:'0 24px 20px', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'12px 16px' }}>
-                    {req.sellerNote && <div style={{ fontSize:12, color:'#555', marginBottom:4 }}><strong>Seller:</strong> {req.sellerNote}</div>}
+                    {req.employeeNote && <div style={{ fontSize:12, color:'#555', marginBottom:4 }}><strong>Employee:</strong> {req.employeeNote}</div>}
                     {req.adminNote  && <div style={{ fontSize:12, color:'#555' }}><strong>Admin:</strong> {req.adminNote}</div>}
                   </div>
                 )}

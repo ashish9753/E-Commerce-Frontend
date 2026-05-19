@@ -32,7 +32,7 @@ export function normalizeProduct(p) {
     description: p.description || '',
     shortDescription: p.shortDescription || '',
     specs,
-    seller: p.seller || null,
+    employee: p.employee || null,
     badge: off >= 20 ? 'sale' : p.isFeatured ? 'featured' : null,
     returnable:   p.returnable !== false,
     returnWindow: p.returnWindow || 7,
