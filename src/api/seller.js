@@ -9,4 +9,7 @@ export const sellerApi = {
   createProduct: (data) => client.post('/products', data),
   updateProduct: (id, data) => client.patch(`/products/${id}`, data),
   deleteProduct: (id) => client.delete(`/products/${id}`),
+
+  getMyOrders:         (params)     => client.get('/orders/seller/my-orders', { params }),
+  updateOrderStatus:   (id, data)   => client.patch(`/orders/${id}/seller-status`, data),
 };

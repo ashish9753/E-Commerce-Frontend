@@ -15,6 +15,7 @@ import OrdersPage from './pages/OrdersPage';
 import WishlistPage from './pages/WishlistPage';
 import OrderTrackingPage from './pages/OrderTrackingPage';
 import ReturnsPage from './pages/ReturnsPage';
+import ReturnStatusPage from './pages/ReturnStatusPage';
 import ComparePage from './pages/ComparePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import SellerDashboard from './pages/seller/SellerDashboard';
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/wishlist" element={<Layout><PrivateRoute><WishlistPage /></PrivateRoute></Layout>} />
         <Route path="/track" element={<Layout><PrivateRoute><OrderTrackingPage /></PrivateRoute></Layout>} />
         <Route path="/returns" element={<Layout><PrivateRoute><ReturnsPage /></PrivateRoute></Layout>} />
+        <Route path="/return-status/:returnId" element={<Layout><PrivateRoute><ReturnStatusPage /></PrivateRoute></Layout>} />
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
