@@ -5,7 +5,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCompare } from '../../context/CompareContext';
-import { searchProducts } from '../../data/products';
+import { productsApi } from '../../api/products';
+import { normalizeProducts } from '../../utils/normalizers';
 import { formatPriceShort } from '../../utils/formatters';
 import { categories } from '../../data/categories';
 
@@ -37,10 +38,16 @@ export default function Header() {
     const q = e.target.value;
     setQuery(q);
     if (q.trim().length > 1) {
-      setResults(searchProducts(q).slice(0, 6));
-      setShowResults(true);
+      productsApi.getAll({ search: q.trim(), limit: 6 })
+        .then(({ data }) => {
+          const prods = normalizeProducts(data.data?.products || data.data?.data || []);
+          setResults(prods);
+          setShowResults(prods.length > 0);
+        })
+        .catch(() => setResults([]));
     } else {
       setShowResults(false);
+      setResults([]);
     }
   };
 
@@ -55,7 +62,7 @@ export default function Header() {
   const selectResult = (product) => {
     setShowResults(false);
     setQuery('');
-    navigate(`/product/${product.id}`);
+    navigate(`/product/${product._id || product.id}`);
   };
 
   return (
@@ -94,8 +101,10 @@ export default function Header() {
             {showResults && (
               <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-line rounded-[14px] shadow-xl z-50 overflow-hidden max-h-80 overflow-y-auto">
                 {results.length > 0 ? results.map(p => (
-                  <div key={p.id} className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-surface transition-colors" onClick={() => selectResult(p)}>
-                    <div className="text-2xl w-10 h-10 bg-surface rounded-lg flex items-center justify-center shrink-0">{p.emo}</div>
+                  <div key={p._id || p.id} className="flex items-center gap-3.5 px-4 py-3 cursor-pointer hover:bg-surface transition-colors" onClick={() => selectResult(p)}>
+                    <div className="text-2xl w-10 h-10 bg-surface rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                      {p.images?.[0] ? <img src={p.images[0]} alt={p.name} className="w-full h-full object-contain" /> : '🛍️'}
+                    </div>
                     <div>
                       <div className="text-sm font-semibold">{p.name}</div>
                       <div className="text-[11px] text-mute">{p.brand}</div>
@@ -125,10 +134,22 @@ export default function Header() {
               {cartCount > 0 && <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-white">{cartCount}</span>}
             </button>
             {user ? (
-              <button className={navBtn} onClick={() => navigate('/profile')}>
-                <User size={18} />
-                <span>{user.name.split(' ')[0]}</span>
-              </button>
+              <>
+                {user.role === 'admin' && (
+                  <button className={navBtn} onClick={() => navigate('/admin')} title="Admin Dashboard">
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 6, background: '#7c3aed22', color: '#7c3aed' }}>ADMIN</span>
+                  </button>
+                )}
+                {user.role === 'seller' && (
+                  <button className={navBtn} onClick={() => navigate('/seller')} title="Seller Dashboard">
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 6, background: '#f59e0b22', color: '#f59e0b' }}>SELLER</span>
+                  </button>
+                )}
+                <button className={navBtn} onClick={() => navigate('/profile')}>
+                  <User size={18} />
+                  <span>{user.name.split(' ')[0]}</span>
+                </button>
+              </>
             ) : (
               <button className="btn btn-primary btn-sm" onClick={() => navigate('/login')}>Sign In</button>
             )}

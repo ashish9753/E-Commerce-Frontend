@@ -80,7 +80,7 @@ export default function LoginPage() {
             <div className="field mb-6">
               <label className="flex justify-between">
                 Password
-                <a href="#" className="text-accent font-semibold text-xs">Forgot password?</a>
+                <a onClick={() => navigate('/forgot-password')} className="text-accent font-semibold text-xs cursor-pointer">Forgot password?</a>
               </label>
               <div className="relative">
                 <input

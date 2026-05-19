@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
 import { useToast } from '../context/ToastContext';
+import { returnsApi } from '../api/returns';
+import { getErrorMessage } from '../api/client';
 import { formatPriceShort } from '../utils/formatters';
 
 const REASONS = [
   { id: 'defective', label: '🔧 Defective / Not Working' },
-  { id: 'wrong', label: '📦 Wrong Item Received' },
+  { id: 'wrong_item', label: '📦 Wrong Item Received' },
   { id: 'damaged', label: '💥 Damaged in Transit' },
   { id: 'not_as_described', label: '📋 Not as Described' },
   { id: 'changed_mind', label: '🔄 Changed My Mind' },
@@ -18,29 +20,55 @@ export default function ReturnsPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { getUserOrders, submitReturn } = useOrders();
+  const { getMyOrders } = useOrders();
   const toast = useToast();
 
+  const [orders, setOrders] = useState([]);
   const [orderId, setOrderId] = useState(searchParams.get('orderId') || '');
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItemIndex, setSelectedItemIndex] = useState(null);
   const [reason, setReason] = useState('');
   const [method, setMethod] = useState('refund');
   const [description, setDescription] = useState('');
-  const [uploaded, setUploaded] = useState([]);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    getMyOrders({ limit: 50 })
+      .then(result => {
+        if (result.success) {
+          const eligible = (result.data || result.orders || []).filter(o => o.orderStatus === 'DELIVERED');
+          setOrders(eligible);
+        }
+      });
+  }, [user, getMyOrders]);
 
   if (!user) { navigate('/login'); return null; }
 
-  const orders = getUserOrders(user.id).filter(o => o.status === 'delivered' && !o.returnRequest);
-  const selectedOrder = orders.find(o => o.id === orderId);
+  const selectedOrder = orders.find(o => o._id === orderId);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!orderId) { toast('Please select an order', 'error'); return; }
-    if (!selectedItem) { toast('Please select the item to return', 'error'); return; }
+    if (selectedItemIndex === null) { toast('Please select the item to return', 'error'); return; }
     if (!reason) { toast('Please select a reason', 'error'); return; }
-    submitReturn(orderId, { item: selectedItem, reason, method, description, uploads: uploaded.length });
-    setSubmitted(true);
-    toast('Return request submitted!');
+
+    setLoading(true);
+    try {
+      const item = selectedOrder.orderItems[selectedItemIndex];
+      await returnsApi.submit({
+        orderId,
+        productId: item.product?._id || item.product,
+        reason,
+        resolution: method,
+        description,
+      });
+      setSubmitted(true);
+      toast('Return request submitted!');
+    } catch (err) {
+      toast(getErrorMessage(err), 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (submitted) return (
@@ -69,11 +97,15 @@ export default function ReturnsPage() {
           <div className="rp-section">
             <span className="lab">Select Order</span>
             {orders.length === 0 ? (
-              <div style={{ color: 'var(--mute)', fontSize: 14 }}>No eligible orders for return. Only delivered orders within 7 days are eligible.</div>
+              <div style={{ color: 'var(--mute)', fontSize: 14 }}>No eligible orders for return. Only delivered orders are eligible.</div>
             ) : (
-              <select className="select" value={orderId} onChange={e => { setOrderId(e.target.value); setSelectedItem(null); }}>
+              <select className="select" value={orderId} onChange={e => { setOrderId(e.target.value); setSelectedItemIndex(null); }}>
                 <option value="">Select an order...</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.id} — {o.items.length} item(s)</option>)}
+                {orders.map(o => (
+                  <option key={o._id} value={o._id}>
+                    #{o._id?.slice(-8).toUpperCase()} — {(o.orderItems || []).length} item(s)
+                  </option>
+                ))}
               </select>
             )}
           </div>
@@ -81,14 +113,16 @@ export default function ReturnsPage() {
           {selectedOrder && (
             <div className="rp-section">
               <span className="lab">Select Item to Return</span>
-              {selectedOrder.items.map((item, i) => (
-                <div key={i} className={`rp-product`} style={{ cursor: 'pointer', border: selectedItem?.id === item.id ? '2px solid var(--accent)' : '2px solid transparent', borderRadius: 12 }} onClick={() => setSelectedItem(item)}>
-                  <div className="img">{item.emo}</div>
-                  <div>
-                    <div className="nm">{item.name}</div>
-                    <div className="meta">{item.brand} · Qty: {item.qty}</div>
+              {(selectedOrder.orderItems || []).map((item, i) => (
+                <div key={i} className="rp-product" style={{ cursor: 'pointer', border: selectedItemIndex === i ? '2px solid var(--accent)' : '2px solid transparent', borderRadius: 12 }} onClick={() => setSelectedItemIndex(i)}>
+                  <div className="img">
+                    {item.image ? <img src={item.image} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🛍️'}
                   </div>
-                  <div className="rp-price">{formatPriceShort(item.price * item.qty)}</div>
+                  <div>
+                    <div className="nm">{item.title}</div>
+                    <div className="meta">Qty: {item.quantity}</div>
+                  </div>
+                  <div className="rp-price">{formatPriceShort(item.price * item.quantity)}</div>
                 </div>
               ))}
             </div>
@@ -111,16 +145,6 @@ export default function ReturnsPage() {
           </div>
 
           <div className="rp-section">
-            <span className="lab">Upload Photos / Videos</span>
-            <div className="rp-upload" onClick={() => document.getElementById('ret-upload').click()}>
-              <div className="ic">📸</div>
-              <div className="rp-up-tit">{uploaded.length > 0 ? `${uploaded.length} file(s) selected` : 'Click to upload'}</div>
-              <div className="rp-up-sub">JPG, PNG, MP4 up to 50MB each · Max 5 files</div>
-              <input id="ret-upload" type="file" multiple accept="image/*,video/*" style={{ display: 'none' }} onChange={e => setUploaded(Array.from(e.target.files))} />
-            </div>
-          </div>
-
-          <div className="rp-section">
             <span className="lab">Resolution Preference</span>
             <div className="rp-method">
               {[
@@ -137,8 +161,8 @@ export default function ReturnsPage() {
             </div>
           </div>
 
-          <button className="btn btn-accent" style={{ width: '100%', height: 48 }} onClick={handleSubmit}>
-            Submit Return Request
+          <button className="btn btn-accent" style={{ width: '100%', height: 48 }} disabled={loading} onClick={handleSubmit}>
+            {loading ? <span className="spinner" /> : 'Submit Return Request'}
           </button>
         </div>
       </div>
