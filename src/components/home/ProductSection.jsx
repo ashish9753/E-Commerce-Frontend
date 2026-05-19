@@ -14,7 +14,7 @@ export default function ProductSection({ title, subtitle, products, viewAllLink 
           <button className="btn btn-ghost btn-sm" onClick={() => navigate(viewAllLink || '/products')}>View all</button>
         </div>
         <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2">
-          {products.map(p => <ProductCard key={p.id} product={p} />)}
+          {products.map(p => <ProductCard key={p._id || p.id} product={p} />)}
         </div>
       </div>
     </section>

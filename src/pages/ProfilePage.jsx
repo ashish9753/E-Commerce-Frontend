@@ -11,7 +11,7 @@ export default function ProfilePage() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
-  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -19,28 +19,30 @@ export default function ProfilePage() {
 
   const handleLogout = () => { logout(); toast('Signed out successfully'); navigate('/'); };
 
-  const handleProfileSave = () => {
+  const handleProfileSave = async () => {
     const errs = {};
     const nameErr = validators.name(form.name);
     if (nameErr) errs.name = nameErr;
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    const result = updateProfile({ name: form.name, phone: form.phone });
+    setLoading(true);
+    const result = await updateProfile({ name: form.name, phone: form.phone });
+    setLoading(false);
     if (result.success) toast('Profile updated!');
     else toast(result.error, 'error');
   };
 
   const handlePasswordChange = async () => {
     const errs = {};
-    if (!pwForm.current) errs.current = 'Required';
-    const nextErr = validators.password(pwForm.next);
-    if (nextErr) errs.next = nextErr;
-    const confirmErr = validators.confirmPassword(pwForm.confirm, pwForm.next);
+    if (!pwForm.currentPassword) errs.currentPassword = 'Required';
+    const nextErr = validators.password(pwForm.newPassword);
+    if (nextErr) errs.newPassword = nextErr;
+    const confirmErr = validators.confirmPassword(pwForm.confirm, pwForm.newPassword);
     if (confirmErr) errs.confirm = confirmErr;
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
-    const result = await changePassword(pwForm.current, pwForm.next);
+    const result = await changePassword(pwForm.currentPassword, pwForm.newPassword);
     setLoading(false);
-    if (result.success) { toast('Password changed!'); setPwForm({ current: '', next: '', confirm: '' }); }
+    if (result.success) { toast('Password changed!'); setPwForm({ currentPassword: '', newPassword: '', confirm: '' }); }
     else toast(result.error, 'error');
   };
 
@@ -60,10 +62,13 @@ export default function ProfilePage() {
         <div className="card p-6 sticky top-32.5 self-start">
           <div className="flex flex-col items-center text-center pb-6 border-b border-line mb-4">
             <div className="w-16 h-16 rounded-full bg-ink text-white flex items-center justify-center text-2xl font-bold mb-3">
-              {user.name[0].toUpperCase()}
+              {user.name?.[0]?.toUpperCase()}
             </div>
             <div className="font-bold text-base">{user.name}</div>
             <div className="text-xs text-mute mt-0.5">{user.email}</div>
+            {user.role && user.role !== 'user' && (
+              <span className="tag tag-accent mt-2 capitalize">{user.role}</span>
+            )}
           </div>
           <nav className="flex flex-col gap-0.5">
             {navItems.map(item => (
@@ -109,7 +114,9 @@ export default function ProfilePage() {
                 <input className="input bg-surface text-mute cursor-not-allowed" value={user.email} disabled />
                 <div className="text-[11px] text-soft mt-1">Email cannot be changed</div>
               </div>
-              <button className="btn btn-primary" onClick={handleProfileSave}>Save Changes</button>
+              <button className="btn btn-primary" onClick={handleProfileSave} disabled={loading}>
+                {loading ? <span className="spinner" /> : 'Save Changes'}
+              </button>
             </>
           )}
 
@@ -117,8 +124,8 @@ export default function ProfilePage() {
             <>
               <h2 className="text-lg font-bold mb-6 pb-4 border-b border-line">Change Password</h2>
               {[
-                { k: 'current', label: 'Current Password', placeholder: 'Enter current password' },
-                { k: 'next', label: 'New Password', placeholder: 'Min. 8 chars, 1 uppercase, 1 number' },
+                { k: 'currentPassword', label: 'Current Password', placeholder: 'Enter current password' },
+                { k: 'newPassword', label: 'New Password', placeholder: 'Min. 8 chars, 1 uppercase, 1 number' },
                 { k: 'confirm', label: 'Confirm New Password', placeholder: 'Re-enter new password' },
               ].map(f => (
                 <div key={f.k} className="field mb-5">

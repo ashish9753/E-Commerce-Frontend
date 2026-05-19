@@ -1,42 +1,105 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { authService } from '../utils/auth';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi } from '../api/auth';
+import { usersApi } from '../api/users';
+import { getErrorMessage } from '../api/client';
 
 const AuthContext = createContext(null);
 
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(getStoredUser);
   const [loading, setLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    authApi.logout().catch(() => {});
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    setUser(null);
+  }, []);
+
+  // Listen for token-expiry forced logout
   useEffect(() => {
-    const current = authService.getCurrentUser();
-    setUser(current);
-    setLoading(false);
+    const handler = () => logout();
+    window.addEventListener('auth:logout', handler);
+    return () => window.removeEventListener('auth:logout', handler);
+  }, [logout]);
+
+  // Validate stored session on mount
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) { setLoading(false); return; }
+    authApi.getMe()
+      .then(({ data }) => {
+        const u = data.data.user;
+        setUser(u);
+        localStorage.setItem('user', JSON.stringify(u));
+      })
+      .catch(() => {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email, password) => {
-    const result = await authService.login(email, password);
-    if (result.success) setUser(result.user);
-    return result;
+    try {
+      const { data } = await authApi.login({ email, password });
+      const { user: u, accessToken, refreshToken } = data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('user', JSON.stringify(u));
+      setUser(u);
+      return { success: true, user: u };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const register = async (data) => {
-    const result = await authService.register(data);
-    if (result.success) setUser(result.user);
-    return result;
+  const register = async ({ name, email, phone, password }) => {
+    try {
+      const { data } = await authApi.register({ name, email, phone, password });
+      const { user: u, accessToken, refreshToken } = data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('user', JSON.stringify(u));
+      setUser(u);
+      return { success: true, user: u };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const logout = () => {
-    authService.logout();
-    setUser(null);
+  const updateProfile = async (updates) => {
+    try {
+      const { data } = await usersApi.updateProfile(updates);
+      const u = data.data.user;
+      setUser(u);
+      localStorage.setItem('user', JSON.stringify(u));
+      return { success: true, user: u };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const updateProfile = (updates) => {
-    const result = authService.updateProfile(updates);
-    if (result.success) setUser(result.user);
-    return result;
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      await usersApi.changePassword({ currentPassword, newPassword });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
-
-  const changePassword = (current, next) => authService.changePassword(current, next);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, changePassword }}>

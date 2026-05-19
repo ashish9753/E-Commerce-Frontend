@@ -1,28 +1,49 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { storage } from '../utils/storage';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { usersApi } from '../api/users';
+import { useAuth } from './AuthContext';
 
 const WishlistContext = createContext(null);
-const WISHLIST_KEY = 'wishlist';
 
 export function WishlistProvider({ children }) {
-  const [items, setItems] = useState(() => storage.get(WISHLIST_KEY) || []);
+  const { user } = useAuth();
+  const [items, setItems] = useState([]);
 
-  useEffect(() => {
-    storage.set(WISHLIST_KEY, items);
-  }, [items]);
+  const fetchWishlist = useCallback(async () => {
+    if (!user) { setItems([]); return; }
+    try {
+      const { data } = await usersApi.getWishlist();
+      setItems(data.data.wishlist || []);
+    } catch {
+      setItems([]);
+    }
+  }, [user]);
 
-  const toggle = (product) => {
-    setItems(prev => {
-      const exists = prev.find(i => i.id === product.id);
-      return exists ? prev.filter(i => i.id !== product.id) : [...prev, product];
-    });
+  useEffect(() => { fetchWishlist(); }, [fetchWishlist]);
+
+  const toggle = async (product) => {
+    const productId = product._id || product.id;
+    try {
+      await usersApi.toggleWishlist(productId);
+      setItems((prev) => {
+        const exists = prev.some((i) => (i._id || i) === productId);
+        if (exists) return prev.filter((i) => (i._id || i) !== productId);
+        return [...prev, product];
+      });
+    } catch { /* ignore */ }
   };
 
-  const isWished = (productId) => items.some(i => i.id === productId);
-  const remove = (productId) => setItems(prev => prev.filter(i => i.id !== productId));
+  const isWished = (productId) =>
+    items.some((i) => (i._id || i) === productId || i === productId);
+
+  const remove = async (productId) => {
+    try {
+      await usersApi.toggleWishlist(productId);
+      setItems((prev) => prev.filter((i) => (i._id || i) !== productId));
+    } catch { /* ignore */ }
+  };
 
   return (
-    <WishlistContext.Provider value={{ items, toggle, isWished, remove, count: items.length }}>
+    <WishlistContext.Provider value={{ items, toggle, isWished, remove, count: items.length, fetchWishlist }}>
       {children}
     </WishlistContext.Provider>
   );

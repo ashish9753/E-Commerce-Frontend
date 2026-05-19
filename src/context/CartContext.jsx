@@ -1,55 +1,101 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { storage } from '../utils/storage';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { cartApi } from '../api/cart';
+import { getErrorMessage } from '../api/client';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
-const CART_KEY = 'cart';
 
 export function CartProvider({ children }) {
-  const [items, setItems] = useState(() => storage.get(CART_KEY) || []);
-  const [voucher, setVoucher] = useState(null);
+  const { user } = useAuth();
+  const [cart, setCart] = useState(null); // raw backend cart object
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    storage.set(CART_KEY, items);
-  }, [items]);
+  const fetchCart = useCallback(async () => {
+    if (!user) { setCart(null); return; }
+    setLoading(true);
+    try {
+      const { data } = await cartApi.get();
+      setCart(data.data.cart);
+    } catch {
+      setCart(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
-  const addToCart = (product, qty = 1) => {
-    setItems(prev => {
-      const existing = prev.find(i => i.id === product.id);
-      if (existing) {
-        return prev.map(i => i.id === product.id ? { ...i, qty: Math.min(i.qty + qty, 10) } : i);
-      }
-      return [...prev, { ...product, qty }];
-    });
+  useEffect(() => { fetchCart(); }, [fetchCart]);
+
+  const addToCart = async (productId, quantity = 1) => {
+    try {
+      const { data } = await cartApi.addItem(productId, quantity);
+      setCart(data.data.cart);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const removeFromCart = (productId) => {
-    setItems(prev => prev.filter(i => i.id !== productId));
+  const removeFromCart = async (productId) => {
+    try {
+      const { data } = await cartApi.removeItem(productId);
+      setCart(data.data.cart);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const updateQty = (productId, qty) => {
-    if (qty < 1) return removeFromCart(productId);
-    setItems(prev => prev.map(i => i.id === productId ? { ...i, qty: Math.min(qty, 10) } : i));
+  const updateQty = async (productId, quantity) => {
+    if (quantity < 1) return removeFromCart(productId);
+    try {
+      const { data } = await cartApi.updateItem(productId, quantity);
+      setCart(data.data.cart);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
   };
 
-  const clearCart = () => {
-    setItems([]);
-    setVoucher(null);
+  const clearCart = async () => {
+    try {
+      await cartApi.clear();
+      setCart(null);
+    } catch { /* ignore */ }
   };
 
-  const applyVoucher = (voucherData) => setVoucher(voucherData);
-  const removeVoucher = () => setVoucher(null);
+  const applyCoupon = async (code) => {
+    try {
+      const { data } = await cartApi.applyCoupon(code);
+      await fetchCart();
+      return { success: true, discount: data.data.discount, finalPrice: data.data.finalPrice, message: data.message };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
+  };
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-  const savings = items.reduce((sum, i) => sum + (i.was - i.price) * i.qty, 0);
-  const voucherDiscount = voucher ? voucher.discount : 0;
+  const removeCoupon = async () => {
+    try {
+      await cartApi.removeCoupon();
+      await fetchCart();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
+  };
+
+  // Derived values from backend cart
+  const items = cart?.items || [];
+  const count = cart?.totalItems || 0;
+  const subtotal = cart?.totalPrice || 0;
+  const discountAmount = cart?.discountAmount || 0;
+  const finalPrice = cart?.finalPrice || subtotal;
   const deliveryCharge = subtotal >= 5000 ? 0 : 120;
-  const total = subtotal - voucherDiscount + deliveryCharge;
-  const count = items.reduce((sum, i) => sum + i.qty, 0);
+  const total = finalPrice + deliveryCharge;
 
   return (
     <CartContext.Provider value={{
-      items, count, subtotal, savings, voucherDiscount, deliveryCharge, total,
-      voucher, addToCart, removeFromCart, updateQty, clearCart, applyVoucher, removeVoucher,
+      cart, items, count, subtotal, discountAmount, finalPrice, deliveryCharge, total, loading,
+      addToCart, removeFromCart, updateQty, clearCart, applyCoupon, removeCoupon, fetchCart,
     }}>
       {children}
     </CartContext.Provider>

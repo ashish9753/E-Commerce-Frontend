@@ -1,26 +1,59 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Heart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { validateVoucher } from '../data/vouchers';
 import { formatPriceShort } from '../utils/formatters';
-import { useState } from 'react';
 
 export default function CartPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeFromCart, subtotal, savings, deliveryCharge, total, voucher, applyVoucher, removeVoucher, voucherDiscount } = useCart();
+  const { items, updateQty, removeFromCart, subtotal, discountAmount, deliveryCharge, total, finalPrice, applyCoupon, removeCoupon, cart, loading } = useCart();
   const { toggle } = useWishlist();
+  const { user } = useAuth();
   const toast = useToast();
-  const [voucherCode, setVoucherCode] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
 
-  const handleApplyVoucher = () => {
-    const result = validateVoucher(voucherCode, subtotal);
-    if (result.valid) { applyVoucher(result); toast(`Voucher applied! You saved ${formatPriceShort(result.discount)}`); }
+  if (!user) {
+    return (
+      <div className="wrap py-20 text-center">
+        <div className="text-[80px]">🛒</div>
+        <h3 className="text-2xl font-bold mt-4 mb-2">Sign in to view your cart</h3>
+        <p className="text-mute mb-6">Your cart syncs across devices when you're signed in.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/login')}>Sign In</button>
+      </div>
+    );
+  }
+
+  if (loading) return (
+    <div className="wrap py-20 text-center"><div className="spinner mx-auto" style={{ width: 40, height: 40 }} /></div>
+  );
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    const result = await applyCoupon(couponCode.trim().toUpperCase());
+    setCouponLoading(false);
+    if (result.success) toast(`Coupon applied! You saved ${formatPriceShort(result.discount)}`);
     else toast(result.error, 'error');
   };
 
-  const handleSaveForLater = (item) => { toggle(item); removeFromCart(item.id); toast('Moved to wishlist'); };
+  const handleRemoveCoupon = async () => {
+    await removeCoupon();
+    setCouponCode('');
+    toast('Coupon removed');
+  };
+
+  const handleSaveForLater = async (item) => {
+    const product = item.product;
+    await toggle(product);
+    await removeFromCart(product._id);
+    toast('Moved to wishlist');
+  };
+
+  const hasCoupon = discountAmount > 0;
 
   if (items.length === 0) return (
     <div className="wrap py-20 text-center">
@@ -37,45 +70,53 @@ export default function CartPage() {
       <div className="grid grid-cols-[1fr_380px] gap-9 pb-20 max-md:grid-cols-1">
         {/* Items */}
         <div>
-          {items.map(item => (
-            <div key={item.id} className="grid grid-cols-[120px_1fr_auto] gap-5 p-5 border border-line rounded-[14px] mb-3 items-center bg-white">
-              <div className="w-30 h-30 bg-surface rounded-[10px] flex items-center justify-center text-[54px]">{item.emo}</div>
-              <div>
-                <div className="text-[11px] text-soft font-semibold tracking-wider uppercase">{item.brand}</div>
-                <div className="text-base font-bold tracking-tight mt-1">{item.name}</div>
-                <div className="flex gap-2 mt-2">
-                  <span className="text-[11px] text-mute bg-surface px-2.25 py-0.75 rounded-full">{item.category}</span>
-                  {item.badge && <span className="text-[11px] text-mute bg-surface px-2.25 py-0.75 rounded-full">{item.badge === 'sale' ? `${item.off}% off` : 'New'}</span>}
+          {items.map(item => {
+            const product = item.product || {};
+            const image = product.images?.[0];
+            const title = product.title || product.name || 'Product';
+            const brand = product.brand || '';
+            const itemPrice = item.price || product.discountPrice || product.price || 0;
+
+            return (
+              <div key={item._id || product._id} className="grid grid-cols-[120px_1fr_auto] gap-5 p-5 border border-line rounded-[14px] mb-3 items-center bg-white">
+                <div className="w-30 h-30 bg-surface rounded-[10px] flex items-center justify-center overflow-hidden">
+                  {image ? (
+                    <img src={image} alt={title} className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <span className="text-[54px]">🛍️</span>
+                  )}
                 </div>
-                <div className="flex gap-3.5 mt-3.5 text-xs items-center">
-                  <div className="flex items-center border-[1.5px] border-line-2 rounded-full h-9">
-                    <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(item.id, item.qty - 1)}>−</button>
-                    <span className="w-8 text-center font-bold">{item.qty}</span>
-                    <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(item.id, item.qty + 1)}>+</button>
+                <div>
+                  <div className="text-[11px] text-soft font-semibold tracking-wider uppercase">{brand}</div>
+                  <div className="text-base font-bold tracking-tight mt-1">{title}</div>
+                  <div className="flex gap-3.5 mt-3.5 text-xs items-center">
+                    <div className="flex items-center border-[1.5px] border-line-2 rounded-full h-9">
+                      <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(product._id, item.quantity - 1)}>−</button>
+                      <span className="w-8 text-center font-bold">{item.quantity}</span>
+                      <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(product._id, item.quantity + 1)}>+</button>
+                    </div>
+                    <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => handleSaveForLater(item)}>
+                      <Heart size={13} /> Save for later
+                    </button>
+                    <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={async () => { await removeFromCart(product._id); toast('Item removed'); }}>
+                      <Trash2 size={13} /> Remove
+                    </button>
                   </div>
-                  <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => handleSaveForLater(item)}>
-                    <Heart size={13} /> Save for later
-                  </button>
-                  <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => { removeFromCart(item.id); toast('Item removed'); }}>
-                    <Trash2 size={13} /> Remove
-                  </button>
+                </div>
+                <div className="text-right">
+                  <div className="text-xl font-bold tracking-tight">{formatPriceShort(itemPrice * item.quantity)}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xl font-bold tracking-tight">{formatPriceShort(item.price * item.qty)}</div>
-                <div className="text-xs text-soft line-through mt-0.5">{formatPriceShort(item.was * item.qty)}</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Summary */}
         <div className="sticky top-32.5 self-start border border-line rounded-2xl p-6 bg-white">
           <div className="text-[11px] font-bold tracking-widest uppercase text-mute mb-4.5">Order Summary</div>
           {[
-            { label: `Subtotal (${items.reduce((s,i)=>s+i.qty,0)} items)`, val: formatPriceShort(subtotal) },
-            { label: 'You save', val: `−${formatPriceShort(savings)}`, ok: true },
-            ...(voucherDiscount > 0 ? [{ label: 'Voucher discount', val: `−${formatPriceShort(voucherDiscount)}`, ok: true }] : []),
+            { label: `Subtotal (${items.reduce((s, i) => s + i.quantity, 0)} items)`, val: formatPriceShort(subtotal) },
+            ...(discountAmount > 0 ? [{ label: 'Coupon discount', val: `−${formatPriceShort(discountAmount)}`, ok: true }] : []),
             { label: 'Delivery', val: deliveryCharge === 0 ? 'FREE' : formatPriceShort(deliveryCharge) },
           ].map(r => (
             <div key={r.label} className="flex justify-between py-2.5 text-sm text-mute border-b border-dashed border-line">
@@ -88,21 +129,23 @@ export default function CartPage() {
             <span className="font-serif text-[36px] leading-none">{formatPriceShort(total)}</span>
           </div>
 
-          {!voucher ? (
+          {!hasCoupon ? (
             <div className="flex gap-2 my-4 p-3.5 bg-surface rounded-xl">
               <input
                 className="input h-9 flex-1 bg-white"
-                placeholder="Enter voucher code"
-                value={voucherCode}
-                onChange={e => setVoucherCode(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && handleApplyVoucher()}
+                placeholder="Enter coupon code"
+                value={couponCode}
+                onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
               />
-              <button onClick={handleApplyVoucher} className="h-9 px-3.5 bg-ink text-white rounded-lg text-xs font-bold border-0 cursor-pointer shrink-0">Apply</button>
+              <button onClick={handleApplyCoupon} disabled={couponLoading} className="h-9 px-3.5 bg-ink text-white rounded-lg text-xs font-bold border-0 cursor-pointer shrink-0">
+                {couponLoading ? '...' : 'Apply'}
+              </button>
             </div>
           ) : (
             <div className="bg-ok-tint border border-dashed border-ok text-ok text-xs font-semibold px-3.5 py-2.5 rounded-[10px] flex justify-between items-center mt-4">
-              <span>✓ {voucher.voucher.code} applied</span>
-              <button onClick={removeVoucher} className="bg-transparent border-0 cursor-pointer text-ok font-bold">Remove</button>
+              <span>✓ Coupon applied · saved {formatPriceShort(discountAmount)}</span>
+              <button onClick={handleRemoveCoupon} className="bg-transparent border-0 cursor-pointer text-ok font-bold">Remove</button>
             </div>
           )}
 

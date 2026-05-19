@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import HeroSection from '../components/home/HeroSection';
 import BrandStrip from '../components/home/BrandStrip';
 import CategoryGrid from '../components/home/CategoryGrid';
@@ -7,11 +8,22 @@ import BigBanner from '../components/home/BigBanner';
 import PromiseBar from '../components/home/PromiseBar';
 import ReviewsSection from '../components/home/ReviewsSection';
 import NewsletterSection from '../components/home/NewsletterSection';
-import { products } from '../data/products';
+import { productsApi } from '../api/products';
+import { normalizeProducts } from '../utils/normalizers';
 
 export default function HomePage() {
-  const bestSellers = products.filter(p => p.badge === 'sale').slice(0, 4);
-  const newArrivals = products.filter(p => p.badge === 'new').concat(products.filter(p => !p.badge)).slice(0, 4);
+  const [featured, setFeatured] = useState([]);
+  const [newest, setNewest] = useState([]);
+
+  useEffect(() => {
+    productsApi.getFeatured()
+      .then(({ data }) => setFeatured(normalizeProducts(data.data?.products || [])))
+      .catch(() => {});
+
+    productsApi.getAll({ sort: 'newest', limit: 8 })
+      .then(({ data }) => setNewest(normalizeProducts(data.data?.products || data.data?.data || [])))
+      .catch(() => {});
+  }, []);
 
   return (
     <>
@@ -19,19 +31,23 @@ export default function HomePage() {
       <BrandStrip />
       <CategoryGrid />
       <SchemesSection />
-      <ProductSection
-        title='Best <i>Sellers</i>'
-        subtitle="Top Picks"
-        products={bestSellers}
-        viewAllLink="/products"
-      />
+      {featured.length > 0 && (
+        <ProductSection
+          title='Featured <i>Products</i>'
+          subtitle="Top Picks"
+          products={featured.slice(0, 4)}
+          viewAllLink="/products"
+        />
+      )}
       <BigBanner />
-      <ProductSection
-        title='New <i>Arrivals</i>'
-        subtitle="Just In"
-        products={newArrivals}
-        viewAllLink="/products"
-      />
+      {newest.length > 0 && (
+        <ProductSection
+          title='New <i>Arrivals</i>'
+          subtitle="Just In"
+          products={newest.slice(0, 4)}
+          viewAllLink="/products?sort=newest"
+        />
+      )}
       <PromiseBar />
       <ReviewsSection />
       <NewsletterSection />
