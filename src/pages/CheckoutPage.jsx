@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { usersApi } from '../api/users';
 import { settingsApi } from '../api/settings';
 import { paymentsApi } from '../api/payments';
+import { deliveryAreasApi } from '../api/deliveryAreas';
 import { formatPriceShort } from '../utils/formatters';
 import { getErrorMessage } from '../api/client';
 
@@ -210,6 +211,8 @@ export default function CheckoutPage() {
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [bookingLoading, setBookingLoading]     = useState(false);
   const [paymentMethod, setPaymentMethod]       = useState('COD');
+  const [deliveryCheck, setDeliveryCheck]       = useState(null); // { available, city, deliveryCharge } | null
+  const [deliveryChecking, setDeliveryChecking] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -256,6 +259,23 @@ export default function CheckoutPage() {
     : 0;
 
   if (items.length === 0) { navigate('/cart'); return null; }
+
+  const checkDelivery = async (pin) => {
+    if (!pin || pin.length !== 6) { setDeliveryCheck(null); return; }
+    setDeliveryChecking(true);
+    try {
+      const { data } = await deliveryAreasApi.check(pin);
+      setDeliveryCheck(data.data);
+    } catch { setDeliveryCheck({ available: false }); }
+    finally { setDeliveryChecking(false); }
+  };
+
+  // Check delivery whenever selected address changes
+  useEffect(() => {
+    const addr = addresses.find(a => a._id === selectedAddressId);
+    if (addr?.pincode) checkDelivery(addr.pincode);
+    else setDeliveryCheck(null);
+  }, [selectedAddressId, addresses]);
 
   const handleSaveAddress = async (formData) => {
     try {
@@ -491,10 +511,61 @@ export default function CheckoutPage() {
                       />
                     )}
 
+                    {/* Delivery availability check result */}
                     {selectedAddressId && !showAddForm && (
-                      <button onClick={() => setStep(2)}
-                        style={{ marginTop: 20, width: '100%', padding: '12px', background: '#FFD814', border: '1px solid #FBA131', borderRadius: 6, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
-                        Use this address
+                      <div style={{ marginTop: 16 }}>
+                        {deliveryChecking ? (
+                          <div style={{ padding: '10px 14px', background: '#f3f4f6', borderRadius: 6, fontSize: 13, color: '#555' }}>
+                            Checking delivery availability...
+                          </div>
+                        ) : deliveryCheck ? (
+                          deliveryCheck.available ? (
+                            <div style={{ padding: '12px 16px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, fontSize: 13 }}>
+                              <div style={{ fontWeight: 700, color: '#16a34a', marginBottom: 2 }}>
+                                ✓ Delivery available{deliveryCheck.city ? ` in ${deliveryCheck.city}` : ''}
+                              </div>
+                              <div style={{ color: '#15803d' }}>
+                                {deliveryCheck.deliveryCharge === 0 ? 'Free delivery to this area' : `Delivery charge: Rs. ${deliveryCheck.deliveryCharge}`}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
+                              <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 14, marginBottom: 4 }}>
+                                🚫 Delivery not available in this area
+                              </div>
+                              <div style={{ fontSize: 13, color: '#b91c1c' }}>
+                                We currently do not deliver to pincode <strong>{addresses.find(a => a._id === selectedAddressId)?.pincode}</strong>.
+                                Please use a different address or contact support.
+                              </div>
+                            </div>
+                          )
+                        ) : null}
+                      </div>
+                    )}
+
+                    {selectedAddressId && !showAddForm && (
+                      <button
+                        onClick={() => {
+                          if (!deliveryCheck?.available) {
+                            toast('Delivery is not available at your selected address pincode.', 'error');
+                            return;
+                          }
+                          setStep(2);
+                        }}
+                        disabled={deliveryChecking || deliveryCheck === null}
+                        style={{
+                          marginTop: 16, width: '100%', padding: '12px',
+                          background: (!deliveryCheck?.available || deliveryChecking) ? '#e5e7eb' : '#FFD814',
+                          border: `1px solid ${(!deliveryCheck?.available || deliveryChecking) ? '#d1d5db' : '#FBA131'}`,
+                          borderRadius: 6, fontWeight: 700, fontSize: 15,
+                          cursor: (!deliveryCheck?.available || deliveryChecking) ? 'not-allowed' : 'pointer',
+                          color: (!deliveryCheck?.available || deliveryChecking) ? '#9ca3af' : '#000',
+                        }}>
+                        {deliveryChecking
+                          ? 'Checking delivery...'
+                          : deliveryCheck?.available === false
+                            ? 'Delivery not available — choose another address'
+                            : 'Use this address'}
                       </button>
                     )}
                   </>

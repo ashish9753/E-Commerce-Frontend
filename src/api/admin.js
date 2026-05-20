@@ -20,4 +20,9 @@ export const adminApi = {
 
   // Payments
   getPayments: () => client.get('/payments'),
+
+  // Inventory
+  getInventoryAnalytics: () => client.get('/inventory/analytics'),
+  getLowStock: (threshold) => client.get('/inventory/low-stock', { params: { threshold } }),
+  getInventoryLogs: (params) => client.get('/inventory/logs', { params }),
 };

@@ -55,6 +55,13 @@ export default function CartPage() {
 
   const hasCoupon = discountAmount > 0;
 
+  // Items where cart quantity exceeds actual stock
+  const stockIssues = items.filter(item => {
+    const stock = item.product?.stock ?? Infinity;
+    return item.quantity > stock;
+  });
+  const hasStockIssues = stockIssues.length > 0;
+
   if (items.length === 0) return (
     <div className="wrap py-20 text-center">
       <div className="text-[80px]">🛒</div>
@@ -93,7 +100,12 @@ export default function CartPage() {
                     <div className="flex items-center border-[1.5px] border-line-2 rounded-full h-9">
                       <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(product._id, item.quantity - 1)}>−</button>
                       <span className="w-8 text-center font-bold">{item.quantity}</span>
-                      <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(product._id, item.quantity + 1)}>+</button>
+                      <button
+                        className="w-10.5 h-9 text-lg bg-transparent border-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-mute hover:enabled:text-ink cursor-pointer"
+                        onClick={() => updateQty(product._id, item.quantity + 1)}
+                        disabled={item.quantity >= (product.stock ?? Infinity)}
+                        title={item.quantity >= (product.stock ?? Infinity) ? `Only ${product.stock} available` : ''}
+                      >+</button>
                     </div>
                     <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => handleSaveForLater(item)}>
                       <Heart size={13} /> Save for later
@@ -102,6 +114,20 @@ export default function CartPage() {
                       <Trash2 size={13} /> Remove
                     </button>
                   </div>
+                  {(() => {
+                    const stock = product.stock ?? Infinity;
+                    if (item.quantity > stock) return (
+                      <div className="mt-2.5 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        <span className="font-bold">Only {stock} available.</span>
+                        <span>Please reduce quantity.</span>
+                        <button
+                          className="ml-auto font-bold underline bg-transparent border-0 cursor-pointer text-red-600"
+                          onClick={() => updateQty(product._id, stock)}
+                        >Fix</button>
+                      </div>
+                    );
+                    return null;
+                  })()}
                 </div>
                 <div className="text-right">
                   <div className="text-xl font-bold tracking-tight">{formatPriceShort(itemPrice * item.quantity)}</div>
@@ -149,7 +175,16 @@ export default function CartPage() {
             </div>
           )}
 
-          <button className="btn btn-accent w-full h-13 mt-4.5 text-[15px]" onClick={() => navigate('/checkout')}>
+          {hasStockIssues && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-4 text-center font-semibold">
+              Some items exceed available stock. Please fix quantities above.
+            </div>
+          )}
+          <button
+            className="btn btn-accent w-full h-13 mt-2.5 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => navigate('/checkout')}
+            disabled={hasStockIssues}
+          >
             Proceed to Checkout →
           </button>
           <div className="flex items-center justify-center gap-1.5 mt-3.5 text-xs text-mute">🔒 Secure checkout · SSL encrypted</div>

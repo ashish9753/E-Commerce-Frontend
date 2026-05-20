@@ -87,6 +87,7 @@ const Icon = {
   list:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M4 6h16M4 12h16M4 18h7"/></svg>,
   coupon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
   support:<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  box:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   grid:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   extlink:<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>,
   lock:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:16,height:16}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
@@ -512,16 +513,73 @@ function OverviewTab() {
 /* ══════════════════════════════════════════════════════
    USERS TAB
 ══════════════════════════════════════════════════════ */
-function UsersTab() {
+function buildUserGrowthData(all, period) {
+  const now = new Date();
+  let buckets = [];
+  let labelFn, keyFn;
+
+  if (period === 'today') {
+    buckets = Array.from({ length: 24 }, (_, h) => ({ label: `${h}:00`, count: 0 }));
+    keyFn = d => d.getHours();
+    labelFn = (_, i) => i;
+  } else if (period === 'week') {
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    buckets = days.map(d => ({ label: d, count: 0 }));
+    const weekStart = new Date(now); weekStart.setDate(now.getDate() - now.getDay()); weekStart.setHours(0,0,0,0);
+    keyFn = d => d.getDay();
+    labelFn = (_, i) => i;
+    all = all.filter(u => new Date(u.createdAt) >= weekStart);
+  } else if (period === 'month') {
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: `${i+1}`, count: 0 }));
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    keyFn = d => d.getDate() - 1;
+    labelFn = (_, i) => i;
+    all = all.filter(u => new Date(u.createdAt) >= monthStart);
+  } else if (period === 'year') {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    buckets = months.map(m => ({ label: m, count: 0 }));
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    keyFn = d => d.getMonth();
+    labelFn = (_, i) => i;
+    all = all.filter(u => new Date(u.createdAt) >= yearStart);
+  } else {
+    // all time — group by month-year
+    const sorted = [...all].sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (!sorted.length) return [];
+    const first = new Date(sorted[0].createdAt);
+    const map = {};
+    sorted.forEach(u => {
+      const d = new Date(u.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const label = d.toLocaleDateString('en-IN', { month:'short', year:'2-digit' });
+      if (!map[key]) map[key] = { label, count: 0 };
+      map[key].count++;
+    });
+    return Object.values(map);
+  }
+
+  all.forEach(u => {
+    const d = new Date(u.createdAt);
+    const idx = keyFn(d);
+    if (buckets[idx]) buckets[idx].count++;
+  });
+  return buckets;
+}
+
+function UsersTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null);
   const [search, setSearch]   = useState('');
   const [roleFilter, setRole] = useState('');
   const [statusFilter, setSt] = useState('');
+  const [period, setPeriod]   = useState('month');
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   useEffect(() => {
-    adminApi.getUsers({ limit: 200 })
+    adminApi.getUsers({ limit: 500 })
       .then(r => setAll(r.data?.data?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -536,6 +594,27 @@ function UsersTab() {
 
   const roleCounts = { admin: 0, employee: 0, user: 0 };
   all.forEach(u => { if (roleCounts[u.role] !== undefined) roleCounts[u.role]++; });
+
+  // Period-filtered counts for KPI
+  const now = new Date();
+  const periodStart = {
+    today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+    week:  new Date(now - 7  * 86400000),
+    month: new Date(now.getFullYear(), now.getMonth(), 1),
+    year:  new Date(now.getFullYear(), 0, 1),
+    all:   new Date(0),
+  }[period];
+  const newInPeriod = all.filter(u => new Date(u.createdAt) >= periodStart).length;
+  const growthData  = buildUserGrowthData(all, period);
+  const totalGrowth = growthData.reduce((s, d) => s + d.count, 0);
+
+  const PERIODS = [
+    { key: 'today', label: 'Today' },
+    { key: 'week',  label: 'This Week' },
+    { key: 'month', label: 'This Month' },
+    { key: 'year',  label: 'This Year' },
+    { key: 'all',   label: 'All Time' },
+  ];
 
   const handleBlock = async (id, isBlocked) => {
     setBusy(id);
@@ -563,8 +642,48 @@ function UsersTab() {
         <KpiCard label="Customers"     value={fmt(roleCounts.user)}      sub="Regular users"       colorKey="green"  iconEl={Icon.person} />
       </div>
 
-      {/* Role donut */}
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
+      {/* Growth chart + Role donut */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20 }}>
+        {/* Growth chart */}
+        <Card title="User Registrations">
+          {/* Period toggle */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            {PERIODS.map(p => (
+              <button key={p.key} onClick={() => setPeriod(p.key)}
+                style={{ padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+                  background: period === p.key ? C.blue : C.bg2,
+                  color:      period === p.key ? 'white'  : C.mute,
+                  transition: 'all .15s' }}>
+                {p.label}
+              </button>
+            ))}
+            <span style={{ marginLeft: 'auto', fontSize: 13, color: C.mute, alignSelf: 'center' }}>
+              <strong style={{ color: C.blue }}>{totalGrowth}</strong> new {period === 'all' ? 'total' : `in ${PERIODS.find(p2=>p2.key===period)?.label?.toLowerCase()}`}
+            </span>
+          </div>
+          {growthData.length === 0 || totalGrowth === 0
+            ? <div style={{ textAlign:'center', padding:'40px 0', color:C.mute, fontSize:13 }}>No registrations in this period</div>
+            : <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={growthData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="userGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={C.blue} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={C.blue} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.mute }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: C.mute }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 12 }}
+                    formatter={(v) => [v, 'New Users']} />
+                  <Area type="monotone" dataKey="count" stroke={C.blue} strokeWidth={2}
+                    fill="url(#userGrad)" dot={false} activeDot={{ r: 4, fill: C.blue }} />
+                </AreaChart>
+              </ResponsiveContainer>
+          }
+        </Card>
+
+        {/* Role donut */}
         <Card title="Role Breakdown">
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
@@ -577,35 +696,35 @@ function UsersTab() {
             </PieChart>
           </ResponsiveContainer>
         </Card>
-
-        {/* Filters */}
-        <Card title="Filter & Search">
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 0 }}>
-            <Input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, email, phone…"
-              style={{ flex: 1, minWidth: 220 }}
-            />
-            <Select value={roleFilter} onChange={e => setRole(e.target.value)}>
-              <option value="">All Roles</option>
-              <option value="user">User</option>
-              <option value="employee">Employee</option>
-              <option value="admin">Admin</option>
-            </Select>
-            <Select value={statusFilter} onChange={e => setSt(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="blocked">Blocked</option>
-            </Select>
-            {(search || roleFilter || statusFilter) && (
-              <Btn onClick={() => { setSearch(''); setRole(''); setSt(''); }}>Clear</Btn>
-            )}
-          </div>
-          <div style={{ marginTop: 12, fontSize: 13, color: C.mute }}>
-            Showing <strong>{users.length}</strong> of <strong>{all.length}</strong> users
-          </div>
-        </Card>
       </div>
+
+      {/* Filters */}
+      <Card title="Filter & Search">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 0 }}>
+          <Input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name, email, phone…"
+            style={{ flex: 1, minWidth: 220 }}
+          />
+          <Select value={roleFilter} onChange={e => setRole(e.target.value)}>
+            <option value="">All Roles</option>
+            <option value="user">User</option>
+            <option value="employee">Employee</option>
+            <option value="admin">Admin</option>
+          </Select>
+          <Select value={statusFilter} onChange={e => setSt(e.target.value)}>
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+          </Select>
+          {(search || roleFilter || statusFilter) && (
+            <Btn onClick={() => { setSearch(''); setRole(''); setSt(''); }}>Clear</Btn>
+          )}
+        </div>
+        <div style={{ marginTop: 12, fontSize: 13, color: C.mute }}>
+          Showing <strong>{users.length}</strong> of <strong>{all.length}</strong> users
+        </div>
+      </Card>
 
       {/* Table */}
       <Card title={`Users (${users.length})`}>
@@ -661,7 +780,7 @@ function UsersTab() {
 ══════════════════════════════════════════════════════ */
 const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', shopName:'', businessAddress:'', gstNumber:'', shopDescription:'' };
 
-function EmployeesTab() {
+function EmployeesTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null);
@@ -671,6 +790,8 @@ function EmployeesTab() {
   const [form, setForm]       = useState(EMPTY_EMP_FORM);
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState('');
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   useEffect(() => {
     adminApi.getEmployees({ limit: 200 })
@@ -870,7 +991,7 @@ function EmployeesTab() {
 ══════════════════════════════════════════════════════ */
 const ORDER_STATUSES = ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED','CANCELLED','RETURNED'];
 
-function OrdersTab() {
+function OrdersTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpd]    = useState(null);
@@ -880,6 +1001,8 @@ function OrdersTab() {
   const [refundModal, setRefundModal] = useState(null); // order object
   const [refundForm, setRefundForm]   = useState({ reason: '', adminNote: '', refundAmount: '' });
   const [refunding, setRefunding]     = useState(false);
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   useEffect(() => {
     adminApi.getOrders({ limit: 200 })
@@ -1143,7 +1266,7 @@ function ReturnStatusBadge({ status }) {
   );
 }
 
-function AdminReturnsTab() {
+function AdminReturnsTab({ globalSearch = '' }) {
   const { isMobile, isTablet } = useResponsive();
   const [returns, setReturns]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -1152,6 +1275,8 @@ function AdminReturnsTab() {
   const [actionForm, setActionForm] = useState({ status:'', adminNote:'', refundAmount:'' });
   const [saving, setSaving]         = useState(false);
   const [search, setSearch]         = useState('');
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1478,7 +1603,7 @@ function AdminReturnsTab() {
 ══════════════════════════════════════════════════════ */
 const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true };
 
-function AdminCouponsTab() {
+function AdminCouponsTab({ globalSearch = '' }) {
   const [coupons, setCoupons]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [form, setForm]         = useState(EMPTY_COUPON);
@@ -1487,6 +1612,9 @@ function AdminCouponsTab() {
   const [error, setError]       = useState('');
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [search, setSearch]     = useState('');
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1652,7 +1780,7 @@ function AdminCouponsTab() {
                 ))}
               </tr></thead>
               <tbody>
-                {coupons.map(c => {
+                {coupons.filter(c => !search || c.code?.toLowerCase().includes(search.toLowerCase())).map(c => {
                   const isExpired  = new Date(c.expiryDate) <= now;
                   const daysLeft   = Math.ceil((new Date(c.expiryDate) - now) / 86400000);
                   const statusColor = isExpired ? C.red : !c.isActive ? C.mute : C.green;
@@ -1943,7 +2071,7 @@ function TicketStatusBadge({ status }) {
   );
 }
 
-function AdminSupportTab() {
+function AdminSupportTab({ globalSearch = '' }) {
   const { user }            = useAuth();
   const { lastSupportMsg }  = useNotifications();
   const [tickets, setTickets]       = useState([]);
@@ -1956,6 +2084,7 @@ function AdminSupportTab() {
   const [search, setSearch]         = useState('');
   const bottomRef = useRef(null);
 
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
   useEffect(() => { fetchAll(); }, [filterStatus]);
 
   // Append incoming message directly from SSE payload — zero extra API calls
@@ -2345,6 +2474,7 @@ const NAV_SECTIONS = [
       { id: 'Employees',     iconEl: Icon.person },
       { id: 'Orders',        iconEl: Icon.orders },
       { id: 'Returns',       iconEl: Icon.refund },
+      { id: 'Inventory',     iconEl: Icon.box },
       { id: 'Coupons',       iconEl: Icon.coupon },
       { id: 'Notifications', iconEl: Icon.bell },
       { id: 'Support',       iconEl: Icon.support },
@@ -2371,6 +2501,7 @@ export default function AdminDashboard() {
   const [tab, setTab]               = useState('Overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openTicketCount, setOTC]   = useState(0);
+  const [globalSearch, setGlobalSearch] = useState('');
   const navigate                    = useNavigate();
   const { user, logout }            = useAuth();
   const { notifications }           = useNotifications();
@@ -2390,9 +2521,10 @@ export default function AdminDashboard() {
     }
   }, [notifications]);
 
-  // Clear badge when Support tab is opened
+  // Clear global search when tab changes
   const handleTabClick = (id) => {
     setTab(id);
+    setGlobalSearch('');
     if (id === 'Support') setOTC(0);
     if (isMobile) setSidebarOpen(false);
   };
@@ -2415,6 +2547,7 @@ export default function AdminDashboard() {
     Coupons:       'Create and manage discount coupons for customers',
     Notifications: 'Broadcast notifications to customers, employees, or everyone',
     Support:       'View and respond to customer support tickets',
+    Inventory:     'Stock levels, top-sellers, category breakdown, and order analytics',
     Catalog:       'Manage brands, categories, sub-categories, attributes and events',
     Settings:      'Configure COD availability, order amount limits, and booking payments',
   };
@@ -2548,10 +2681,16 @@ export default function AdminDashboard() {
               padding: '0 12px', height: 36,
             }}>
               <span style={{ color: C.mute, display: 'flex', alignItems: 'center' }}>{Icon.search}</span>
-              <input placeholder="Search orders, users, products…" style={{
-                flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontSize: 13, color: C.text, fontFamily: "'DM Sans', sans-serif",
-              }} />
+              <input
+                value={globalSearch}
+                onChange={e => setGlobalSearch(e.target.value)}
+                placeholder={`Search ${tab.toLowerCase()}…`}
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: C.text, fontFamily: "'DM Sans', sans-serif" }}
+              />
+              {globalSearch && (
+                <button onClick={() => setGlobalSearch('')}
+                  style={{ background: 'none', border: 'none', color: C.mute, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, display: 'flex', alignItems: 'center' }}>✕</button>
+              )}
             </div>
           )}
           {/* Mobile: page title in topbar */}
@@ -2616,17 +2755,707 @@ export default function AdminDashboard() {
           )}
 
           {tab === 'Overview'      && <OverviewTab />}
-          {tab === 'Users'         && <UsersTab />}
-          {tab === 'Employees'     && <EmployeesTab />}
-          {tab === 'Orders'        && <OrdersTab />}
-          {tab === 'Returns'       && <AdminReturnsTab />}
-          {tab === 'Coupons'       && <AdminCouponsTab />}
+          {tab === 'Users'         && <UsersTab         globalSearch={globalSearch} />}
+          {tab === 'Employees'     && <EmployeesTab     globalSearch={globalSearch} />}
+          {tab === 'Orders'        && <OrdersTab        globalSearch={globalSearch} />}
+          {tab === 'Returns'       && <AdminReturnsTab  globalSearch={globalSearch} />}
+          {tab === 'Coupons'       && <AdminCouponsTab  globalSearch={globalSearch} />}
           {tab === 'Notifications' && <AdminNotificationsTab />}
-          {tab === 'Support'       && <AdminSupportTab />}
+          {tab === 'Support'       && <AdminSupportTab  globalSearch={globalSearch} />}
+          {tab === 'Inventory'     && <InventoryTab     globalSearch={globalSearch} />}
           {tab === 'Catalog'       && <AdminCatalogTab />}
           {tab === 'Settings'      && <AdminSettingsTab />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   INVENTORY TAB
+══════════════════════════════════════════════════════ */
+function InventoryTab({ globalSearch = '' }) {
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [sortBy, setSortBy]       = useState('sold');
+  const [catFilter, setCat]       = useState('ALL');
+  const [stockFilter, setStock]   = useState('ALL');
+  const [orderFilter, setOrder]   = useState('ALL');
+  const [catSortBy, setCatSort]   = useState('sold_desc');
+  const [catStockF, setCatStockF] = useState('ALL');
+  const [catSearch, setCatSearch] = useState('');
+  const [showTax, setShowTax]     = useState(false);
+  const [taxSearch, setTaxSearch] = useState('');
+  const [taxCatFilter, setTaxCat] = useState('ALL');
+  const [taxRateFilter, setTaxRate] = useState('ALL');
+  const [chartPeriod, setChartPeriod] = useState('month');
+  const [expandedCat, setExpandedCat] = useState(null);   // category name string
+  const [detailProduct, setDetailProduct] = useState(null); // product object for modal
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
+
+  useEffect(() => {
+    adminApi.getInventoryAnalytics()
+      .then(r => setData(r.data?.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div style={{ textAlign: 'center', padding: 80, color: C.mute }}>
+      <div className="spinner" style={{ width: 36, height: 36, margin: '0 auto 16px' }} />
+      Loading inventory data…
+    </div>
+  );
+
+  if (!data) return <div style={{ color: C.red, padding: 40 }}>Failed to load inventory analytics.</div>;
+
+  const { orderSummary, stockHealth, allProducts, categoryBreakdown, paymentBreakdown, timeSeries } = data;
+
+  // Local date string helpers (IST-aware)
+  const localDateKey = (dt) => {
+    const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0'), d = String(dt.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  };
+  const localMonthKey = (dt) => {
+    const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0');
+    return `${y}-${m}`;
+  };
+
+  // Build chart data from time series
+  const buildChartData = () => {
+    if (chartPeriod === 'today') {
+      return Array.from({ length: 24 }, (_, h) => {
+        const d = (timeSeries?.hourly || []).find(x => x._id === h);
+        return { label: `${h}:00`, revenue: d?.revenue || 0, orders: d?.orders || 0, net: (d?.revenue||0)-(d?.refunded||0) };
+      });
+    }
+    if (chartPeriod === 'week') {
+      return Array.from({ length: 7 }, (_, i) => {
+        const dt  = new Date(); dt.setDate(dt.getDate() - (6 - i)); dt.setHours(0,0,0,0);
+        const key = localDateKey(dt);
+        const d   = (timeSeries?.daily || []).find(x => x._id === key);
+        return { label: dt.toLocaleDateString('en-IN', { weekday:'short', day:'numeric' }), revenue: d?.revenue||0, orders: d?.orders||0, net: (d?.revenue||0)-(d?.refunded||0) };
+      });
+    }
+    if (chartPeriod === 'month') {
+      const now  = new Date();
+      const days = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      return Array.from({ length: days }, (_, i) => {
+        const dt  = new Date(now.getFullYear(), now.getMonth(), i+1);
+        const key = localDateKey(dt);
+        const d   = (timeSeries?.daily || []).find(x => x._id === key);
+        return { label: `${i+1}`, revenue: d?.revenue||0, orders: d?.orders||0, net: (d?.revenue||0)-(d?.refunded||0) };
+      });
+    }
+    // year — 12 months
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const dt  = new Date(now.getFullYear(), i, 1);
+      const key = localMonthKey(dt);
+      const d   = (timeSeries?.monthly || []).find(x => x._id === key);
+      return { label: dt.toLocaleDateString('en-IN', { month:'short' }), revenue: d?.revenue||0, orders: d?.orders||0, net: (d?.revenue||0)-(d?.refunded||0) };
+    });
+  };
+  const chartData   = buildChartData();
+  const chartTotal  = chartData.reduce((s, d) => s + d.revenue, 0);
+  const chartOrders = chartData.reduce((s, d) => s + d.orders, 0);
+
+  const CHART_PERIODS = [
+    { key: 'today', label: 'Today' },
+    { key: 'week',  label: 'This Week' },
+    { key: 'month', label: 'This Month' },
+    { key: 'year',  label: 'This Year' },
+  ];
+  const cod    = paymentBreakdown?.cod    || { count: 0, revenue: 0, refunded: 0, deposit: { paid: { count: 0, amount: 0 }, pending: { count: 0, amount: 0 }, none: { count: 0 } } };
+  const online = paymentBreakdown?.online || { count: 0, revenue: 0, refunded: 0 };
+  const codDeposit = cod.deposit || { paid: { count: 0, amount: 0 }, pending: { count: 0, amount: 0 }, none: { count: 0 } };
+  const totalDepositCollected = codDeposit.paid?.amount || 0;
+  const totalDepositPending   = codDeposit.pending?.amount || 0;
+
+  const categories = ['ALL', ...new Set((allProducts || []).map(p => p.category?.name).filter(Boolean))];
+
+  const filtered = (allProducts || [])
+    .filter(p => catFilter === 'ALL' || p.category?.name === catFilter)
+    .filter(p => {
+      if (stockFilter === 'out') return p.stock === 0;
+      if (stockFilter === 'low') return p.stock > 0 && p.stock <= 10;
+      if (stockFilter === 'ok')  return p.stock > 10;
+      return true;
+    })
+    .filter(p => !search || p.title?.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'sold')    return b.sold - a.sold;
+      if (sortBy === 'stock')   return a.stock - b.stock;
+      if (sortBy === 'revenue') return (b.sold * b.price) - (a.sold * a.price);
+      if (sortBy === 'price')   return b.price - a.price;
+      return a.title?.localeCompare(b.title);
+    });
+
+  const catRows = (() => {
+    let rows = (categoryBreakdown || []).map(c => ({
+      name: c.categoryName,
+      products: c.productCount,
+      sold: c.totalSold,
+      stock: c.totalStock,
+      revenue: Math.round(c.revenue),
+    }));
+    if (catSearch.trim()) {
+      const q = catSearch.trim().toLowerCase();
+      rows = rows.filter(r => r.name?.toLowerCase().includes(q));
+    }
+    if (catStockF !== 'ALL') {
+      rows = rows.filter(r => {
+        if (catStockF === 'out')     return r.stock === 0;
+        if (catStockF === 'low')     return r.stock > 0 && r.stock <= 20;
+        if (catStockF === 'healthy') return r.stock > 20;
+        return true;
+      });
+    }
+    rows.sort((a, b) => {
+      if (catSortBy === 'sold_desc')    return b.sold - a.sold;
+      if (catSortBy === 'sold_asc')     return a.sold - b.sold;
+      if (catSortBy === 'revenue_desc') return b.revenue - a.revenue;
+      if (catSortBy === 'revenue_asc')  return a.revenue - b.revenue;
+      if (catSortBy === 'stock_desc')   return b.stock - a.stock;
+      if (catSortBy === 'stock_asc')    return a.stock - b.stock;
+      if (catSortBy === 'products')     return b.products - a.products;
+      if (catSortBy === 'name')         return (a.name || '').localeCompare(b.name || '');
+      return b.sold - a.sold;
+    });
+    return rows;
+  })();
+
+  const Stat = ({ label, value, color = C.text, sub, accent }) => (
+    <div style={{ background: C.card, border: `1px solid ${accent ? accent + '44' : C.line}`, borderRadius: 12, padding: '16px 18px', borderLeft: accent ? `3px solid ${accent}` : undefined }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.mute, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+
+  const TH = ({ children, right }) => (
+    <th style={{ padding: '9px 12px', textAlign: right ? 'right' : 'left', color: C.mute, fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap', borderBottom: `1px solid ${C.line}`, background: C.card2 }}>
+      {children}
+    </th>
+  );
+
+  const inputStyle = { height: 34, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 11px', fontSize: 13, background: C.bg, color: C.text, outline: 'none' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ── Product Detail Modal ── */}
+      {detailProduct && (() => {
+        const p = detailProduct;
+        const effPrice = p.discountPrice || p.price || 0;
+        const grossRev = effPrice * p.sold;
+        const taxAmt   = grossRev * (p.taxRate || 0) / 100;
+        const st = p.stock === 0 ? { label:'Out of Stock', color:C.red } : p.stock <= 10 ? { label:'Low Stock', color:C.yellow } : { label:'In Stock', color:C.green };
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
+            onClick={() => setDetailProduct(null)}>
+            <div style={{ background:C.card, borderRadius:18, padding:28, maxWidth:540, width:'100%', border:`1px solid ${C.line}`, boxShadow:'0 24px 64px #000a' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:20 }}>
+                {p.images?.[0]
+                  ? <img src={p.images[0]} alt="" style={{ width:72, height:72, objectFit:'contain', borderRadius:10, border:`1px solid ${C.line}`, flexShrink:0 }} />
+                  : <div style={{ width:72, height:72, borderRadius:10, background:C.card2, display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, flexShrink:0 }}>📦</div>
+                }
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:800, fontSize:16, color:C.text, lineHeight:1.3 }}>{p.title}</div>
+                  <div style={{ fontSize:12, color:C.mute, marginTop:3 }}>{p.category?.name || '—'} · {p.brand || '—'}</div>
+                  <span style={{ display:'inline-block', marginTop:6, fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:99, background:st.color+'22', color:st.color }}>{st.label}</span>
+                </div>
+                <button onClick={() => setDetailProduct(null)}
+                  style={{ background:'transparent', border:'none', color:C.mute, fontSize:22, cursor:'pointer', lineHeight:1, padding:4 }}>✕</button>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:16 }}>
+                {[
+                  { label:'Selling Price', val: fmtRs(effPrice), color:C.accent },
+                  { label:'MRP', val: fmtRs(p.price), color:C.text },
+                  { label:'Units Sold', val: fmt(p.sold), color:C.green },
+                  { label:'Stock Left', val: fmt(p.stock), color:st.color },
+                  { label:'Gross Revenue', val: fmtRs(grossRev), color:C.blue },
+                  { label:'Tax Amount', val: fmtRs(taxAmt), color:C.purple },
+                  { label:'Net Revenue', val: fmtRs(grossRev - taxAmt), color:C.green },
+                  { label:'Tax Rate', val: p.taxRate ? `${p.taxLabel || p.taxRate+'%'}` : 'No Tax', color:C.mute },
+                ].map(({ label, val, color }) => (
+                  <div key={label} style={{ background:C.card2, borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:C.mute, marginBottom:3, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</div>
+                    <div style={{ fontSize:16, fontWeight:800, color }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize:11, color:C.mute, textAlign:'center' }}>Click outside to close</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Earnings Chart ── */}
+      <div style={{ background:C.card, border:`1px solid ${C.line}`, borderRadius:14, padding:'18px 20px' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:16 }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:15, color:C.text }}>Earnings Overview</div>
+            <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
+              <span style={{ color:C.accent, fontWeight:700 }}>{fmtRs(chartTotal)}</span>
+              &nbsp;·&nbsp;{fmt(chartOrders)} orders&nbsp;·&nbsp;
+              {CHART_PERIODS.find(p => p.key === chartPeriod)?.label}
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {CHART_PERIODS.map(p => (
+              <button key={p.key} onClick={() => setChartPeriod(p.key)}
+                style={{ padding:'5px 14px', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', border:'none',
+                  background: chartPeriod === p.key ? C.accent : C.bg2,
+                  color:      chartPeriod === p.key ? 'white'  : C.mute }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {chartTotal === 0
+          ? <div style={{ textAlign:'center', padding:'40px 0', color:C.mute, fontSize:13 }}>No orders in this period</div>
+          : <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData} margin={{ top:4, right:8, left:-10, bottom:0 }}>
+                <defs>
+                  <linearGradient id="invRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={C.accent} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={C.accent} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="invNet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={C.green} stopOpacity={0.2} />
+                    <stop offset="95%" stopColor={C.green} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize:10, fill:C.mute }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize:10, fill:C.mute }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+                <Tooltip
+                  contentStyle={{ background:C.card, border:`1px solid ${C.line}`, borderRadius:10, fontSize:12 }}
+                  formatter={(v, name) => [fmtRs(v), name === 'revenue' ? 'Gross Revenue' : name === 'net' ? 'Net Revenue' : 'Orders']}
+                />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize:11, paddingTop:8 }} formatter={v => v === 'revenue' ? 'Gross Revenue' : v === 'net' ? 'Net Revenue' : 'Orders'} />
+                <Area type="monotone" dataKey="revenue" stroke={C.accent} strokeWidth={2} fill="url(#invRev)" dot={false} activeDot={{ r:4 }} />
+                <Area type="monotone" dataKey="net"     stroke={C.green}  strokeWidth={2} fill="url(#invNet)" dot={false} activeDot={{ r:4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+        }
+      </div>
+
+      {/* ── Order Summary KPIs ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Order Summary</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
+          <Stat label="Total Orders"   value={fmt(orderSummary.totalOrders)}             />
+          <Stat label="Active Orders"  value={fmt(orderSummary.totalSold)}      color={C.green}  accent={C.green}  sub="Placed → Delivered" />
+          <Stat label="Cancelled"      value={fmt(orderSummary.totalCancelled)} color={C.red}    accent={C.red}    />
+          <Stat label="Returned"       value={fmt(orderSummary.totalReturned)}  color={C.yellow} accent={C.yellow} />
+          <Stat label="Total Sales"    value={fmtShort(orderSummary.totalRevenue)}  color={C.accent} accent={C.accent} sub={totalDepositCollected > 0 ? `+ ${fmtShort(totalDepositCollected)} COD deposit` : undefined} />
+          <Stat label="Total Refunded" value={fmtShort(orderSummary.totalRefunded)} color={C.red}    accent={C.red}    />
+          {(orderSummary.totalShipping > 0) && (
+            <Stat label="Delivery Collected" value={fmtShort(orderSummary.totalShipping)} color={C.blue} accent={C.blue} sub="Shipping charged to buyers" />
+          )}
+          <Stat label="Net Revenue"
+            value={fmtShort(Math.max(0, orderSummary.totalRevenue - orderSummary.totalRefunded - (orderSummary.totalShipping || 0)))}
+            color={C.green} accent={C.green}
+            sub="After refunds & delivery" />
+          {/* Clickable tax card */}
+          <div onClick={() => setShowTax(v => !v)}
+            style={{ background: C.card, border: `1px solid ${showTax ? C.purple : C.purple + '44'}`, borderLeft: `3px solid ${C.purple}`, borderRadius: 12, padding: '16px 18px', cursor: 'pointer', transition: 'all .15s', position: 'relative' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>Total Tax Collected</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, lineHeight: 1 }}>{fmtShort(orderSummary.totalTax || 0)}</div>
+            <div style={{ fontSize: 11, color: C.purple, marginTop: 4, fontWeight: 600 }}>{showTax ? '▴ Hide breakdown' : '▾ See per-product'}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tax Breakdown (expanded) ── */}
+      {showTax && (() => {
+        const taxProducts = (allProducts || []).map(p => {
+          const effPrice = p.discountPrice || p.price || 0;
+          const grossRev = effPrice * p.sold;
+          const taxAmt   = grossRev * (p.taxRate || 0) / 100;
+          const netRev   = grossRev - taxAmt;
+          return { ...p, effPrice, grossRev, taxAmt, netRev };
+        });
+        const uniqueRates = ['ALL', ...new Set(taxProducts.map(p => p.taxRate || 0).sort((a,b)=>a-b).map(String))];
+        const taxCats = ['ALL', ...new Set(taxProducts.map(p => p.category?.name).filter(Boolean))];
+        const filtered = taxProducts
+          .filter(p => taxCatFilter === 'ALL' || p.category?.name === taxCatFilter)
+          .filter(p => taxRateFilter === 'ALL' || String(p.taxRate || 0) === taxRateFilter)
+          .filter(p => !taxSearch || p.title?.toLowerCase().includes(taxSearch.toLowerCase()))
+          .sort((a, b) => b.taxAmt - a.taxAmt);
+        const totalFiltered = filtered.reduce((s, p) => s + p.taxAmt, 0);
+        return (
+          <div style={{ background: C.card, border: `1px solid ${C.purple}44`, borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>
+                Tax Breakdown — Per Product
+                <span style={{ fontWeight: 400, fontSize: 12, color: C.mute, marginLeft: 8 }}>{filtered.length} products</span>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: C.purple }}>
+                Total: {fmtRs(totalFiltered)}
+              </div>
+            </div>
+            {/* Filters */}
+            <div style={{ padding: '10px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 10, flexWrap: 'wrap', background: C.card2 + '66' }}>
+              <input value={taxSearch} onChange={e => setTaxSearch(e.target.value)} placeholder="Search product…"
+                style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+              <select value={taxCatFilter} onChange={e => setTaxCat(e.target.value)} style={inputStyle}>
+                {taxCats.map(c => <option key={c} value={c}>{c === 'ALL' ? 'All Categories' : c}</option>)}
+              </select>
+              <select value={taxRateFilter} onChange={e => setTaxRate(e.target.value)} style={inputStyle}>
+                {uniqueRates.map(r => <option key={r} value={r}>{r === 'ALL' ? 'All Tax Rates' : `${r}%`}</option>)}
+              </select>
+              {(taxSearch || taxCatFilter !== 'ALL' || taxRateFilter !== 'ALL') && (
+                <button onClick={() => { setTaxSearch(''); setTaxCat('ALL'); setTaxRate('ALL'); }}
+                  style={{ ...inputStyle, padding: '0 12px', cursor: 'pointer', color: C.sub, background: 'rgba(255,255,255,.06)' }}>Clear</button>
+              )}
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <TH>Product</TH>
+                    <TH>Category</TH>
+                    <TH right>Tax Rate</TH>
+                    <TH right>Units Sold</TH>
+                    <TH right>Gross Revenue</TH>
+                    <TH right>Tax Amount</TH>
+                    <TH right>Net Revenue</TH>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: C.mute }}>No products match filters</td></tr>
+                  )}
+                  {filtered.map((p, i) => (
+                    <tr key={p._id} style={{ borderBottom: `1px solid ${C.line}22`, background: i % 2 === 0 ? 'transparent' : C.card2 + '44' }}>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {p.images?.[0]
+                            ? <img src={p.images[0]} alt="" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 5, border: `1px solid ${C.line}`, flexShrink: 0 }} />
+                            : <div style={{ width: 30, height: 30, borderRadius: 5, background: C.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📦</div>
+                          }
+                          <span style={{ fontWeight: 600, color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: C.mute }}>{p.category?.name || '—'}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                        {p.taxRate > 0
+                          ? <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: C.purple + '22', color: C.purple }}>{p.taxLabel || `${p.taxRate}%`}</span>
+                          : <span style={{ fontSize: 11, color: C.mute }}>No Tax</span>
+                        }
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: C.green, fontWeight: 700 }}>{fmt(p.sold)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtRs(p.grossRev)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: C.purple, whiteSpace: 'nowrap' }}>{fmtRs(p.taxAmt)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.green, whiteSpace: 'nowrap' }}>{fmtRs(p.netRev)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Payment Method Breakdown ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Payment Method Breakdown</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {/* COD card */}
+          <div style={{ background: C.card, border: `1px solid ${C.yellow}44`, borderLeft: `3px solid ${C.yellow}`, borderRadius: 12, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.yellow, textTransform: 'uppercase', letterSpacing: '.08em' }}>Cash on Delivery (COD)</div>
+            {/* Main stats */}
+            <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Orders</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }}>{fmt(cod.count)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Total Sales</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }}>{fmtShort(cod.revenue)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Refunded</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }}>{fmtShort(cod.refunded || 0)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Net COD</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }}>{fmtShort(Math.max(0, (cod.revenue || 0) - (cod.refunded || 0)))}</div>
+              </div>
+            </div>
+            {/* Deposit section */}
+            <div style={{ borderTop: `1px dashed ${C.yellow}44`, paddingTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.yellow, textTransform: 'uppercase', letterSpacing: '.06em' }}>Booking Deposit</div>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: C.blue + '22', color: C.blue, border: `1px solid ${C.blue}44` }}>ONLINE ONLY · UPI / Transfer</span>
+              </div>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Collected Online</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{fmtRs(totalDepositCollected)}</div>
+                  <div style={{ fontSize: 10, color: C.mute }}>{fmt(codDeposit.paid?.count || 0)} orders</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Awaiting Payment</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.red }}>{fmtRs(totalDepositPending)}</div>
+                  <div style={{ fontSize: 10, color: C.mute }}>{fmt(codDeposit.pending?.count || 0)} orders</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>No Deposit Required</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.mute }}>{fmt(codDeposit.none?.count || 0)}</div>
+                  <div style={{ fontSize: 10, color: C.mute }}>orders</div>
+                </div>
+                <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Total Expected</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.yellow }}>{fmtRs(totalDepositCollected + totalDepositPending)}</div>
+                  <div style={{ fontSize: 10, color: C.blue, fontWeight: 600 }}>via online transfer</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* Online / Razorpay card */}
+          <div style={{ background: C.card, border: `1px solid ${C.blue}44`, borderLeft: `3px solid ${C.blue}`, borderRadius: 12, padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>Online / Razorpay</div>
+            <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Orders</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{fmt(online.count)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Total Sales</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{fmtShort(online.revenue)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Refunded</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }}>{fmtShort(online.refunded)}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Net</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }}>{fmtShort(Math.max(0, online.revenue - online.refunded))}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Stock Health KPIs ── */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.mute, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>Stock Health</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
+          <Stat label="Total Products"   value={fmt(stockHealth.totalProducts)}        />
+          <Stat label="Units in Stock"   value={fmt(stockHealth.totalUnits)}       color={C.blue}   accent={C.blue}   />
+          <Stat label="Total Units Sold" value={fmt(stockHealth.totalProductsSold)} color={C.green}  accent={C.green}  />
+          <Stat label="Low Stock ≤10"    value={fmt(stockHealth.lowStock)}          color={C.yellow} accent={C.yellow} sub="Need restock" />
+          <Stat label="Out of Stock"     value={fmt(stockHealth.outOfStock)}        color={C.red}    accent={C.red}    sub="Zero units left" />
+        </div>
+      </div>
+
+      {/* ── Category Breakdown Table ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>
+            Category Breakdown
+            <span style={{ fontWeight: 400, fontSize: 12, color: C.mute, marginLeft: 8 }}>{catRows.length} categories</span>
+          </div>
+        </div>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: C.card2 + '66' }}>
+          <input
+            value={catSearch} onChange={e => setCatSearch(e.target.value)}
+            placeholder="Search category…"
+            style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+          />
+          <select value={catStockF} onChange={e => setCatStockF(e.target.value)} style={inputStyle}>
+            <option value="ALL">All Stock Status</option>
+            <option value="healthy">Healthy (&gt;20)</option>
+            <option value="low">Low Stock (1–20)</option>
+            <option value="out">Out of Stock</option>
+          </select>
+          <select value={catSortBy} onChange={e => setCatSort(e.target.value)} style={inputStyle}>
+            <option value="sold_desc">Most Sold</option>
+            <option value="sold_asc">Least Sold</option>
+            <option value="revenue_desc">Highest Revenue</option>
+            <option value="revenue_asc">Lowest Revenue</option>
+            <option value="stock_desc">Most Stock</option>
+            <option value="stock_asc">Lowest Stock</option>
+            <option value="products">Most Products</option>
+            <option value="name">A → Z</option>
+          </select>
+          {(catSearch || catStockF !== 'ALL' || catSortBy !== 'sold_desc') && (
+            <button onClick={() => { setCatSearch(''); setCatStockF('ALL'); setCatSort('sold_desc'); }}
+              style={{ ...inputStyle, padding: '0 12px', cursor: 'pointer', whiteSpace: 'nowrap', background: 'rgba(255,255,255,.06)', border: `1px solid ${C.line}`, color: C.sub, fontFamily: 'inherit' }}>
+              Clear
+            </button>
+          )}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <TH>Category</TH>
+                <TH right>Products</TH>
+                <TH right>Units Sold</TH>
+                <TH right>Stock Left</TH>
+                <TH right>Revenue</TH>
+                <TH right>Stock Status</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {catRows.length === 0 && (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: C.mute }}>No data</td></tr>
+              )}
+              {catRows.map((row, i) => {
+                const st = row.stock === 0 ? { label: 'Out of Stock', color: C.red }
+                         : row.stock <= 20 ? { label: 'Low',          color: C.yellow }
+                         : { label: 'Healthy', color: C.green };
+                const isExpanded = expandedCat === row.name;
+                const catProducts = (allProducts || []).filter(p => (p.category?.name || 'Uncategorised') === row.name);
+                return (
+                  <>
+                    <tr key={i}
+                      onClick={() => setExpandedCat(isExpanded ? null : row.name)}
+                      style={{ borderBottom: `1px solid ${C.line}22`, background: isExpanded ? C.accent + '12' : i % 2 === 0 ? 'transparent' : C.card2 + '55', cursor: 'pointer', transition: 'background .15s' }}>
+                      <td style={{ padding: '11px 12px', fontWeight: 700, color: isExpanded ? C.accent : C.text }}>
+                        <span style={{ marginRight: 6, fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>{row.name}
+                      </td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right', color: C.mute }}>{fmt(row.products)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: C.green }}>{fmt(row.sold)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: st.color }}>{fmt(row.stock)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: C.accent }}>{fmtRs(row.revenue)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: st.color + '22', color: st.color }}>{st.label}</span>
+                      </td>
+                    </tr>
+                    {isExpanded && catProducts.map((p, j) => {
+                      const pst = p.stock === 0 ? { label:'Out', color:C.red } : p.stock <= 10 ? { label:'Low', color:C.yellow } : { label:'OK', color:C.green };
+                      const effP = p.discountPrice || p.price || 0;
+                      return (
+                        <tr key={`cat-p-${j}`}
+                          onClick={() => setDetailProduct(p)}
+                          style={{ background: C.accent + '08', cursor:'pointer', borderBottom:`1px solid ${C.line}11` }}>
+                          <td style={{ padding:'8px 12px 8px 28px', color:C.sub, fontSize:12 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {p.images?.[0] ? <img src={p.images[0]} alt="" style={{ width:26, height:26, objectFit:'contain', borderRadius:5, border:`1px solid ${C.line}` }} /> : <span>📦</span>}
+                              <span style={{ fontWeight:600 }}>{p.title}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding:'8px 12px', textAlign:'right', fontSize:12, color:C.mute }}>—</td>
+                          <td style={{ padding:'8px 12px', textAlign:'right', fontSize:12, fontWeight:700, color:C.green }}>{fmt(p.sold)}</td>
+                          <td style={{ padding:'8px 12px', textAlign:'right', fontSize:12, fontWeight:700, color:pst.color }}>{fmt(p.stock)}</td>
+                          <td style={{ padding:'8px 12px', textAlign:'right', fontSize:12, fontWeight:700, color:C.accent }}>{fmtRs(effP * p.sold)}</td>
+                          <td style={{ padding:'8px 12px', textAlign:'right' }}>
+                            <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99, background:pst.color+'22', color:pst.color }}>{pst.label}</span>
+                            <span style={{ fontSize:10, color:C.mute, marginLeft:6 }}>→ details</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── All Products Table ── */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>
+            All Products
+            <span style={{ fontWeight: 400, fontSize: 12, color: C.mute, marginLeft: 8 }}>{filtered.length} of {allProducts?.length}</span>
+          </div>
+        </div>
+
+        {/* Filters bar */}
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', background: C.card2 + '66' }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search product name…"
+            style={{ ...inputStyle, flex: 1, minWidth: 180 }} />
+
+          <select value={catFilter} onChange={e => setCat(e.target.value)} style={inputStyle}>
+            {categories.map(c => <option key={c} value={c}>{c === 'ALL' ? 'All Categories' : c}</option>)}
+          </select>
+
+          <select value={stockFilter} onChange={e => setStock(e.target.value)} style={inputStyle}>
+            <option value="ALL">All Stock</option>
+            <option value="ok">In Stock (&gt;10)</option>
+            <option value="low">Low Stock (≤10)</option>
+            <option value="out">Out of Stock</option>
+          </select>
+
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={inputStyle}>
+            <option value="sold">Top Sellers</option>
+            <option value="stock">Low Stock First</option>
+            <option value="revenue">Top Revenue</option>
+            <option value="price">Highest Price</option>
+            <option value="name">A – Z</option>
+          </select>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <TH>#</TH>
+                <TH>Product</TH>
+                <TH>Category</TH>
+                <TH right>Price</TH>
+                <TH right>Units Sold</TH>
+                <TH right>Stock Left</TH>
+                <TH right>Revenue</TH>
+                <TH right>Stock Status</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p, i) => {
+                const effP    = p.discountPrice || p.price || 0;
+                const revenue = p.sold * effP;
+                const st = p.stock === 0 ? { label: 'Out of Stock', color: C.red }
+                         : p.stock <= 10  ? { label: 'Low Stock',   color: C.yellow }
+                         : { label: 'In Stock', color: C.green };
+                return (
+                  <tr key={p._id}
+                    onClick={() => setDetailProduct(p)}
+                    title="Click for full details"
+                    style={{ borderBottom: `1px solid ${C.line}22`, background: i % 2 === 0 ? 'transparent' : C.card2 + '44', cursor: 'pointer', transition: 'background .12s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.accent + '10'}
+                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : C.card2 + '44'}>
+                    <td style={{ padding: '10px 12px', color: C.mute, fontSize: 11 }}>{i + 1}</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        {p.images?.[0]
+                          ? <img src={p.images[0]} alt="" style={{ width: 34, height: 34, objectFit: 'contain', borderRadius: 6, border: `1px solid ${C.line}`, flexShrink: 0 }} />
+                          : <div style={{ width: 34, height: 34, borderRadius: 6, background: C.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>📦</div>
+                        }
+                        <span style={{ fontWeight: 600, color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', color: C.mute, whiteSpace: 'nowrap' }}>{p.category?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{fmtRs(p.price)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.green }}>{fmt(p.sold)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: st.color }}>{fmt(p.stock)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.accent, whiteSpace: 'nowrap' }}>{fmtShort(revenue)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: st.color + '22', color: st.color, whiteSpace: 'nowrap' }}>
+                        {st.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: C.mute }}>No products match your filters</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   );
 }

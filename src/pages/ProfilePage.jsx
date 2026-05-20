@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -81,10 +81,16 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, logout, updateProfile, changePassword } = useAuth();
   const toast = useToast();
 
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
   const [form, setForm]           = useState({ name: user?.name || '', phone: user?.phone || '' });
   const [pwForm, setPwForm]       = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [loading, setLoading]     = useState(false);
@@ -100,7 +106,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (activeTab === 'addresses') {
       usersApi.getProfile()
-        .then(r => setAddresses(r.data?.data?.addresses || r.data?.addresses || []))
+        .then(r => setAddresses(r.data?.data?.user?.addresses || r.data?.data?.addresses || r.data?.addresses || []))
         .catch(() => {});
     }
   }, [activeTab]);

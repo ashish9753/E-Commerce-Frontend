@@ -36,22 +36,42 @@ export function CartProvider({ children }) {
   };
 
   const removeFromCart = async (productId) => {
+    // Optimistic: remove immediately from local state
+    setCart(prev => {
+      if (!prev) return prev;
+      const items = prev.items.filter(i => {
+        const id = i.product?._id || i.product;
+        return id?.toString() !== productId?.toString();
+      });
+      return { ...prev, items };
+    });
     try {
       const { data } = await cartApi.removeItem(productId);
       setCart(data.data.cart);
       return { success: true };
     } catch (err) {
+      fetchCart(); // restore on error
       return { success: false, error: getErrorMessage(err) };
     }
   };
 
   const updateQty = async (productId, quantity) => {
     if (quantity < 1) return removeFromCart(productId);
+    // Optimistic: update quantity immediately
+    setCart(prev => {
+      if (!prev) return prev;
+      const items = prev.items.map(i => {
+        const id = i.product?._id || i.product;
+        return id?.toString() === productId?.toString() ? { ...i, quantity } : i;
+      });
+      return { ...prev, items };
+    });
     try {
       const { data } = await cartApi.updateItem(productId, quantity);
       setCart(data.data.cart);
       return { success: true };
     } catch (err) {
+      fetchCart(); // restore on error
       return { success: false, error: getErrorMessage(err) };
     }
   };

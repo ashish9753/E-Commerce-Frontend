@@ -161,8 +161,10 @@ export default function Header() {
   const [showResults, setShowResults] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   const [showNotifs, setShowNotifs] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const searchRef = useRef(null);
   const bellRef   = useRef(null);
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     const handler = (e) => {
@@ -171,6 +173,18 @@ export default function Header() {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y < 80) { setHidden(false); }
+      else if (y > lastScrollY.current + 5) { setHidden(true); }
+      else if (y < lastScrollY.current - 5) { setHidden(false); }
+      lastScrollY.current = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const handleSearch = (e) => {
@@ -217,11 +231,15 @@ export default function Header() {
   );
 
   return (
-    <nav style={{ position: 'sticky', top: 0, zIndex: 50 }}>
+    <nav style={{
+      position: 'sticky', top: 0, zIndex: 50,
+      transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
+      transition: 'transform 0.25s ease',
+    }}>
       {/* Main dark bar */}
       <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
         <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
-          display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 20, alignItems: 'center', height: 76 }}>
+          display: 'grid', gridTemplateColumns: 'auto auto 1fr auto', gap: 16, alignItems: 'center', height: 76 }}>
 
           {/* Logo */}
           <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
@@ -231,6 +249,30 @@ export default function Header() {
             onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
             Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
           </div>
+
+          {/* Deliver to widget */}
+          {(() => {
+            const addr = user?.addresses?.[0];
+            return (
+              <div onClick={() => navigate('/profile?tab=addresses')}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                  padding: '5px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                  <span style={{ fontSize: 11, color: '#ccc' }}>
+                    {addr ? `Delivering to ${addr.city || addr.state || ''}` : 'Deliver to'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+                    {addr ? addr.pincode : 'Update location'}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Search */}
           <div style={{ position: 'relative', maxWidth: 700, width: '100%', margin: '0 auto' }} ref={searchRef}>

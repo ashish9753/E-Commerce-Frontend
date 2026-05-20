@@ -1,9 +1,10 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { employeeApi } from '../../api/employee';
 import { categoriesApi } from '../../api/categories';
 import { returnsApi } from '../../api/returns';
+import { deliveryAreasApi } from '../../api/deliveryAreas';
 import { getErrorMessage } from '../../api/client';
 import { useCatalog } from '../../context/CatalogContext';
 import {
@@ -11,7 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
-/* â”€â”€ Palette â€” matches admin dashboard exactly â”€â”€ */
+/* â"€â"€ Palette — matches admin dashboard exactly â"€â"€ */
 const C = {
   accent:  '#f97316',
   blue:    '#3b82f6',
@@ -47,7 +48,7 @@ const fmtShort = (n) => {
   return fmtRs(v);
 };
 
-/* â”€â”€ Responsive hook â”€â”€ */
+/* â"€â"€ Responsive hook â"€â"€ */
 function useResponsive() {
   const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   useEffect(() => {
@@ -58,7 +59,7 @@ function useResponsive() {
   return { w, isMobile: w < 768, isTablet: w >= 768 && w < 1100, isDesktop: w >= 1100 };
 }
 
-/* â”€â”€ SVG Icons â”€â”€ */
+/* â"€â"€ SVG Icons â"€â"€ */
 const Icon = {
   grid:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   bag:     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>,
@@ -95,7 +96,7 @@ function SvgAt({ el, size = 17 }) {
   );
 }
 
-/* â”€â”€ Shared UI components â”€â”€ */
+/* â"€â"€ Shared UI components â"€â"€ */
 const ICON_COLOR_MAP = { blue: C.blue, purple: C.purple, yellow: C.yellow, green: C.green, orange: C.accent, red: C.red, cyan: C.cyan };
 const ICON_BG_MAP   = { blue: 'rgba(59,130,246,.15)', purple: 'rgba(139,92,246,.15)', yellow: 'rgba(234,179,8,.15)', green: 'rgba(34,197,94,.15)', orange: 'rgba(249,115,22,.15)', red: 'rgba(239,68,68,.15)', cyan: 'rgba(6,182,212,.15)' };
 
@@ -159,7 +160,7 @@ function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
   return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], opacity: disabled ? .5 : 1 }}>{children}</button>;
 }
 function Loader() {
-  return <div style={{ padding: 60, textAlign: 'center', color: C.mute, fontFamily: "'DM Sans',sans-serif" }}>Loadingâ€¦</div>;
+  return <div style={{ padding: 60, textAlign: 'center', color: C.mute, fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
 }
 function Empty({ text }) {
   return <div style={{ padding: '40px 0', textAlign: 'center', color: C.mute, fontSize: 14 }}>{text}</div>;
@@ -284,8 +285,8 @@ function OverviewTab({ profile }) {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3,1fr)', gap: 20 }}>
           {[
             ['Shop Name',       profile?.shopName],
-            ['GST Number',      profile?.gstNumber || 'â€”'],
-            ['Business Address',profile?.businessAddress || 'â€”'],
+            ['GST Number',      profile?.gstNumber || '—'],
+            ['Business Address',profile?.businessAddress || '—'],
             ['Rating',          `${(profile?.rating||0).toFixed(1)} / 5`],
             ['Total Sales',     fmtRs(profile?.totalSales)],
             ['Status',          profile?.isVerified ? 'Verified' : 'Pending'],
@@ -367,7 +368,7 @@ function ProductsTab({ onEdit }) {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
             <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search productsâ€¦"
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…"
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
           </div>
           <Sel value={stockF} onChange={e=>setStockF(e.target.value)} style={{ width: 150 }}>
@@ -414,10 +415,10 @@ function ProductsTab({ onEdit }) {
                           </div>
                         </div>
                       </Td>
-                      <Td style={{ color:C.mute }}>{catName || 'â€”'}</Td>
+                      <Td style={{ color:C.mute }}>{catName || '—'}</Td>
                       <Td style={{ color: disc > 0 ? C.mute : C.text, textDecoration: disc>0?'line-through':'none' }}>{fmtRs(mrp)}</Td>
                       <Td><span style={{ fontWeight:700, color:C.green }}>{fmtRs(sale)}</span></Td>
-                      <Td>{disc > 0 ? <Badge text={`-${disc}%`} color={C.green} /> : <span style={{ color:C.mute }}>â€”</span>}</Td>
+                      <Td>{disc > 0 ? <Badge text={`-${disc}%`} color={C.green} /> : <span style={{ color:C.mute }}>—</span>}</Td>
                       <Td>
                         <span style={{ fontWeight:700, color: p.stock===0?C.red:p.stock<=5?C.yellow:C.green }}>
                           {p.stock}
@@ -465,8 +466,6 @@ const STATUS_NEXT = {
 
 function OrderStatusCell({ order, onUpdated, onViewReturns }) {
   const [saving, setSaving] = useState(false);
-  const [tracking, setTracking] = useState(order.trackingId || '');
-  const [open, setOpen]     = useState(false);
   const current     = order.orderStatus;
   const isFinal     = ['RETURNED','CANCELLED','DELIVERED'].includes(current);
   const isReturned  = current === 'RETURNED';
@@ -478,40 +477,31 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
   const doUpdate = async (status) => {
     setSaving(true);
     try {
-      await employeeApi.updateOrderStatus(order._id, { status, trackingId: tracking || undefined });
-      onUpdated(order._id, status, tracking);
-      setOpen(false);
+      await employeeApi.updateOrderStatus(order._id, { status });
+      onUpdated(order._id, status, '');
     } catch(e) {
       alert(e?.response?.data?.message || 'Update failed');
     } finally { setSaving(false); }
   };
 
   return (
-    <div style={{ position:'relative' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+    <div>
+      <div style={{ marginBottom: nextStatus || isReturned ? 6 : 0 }}>
         <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700,
           padding:'3px 9px', borderRadius:99, background: sm+'22', color: sm }}>
           <span style={{ width:6, height:6, borderRadius:'50%', background: sm }} />
           {current.replace(/_/g,' ')}
         </span>
-        {!isFinal && (
-          <button onClick={() => setOpen(o=>!o)}
-            style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
-              background: open ? C.card2 : C.active,
-              border:`1px solid ${C.line}`, cursor:'pointer', color:C.sub }}>
-            {open ? 'âœ•' : 'Change'}
-          </button>
-        )}
       </div>
 
-      {!isFinal && !open && nextStatus && (
+      {!isFinal && nextStatus && (
         <button onClick={() => doUpdate(nextStatus)} disabled={saving}
-          style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6,
+          style={{ fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:6,
             background: STATUS_COLORS[nextStatus]+'22', color: STATUS_COLORS[nextStatus],
             border:`1px solid ${STATUS_COLORS[nextStatus]}44`, cursor:'pointer',
             opacity: saving ? 0.6 : 1, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
           <SvgAt el={Icon.arrow} size={11} />
-          {saving ? 'â€¦' : `Mark ${nextStatus.replace(/_/g,' ')}`}
+          {saving ? '…' : nextStatus === 'DELIVERED' ? 'Mark as Delivered' : `Mark ${nextStatus.replace(/_/g,' ')}`}
         </button>
       )}
 
@@ -526,34 +516,6 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
       {isDelivered && <span style={{ fontSize:11, color:C.green, fontWeight:600, display:'flex', alignItems:'center', gap:5 }}><SvgAt el={Icon.check} size={12} /> Delivered</span>}
       {isCancelled && <span style={{ fontSize:11, color:C.mute }}>Order cancelled</span>}
 
-      {open && (
-        <div style={{ position:'absolute', top:'100%', left:0, zIndex:50, background:C.card2,
-          border:`1px solid ${C.line}`, borderRadius:10, padding:14, boxShadow:'0 8px 32px rgba(0,0,0,.4)', width:240, marginTop:4 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:C.mute, marginBottom:8, textTransform:'uppercase' }}>Set Status</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:5, marginBottom:10 }}>
-            {EMPLOYEE_STATUSES.map(s => (
-              <button key={s} onClick={() => doUpdate(s)} disabled={saving || s === current}
-                style={{ textAlign:'left', padding:'7px 10px', borderRadius:7,
-                  background: s === current ? STATUS_COLORS[s]+'22' : C.bg,
-                  border:`1px solid ${s === current ? STATUS_COLORS[s] : C.line}`,
-                  color: s === current ? STATUS_COLORS[s] : C.sub,
-                  fontWeight: s === current ? 700 : 500, fontSize:12,
-                  cursor: s === current ? 'default' : 'pointer',
-                  opacity: saving ? 0.6 : 1, fontFamily:'inherit', display:'flex', alignItems:'center', gap:6 }}>
-                {s === current && <SvgAt el={Icon.check} size={11} />}
-                {s.replace(/_/g,' ')}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase' }}>Tracking ID (optional)</div>
-          <input value={tracking} onChange={e=>setTracking(e.target.value)} placeholder="e.g. FEDEX123456"
-            style={{ width:'100%', height:32, border:`1px solid ${C.line}`, borderRadius:6, padding:'0 8px', fontSize:12, outline:'none', boxSizing:'border-box', background:C.bg, color:C.text, fontFamily:'inherit' }} />
-          <button onClick={() => setOpen(false)}
-            style={{ marginTop:8, width:'100%', padding:'6px', borderRadius:6, border:`1px solid ${C.line}`, background:C.bg, fontSize:12, cursor:'pointer', color:C.mute, fontFamily:'inherit' }}>
-            Close
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -626,7 +588,7 @@ function OrdersTab({ onViewReturns }) {
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
             <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, customer nameâ€¦"
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, customer name…"
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
           </div>
           <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:170 }}>
@@ -668,7 +630,7 @@ function OrdersTab({ onViewReturns }) {
                       {o.trackingId && <div style={{ fontSize:10, color:C.mute, marginTop:2 }}>Track: {o.trackingId}</div>}
                     </Td>
                     <Td>
-                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'â€”'}</div>
+                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'—'}</div>
                       <div style={{ fontSize:11, color:C.mute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.email}</div>
                       <div style={{ fontSize:11, color:C.mute }}>{o.user?.phone}</div>
                     </Td>
@@ -717,23 +679,52 @@ function OrdersTab({ onViewReturns }) {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    PRODUCT FORM (Add / Edit)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+function SectionHead({ title, sub }) {
+  return (
+    <div style={{ borderBottom:`2px solid ${C.accent}`, paddingBottom:10, marginBottom:18, marginTop:24 }}>
+      <div style={{ fontWeight:800, fontSize:15, color:C.text }}>{title}</div>
+      {sub && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+}
+
 function ProductForm({ initial, categories, onSave, onCancel }) {
-  const { brands: catalogBrands } = useCatalog();
+  const { brands: catalogBrands, topCategories, getSubcats } = useCatalog();
   const fileInputRef = useRef(null);
 
-  const empty = { title:'',description:'',shortDescription:'',brand:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'GST',taxRate:18 };
+  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'No Tax',taxRate:0 };
+
+  // Derive initial parentCat from the initial category's parent field
+  const initCatId = initial ? (typeof initial.category==='object' ? initial.category?._id : initial.category)||'' : '';
+  const [parentCat, setParentCat] = useState(() => {
+    if (!initial) return '';
+    const cat = initial.category;
+    if (typeof cat === 'object' && cat?.parent) return (cat.parent?._id || cat.parent) + '';
+    return initCatId; // fallback: treat as parent
+  });
+
   const [form, setForm] = useState(initial ? {
     title: initial.title||'', description: initial.description||'',
     shortDescription: initial.shortDescription||'', brand: initial.brand||'',
     price: initial.price||'', discountPrice: initial.discountPrice||'',
     stock: initial.stock??'',
-    category: (typeof initial.category==='object'?initial.category?._id:initial.category)||'',
+    category: initCatId, sku: initial.sku||'', tags: Array.isArray(initial.tags) ? initial.tags.join(', ') : (initial.tags||''),
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
-    taxLabel: initial.taxLabel || 'GST', taxRate: initial.taxRate ?? 18,
+    taxLabel: initial.taxLabel || 'No Tax', taxRate: initial.taxRate ?? 0,
   } : empty);
 
-  /* â”€â”€ image state â”€â”€ */
+  const subcats = getSubcats(parentCat);
+
+  const handleParentChange = (e) => {
+    const pid = e.target.value;
+    setParentCat(pid);
+    // If no subcategories exist for this parent, set category to parent itself
+    const subs = getSubcats(pid);
+    set('category', subs.length > 0 ? '' : pid);
+  };
+
+  /* â"€â"€ image state â"€â"€ */
   const [existingImgs, setExistingImgs] = useState(initial?.images || []);
   const [newFiles,     setNewFiles]     = useState([]);      // File objects
   const [newPreviews,  setNewPreviews]  = useState([]);      // data-URL strings
@@ -743,18 +734,37 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
   const [error,  setError]  = useState('');
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
+  const initSpecs = () => {
+    if (!initial?.specifications) return [{ key:'', value:'' }];
+    const m = initial.specifications instanceof Map ? Object.fromEntries(initial.specifications) : initial.specifications;
+    const rows = Object.entries(m || {}).map(([key, value]) => ({ key, value }));
+    return rows.length ? rows : [{ key:'', value:'' }];
+  };
+  const [specs, setSpecs] = useState(initSpecs);
+  const [specBulkMode, setSpecBulkMode] = useState(false);
+  const [specBulkText, setSpecBulkText] = useState('');
+  const addSpec    = () => setSpecs(s => [...s, { key:'', value:'' }]);
+  const removeSpec = (i) => setSpecs(s => s.filter((_,j) => j !== i));
+  const setSpec    = (i, field, val) => setSpecs(s => s.map((r,j) => j===i ? {...r,[field]:val} : r));
+
   const mrp    = Number(form.price)||0;
   const sale   = Number(form.discountPrice)||0;
   const disc   = mrp > sale && sale > 0 ? Math.round(((mrp-sale)/mrp)*100) : 0;
   const profit = sale > 0 ? sale : mrp;
   const totalImgs = existingImgs.length + newFiles.length;
 
-  /* â”€â”€ file handling â”€â”€ */
+  /* â"€â"€ file handling â"€â"€ */
+  const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
   const addFiles = (fileList) => {
     const allowed = ['image/jpeg','image/jpg','image/png','image/webp'];
-    const valid   = Array.from(fileList).filter(f => allowed.includes(f.type));
-    const slots   = Math.max(0, 5 - totalImgs);
-    const toAdd   = valid.slice(0, slots);
+    const all = Array.from(fileList);
+    const tooBig = all.filter(f => f.size > MAX_SIZE);
+    const valid  = all.filter(f => allowed.includes(f.type) && f.size <= MAX_SIZE);
+    if (tooBig.length) {
+      alert(`${tooBig.length} file(s) skipped — each image must be under 2 MB.\n\nSkipped:\n${tooBig.map(f=>`• ${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`).join('\n')}`);
+    }
+    const slots = Math.max(0, 5 - totalImgs);
+    const toAdd = valid.slice(0, slots);
     if (!toAdd.length) return;
     setNewFiles(prev => [...prev, ...toAdd]);
     toAdd.forEach(f => {
@@ -775,7 +785,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     addFiles(e.dataTransfer.files);
   };
 
-  /* â”€â”€ submit â”€â”€ */
+  /* â"€â"€ submit â"€â"€ */
   const handleSubmit = async () => {
     if (!form.title||!form.description||!form.price||form.stock===''||!form.category) {
       setError('Title, description, price, stock, and category are required.');
@@ -785,14 +795,21 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     try {
       const fd = new FormData();
       // scalar fields
+      const tagsArr = form.tags ? form.tags.split(',').map(t=>t.trim()).filter(Boolean) : [];
       const scalar = { ...form, price: Number(form.price), stock: Number(form.stock),
         discountPrice: form.discountPrice ? Number(form.discountPrice) : '',
-        returnWindow: form.returnable ? Number(form.returnWindow) : '' };
+        returnWindow: form.returnable ? Number(form.returnWindow) : '',
+        tags: undefined };
       Object.entries(scalar).forEach(([k,v]) => { if (v !== '' && v !== undefined) fd.append(k, v); });
+      tagsArr.forEach(t => fd.append('tags', t));
       // images: tell backend which existing URLs to keep
       existingImgs.forEach(url => fd.append('keepImages', url));
       // new uploads
       newFiles.forEach(f => fd.append('images', f));
+      // specifications
+      const specObj = {};
+      specs.forEach(({ key, value }) => { if (key.trim()) specObj[key.trim()] = value.trim(); });
+      if (Object.keys(specObj).length) fd.append('specifications', JSON.stringify(specObj));
       await onSave(fd);
     } catch(err) { setError(getErrorMessage(err)); }
     finally { setSaving(false); }
@@ -807,7 +824,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
           <KpiCard label="MRP"         value={fmtRs(mrp)}                               sub="Original price"  colorKey="blue"   iconEl={Icon.tag} />
           <KpiCard label="Sale Price"  value={fmtRs(profit)}                            sub="Customer pays"   colorKey="green"  iconEl={Icon.dollar} />
-          <KpiCard label="Discount"    value={disc>0?`${disc}%`:'â€”'}                    sub="Off MRP"         colorKey="orange" iconEl={Icon.tag} />
+          <KpiCard label="Discount"    value={disc>0?`${disc}%`:'—'}                    sub="Off MRP"         colorKey="orange" iconEl={Icon.tag} />
           <KpiCard label="Stock Value" value={fmtShort(profit*(Number(form.stock)||0))} sub="At sale price"   colorKey="purple" iconEl={Icon.box} />
         </div>
       )}
@@ -818,15 +835,29 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
           <div>
             <label style={LS}>Brand</label>
             <select value={form.brand} onChange={e=>set('brand',e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
-              <option value="">â€” Select Brand â€”</option>
+              <option value="">— Select Brand —</option>
               {catalogBrands.map(b => <option key={b._id} value={b.name}>{b.name}</option>)}
             </select>
           </div>
           <div>
             <label style={LS}>Category *</label>
-            <select value={form.category} onChange={e=>set('category',e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
-              <option value="">Select categoryâ€¦</option>
-              {categories.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}
+            <select value={parentCat} onChange={handleParentChange} style={{ ...inpStyle, cursor:'pointer' }}>
+              <option value="">Select category…</option>
+              {topCategories.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={LS}>
+              Sub-Category
+              {subcats.length === 0 && parentCat && <span style={{ fontWeight:400, textTransform:'none', color:C.mute, marginLeft:6 }}>(none available)</span>}
+            </label>
+            <select
+              value={form.category}
+              onChange={e=>set('category', e.target.value)}
+              disabled={!parentCat || subcats.length === 0}
+              style={{ ...inpStyle, cursor: (!parentCat || subcats.length===0) ? 'not-allowed' : 'pointer', opacity: (!parentCat || subcats.length===0) ? 0.5 : 1 }}>
+              <option value="">{parentCat && subcats.length === 0 ? 'No sub-categories' : 'Select sub-category…'}</option>
+              {subcats.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}
             </select>
           </div>
           <div><label style={LS}>Stock *</label><input type="number" value={form.stock} onChange={e=>set('stock',e.target.value)} placeholder="0" style={inpStyle} /></div>
@@ -835,10 +866,12 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
             <input type="number" value={form.price} onChange={e=>set('price',e.target.value)} placeholder="0" style={inpStyle} />
           </div>
           <div>
-            <label style={LS}>Sale Price (Rs.) <span style={{ color:C.green, textTransform:'none' }}>â€” Optional</span></label>
+            <label style={LS}>Sale Price (Rs.) <span style={{ color:C.green, textTransform:'none' }}>— Optional</span></label>
             <input type="number" value={form.discountPrice} onChange={e=>set('discountPrice',e.target.value)} placeholder="Leave blank = no discount" style={inpStyle} />
             {disc > 0 && <div style={{ fontSize:12, color:C.green, marginTop:4 }}>{disc}% off MRP</div>}
           </div>
+          <div><label style={LS}>SKU / Model No.</label><input value={form.sku} onChange={e=>set('sku',e.target.value)} placeholder="e.g. SM-G998B" style={inpStyle} /></div>
+          <div><label style={LS}>Tags <span style={{ color:C.mute, textTransform:'none', fontWeight:400 }}>comma-separated</span></label><input value={form.tags} onChange={e=>set('tags',e.target.value)} placeholder="wireless, bluetooth, sport" style={inpStyle} /></div>
         </div>
 
         <div style={{ marginTop:16 }}>
@@ -847,15 +880,85 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
         </div>
         <div style={{ marginTop:16 }}>
           <label style={LS}>Full Description *</label>
-          <textarea rows={4} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product descriptionâ€¦"
+          <textarea rows={6} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product description..."
             style={{ ...inpStyle, height:'auto', padding:'10px 12px', resize:'vertical' }} />
         </div>
 
-        {/* â”€â”€ IMAGE UPLOAD â”€â”€ */}
+        <SectionHead title="Product Specifications" sub="Key-value pairs shown in the spec table on the product page" />
+        {/* Bulk paste mode */}
+        {specBulkMode ? (
+          <div>
+            <textarea
+              autoFocus
+              value={specBulkText}
+              onChange={e => setSpecBulkText(e.target.value)}
+              placeholder={`Paste specs here, one per line:\nCapacity        → 7 KG\nType            → Fully Automatic Top Load\nEnergy Rating   → 5 Star`}
+              rows={10}
+              style={{ ...inpStyle, width:'100%', resize:'vertical', fontFamily:'monospace', fontSize:13, lineHeight:1.7, height:'auto', padding:'10px 12px', boxSizing:'border-box' }}
+            />
+            <div style={{ display:'flex', gap:8, marginTop:8 }}>
+              <button type="button" onClick={() => {
+                const rows = specBulkText.split('\n')
+                  .map(line => {
+                    const sep = line.includes('→') ? '→' : line.includes(':') ? ':' : null;
+                    if (!sep) return null;
+                    const idx = line.indexOf(sep);
+                    const key = line.slice(0, idx).trim();
+                    const value = line.slice(idx + sep.length).trim();
+                    return key ? { key, value } : null;
+                  })
+                  .filter(Boolean);
+                if (rows.length) setSpecs(rows);
+                setSpecBulkMode(false);
+                setSpecBulkText('');
+              }}
+                style={{ padding:'7px 18px', borderRadius:8, border:'none', background:C.accent, color:'white', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                Apply
+              </button>
+              <button type="button" onClick={() => { setSpecBulkMode(false); setSpecBulkText(''); }}
+                style={{ padding:'7px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:'transparent', color:C.mute, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {specs.map((row, i) => (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:8, alignItems:'center' }}>
+                  <input value={row.key} onChange={e => setSpec(i,'key',e.target.value)}
+                    placeholder={['Colour','Capacity','Dimensions','Weight','Material','Warranty'][i] || 'Spec name'}
+                    style={inpStyle} />
+                  <input value={row.value} onChange={e => setSpec(i,'value',e.target.value)}
+                    placeholder="Value" style={inpStyle} />
+                  <button type="button" onClick={() => removeSpec(i)} disabled={specs.length===1}
+                    style={{ width:32, height:36, borderRadius:8, border:`1px solid ${C.line}`, background:'transparent',
+                      color: specs.length===1 ? C.line : C.red, cursor: specs.length===1 ? 'not-allowed' : 'pointer',
+                      fontWeight:700, fontSize:16 }}>x</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:8, marginTop:10, alignItems:'center' }}>
+              <button type="button" onClick={addSpec}
+                style={{ padding:'6px 16px', borderRadius:8, border:`1px dashed ${C.accent}`,
+                  background:'transparent', color:C.accent, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                + Add Row
+              </button>
+              <button type="button" onClick={() => setSpecBulkMode(true)}
+                style={{ padding:'6px 16px', borderRadius:8, border:`1px dashed ${C.mute}`,
+                  background:'transparent', color:C.mute, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                Paste Bulk
+              </button>
+            </div>
+            <div style={{ fontSize:11, color:C.mute, marginTop:6 }}>Leave key blank to skip that row.</div>
+          </>
+        )}
+
+        {/* IMAGE UPLOAD */}
         <div style={{ marginTop:20 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
             <label style={LS}>Product Images <span style={{ color:C.sub, textTransform:'none', fontWeight:500 }}>({totalImgs}/5)</span></label>
-            <span style={{ fontSize:11, color:C.mute }}>JPEG Â· PNG Â· WebP Â· max 5 MB each</span>
+            <span style={{ fontSize:11, color:C.mute }}>JPEG · PNG · WebP · max 2 MB each</span>
           </div>
 
           {/* Existing + new previews */}
@@ -868,7 +971,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
                     style={{ position:'absolute', top:3, right:3, width:20, height:20, borderRadius:'50%',
                       background:'rgba(0,0,0,.75)', color:'white', border:'none', cursor:'pointer',
                       fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
-                    Ã—
+                    x
                   </button>
                   {i === 0 && <span style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,.6)', color:'white', fontSize:9, fontWeight:700, textAlign:'center', padding:'2px 0' }}>MAIN</span>}
                 </div>
@@ -880,7 +983,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
                     style={{ position:'absolute', top:3, right:3, width:20, height:20, borderRadius:'50%',
                       background:'rgba(0,0,0,.75)', color:'white', border:'none', cursor:'pointer',
                       fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
-                    Ã—
+                    x
                   </button>
                   <span style={{ position:'absolute', bottom:0, left:0, right:0, background:C.accent+'cc', color:'white', fontSize:9, fontWeight:700, textAlign:'center', padding:'2px 0' }}>NEW</span>
                 </div>
@@ -898,11 +1001,11 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
               style={{ border:`2px dashed ${dragOver ? C.accent : C.line}`, borderRadius:10, padding:'28px 20px',
                 textAlign:'center', cursor:'pointer', background: dragOver ? C.accent+'0a' : C.card2,
                 transition:'all .15s' }}>
-              <div style={{ fontSize:30, marginBottom:8 }}>ðŸ–¼ï¸</div>
+              <div style={{ fontSize:30, marginBottom:8 }}>🖼</div>
               <div style={{ fontWeight:700, fontSize:13, color:C.text, marginBottom:4 }}>
                 Click to upload or drag &amp; drop
               </div>
-              <div style={{ fontSize:12, color:C.mute }}>Up to {5-totalImgs} more image{5-totalImgs!==1?'s':''} Â· Max 5 MB each</div>
+              <div style={{ fontSize:12, color:C.mute }}>Up to {5-totalImgs} more image{5-totalImgs!==1?'s':''} · Max 2 MB each</div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -982,7 +1085,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
 
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <Btn variant="primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Uploadingâ€¦' : initial ? 'Save Changes' : 'Add Product'}
+            {saving ? 'Uploading…' : initial ? 'Save Changes' : 'Add Product'}
           </Btn>
           {onCancel && <Btn onClick={onCancel}>Cancel</Btn>}
         </div>
@@ -992,7 +1095,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   RETURNS TAB â€” employee
+   RETURNS TAB — employee
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const RETURN_STATUS_META = {
   REQUESTED:         { label:'Requested',        color: C.yellow },
@@ -1127,7 +1230,7 @@ function EmployeeReturnsTab() {
                   <div style={{ background:C.card2, padding:'12px 18px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:700, fontSize:13, color:C.text }}>Return #{req._id?.slice(-8).toUpperCase()}</div>
-                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{req.user?.name} Â· {req.user?.email}</div>
+                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{req.user?.name} · {req.user?.email}</div>
                     </div>
                     <ReturnBadge status={req.status} />
                     <span style={{ fontSize:14, fontWeight:800, color:C.accent }}>{fmtRs(req.refundAmount || 0)}</span>
@@ -1150,12 +1253,12 @@ function EmployeeReturnsTab() {
                       <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
                       <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
                         Reason: <strong style={{color:C.sub}}>{req.reason?.replace(/_/g,' ')}</strong>
-                        {' Â· '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
+                        {' · '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
                       </div>
                       {req.description && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>"{req.description}"</div>}
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0, fontSize:12, color:C.mute }}>
-                      {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || 'â€”'}
+                      {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}
                     </div>
                   </div>
 
@@ -1193,7 +1296,7 @@ function EmployeeReturnsTab() {
                     <div style={{ padding:'14px 18px', background:C.bg, borderTop:`1px solid ${C.line}` }}>
                       <div style={{ fontSize:13, fontWeight:700, marginBottom:10, color:C.text }}>Your response to customer:</div>
                       <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
-                        placeholder="Optional note to customerâ€¦"
+                        placeholder="Optional note to customer…"
                         style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10, background:C.card2, color:C.text }} />
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={() => doAction(req._id, 'approve')} disabled={saving}
@@ -1218,14 +1321,14 @@ function EmployeeReturnsTab() {
                         style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none',
                           fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, whiteSpace:'nowrap', fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
                         <SvgAt el={adv.iconEl} size={14} />
-                        {saving ? 'â€¦' : adv.label}
+                        {saving ? '…' : adv.label}
                       </button>
                     </div>
                   )}
 
                   {req.status === 'REFUND_COMPLETED' && (
                     <div style={{ padding:'10px 18px', background:C.green+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.green, fontWeight:700, display:'flex', alignItems:'center', gap:8 }}>
-                      <SvgAt el={Icon.check} size={14} /> Refund completed â€” this return is closed
+                      <SvgAt el={Icon.check} size={14} /> Refund completed — this return is closed
                     </div>
                   )}
                   {req.status === 'EMPLOYEE_REJECTED' && (
@@ -1253,20 +1356,186 @@ function EmployeeReturnsTab() {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAIN EMPLOYEE DASHBOARD
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ─────────────────────────────────────────────────────────
+   DELIVERY AREAS TAB
+───────────────────────────────────────────────────────── */
+function DeliveryAreasTab() {
+  const [areas, setAreas]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [editId, setEditId]     = useState(null);
+  const empty = { pincode:'', city:'', state:'', deliveryCharge:'' };
+  const [form, setForm]         = useState(empty);
+  const [showForm, setShowForm] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    deliveryAreasApi.getAllAdmin()
+      .then(({ data }) => setAreas(data.data?.areas || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.pincode || form.deliveryCharge === '') { setError('Pincode and delivery charge are required'); return; }
+    if (!/^\d{6}$/.test(form.pincode)) { setError('Pincode must be exactly 6 digits'); return; }
+    setSaving(true); setError('');
+    try {
+      if (editId) {
+        await deliveryAreasApi.update(editId, { ...form, deliveryCharge: Number(form.deliveryCharge) });
+      } else {
+        await deliveryAreasApi.create({ ...form, deliveryCharge: Number(form.deliveryCharge) });
+      }
+      setForm(empty); setEditId(null); setShowForm(false); load();
+    } catch (e) { setError(e?.response?.data?.message || 'Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const handleEdit = (a) => {
+    setForm({ pincode: a.pincode, city: a.city||'', state: a.state||'', deliveryCharge: a.deliveryCharge });
+    setEditId(a._id); setShowForm(true); setError('');
+  };
+
+  const handleToggle = async (a) => {
+    await deliveryAreasApi.update(a._id, { isActive: !a.isActive });
+    load();
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this delivery area?')) return;
+    await deliveryAreasApi.remove(id);
+    load();
+  };
+
+  const LS = { display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' };
+  const inpStyle = { width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      <Card title="Delivery Areas">
+        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
+          <Btn variant="primary" onClick={() => { setForm(empty); setEditId(null); setShowForm(s=>!s); setError(''); }}>
+            {showForm ? 'Cancel' : '+ Add Pincode'}
+          </Btn>
+        </div>
+
+        {showForm && (
+          <div style={{ background:C.card2, border:`1px solid ${C.line}`, borderRadius:12, padding:20, marginBottom:20 }}>
+            <div style={{ fontWeight:700, fontSize:14, color:C.text, marginBottom:16 }}>
+              {editId ? 'Edit Delivery Area' : 'Add New Delivery Area'}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12 }}>
+              <div>
+                <label style={LS}>Pincode *</label>
+                <input value={form.pincode} onChange={e=>set('pincode', e.target.value.replace(/\D/g,'').slice(0,6))}
+                  placeholder="6-digit pincode" disabled={!!editId} style={{ ...inpStyle, opacity: editId ? 0.6 : 1 }} />
+              </div>
+              <div>
+                <label style={LS}>City</label>
+                <input value={form.city} onChange={e=>set('city',e.target.value)} placeholder="City name" style={inpStyle} />
+              </div>
+              <div>
+                <label style={LS}>State</label>
+                <input value={form.state} onChange={e=>set('state',e.target.value)} placeholder="State" style={inpStyle} />
+              </div>
+              <div>
+                <label style={LS}>Delivery Charge (Rs.) *</label>
+                <input type="number" min="0" value={form.deliveryCharge} onChange={e=>set('deliveryCharge',e.target.value)}
+                  placeholder="0 = Free" style={inpStyle} />
+              </div>
+            </div>
+            {error && <div style={{ marginTop:12, color:C.red, fontSize:13, fontWeight:600 }}>{error}</div>}
+            <div style={{ display:'flex', gap:10, marginTop:16 }}>
+              <Btn variant="primary" onClick={handleSubmit} disabled={saving}>
+                {saving ? 'Saving...' : editId ? 'Save Changes' : 'Add Area'}
+              </Btn>
+              <Btn onClick={() => { setShowForm(false); setEditId(null); setForm(empty); }}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:40, color:C.mute }}>Loading...</div>
+        ) : areas.length === 0 ? (
+          <div style={{ textAlign:'center', padding:40, color:C.mute }}>
+            <div style={{ fontSize:40, marginBottom:8 }}>📍</div>
+            <div>No delivery areas added yet.</div>
+            <div style={{ fontSize:12, marginTop:4 }}>Add pincodes to enable delivery checking for customers.</div>
+          </div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead>
+                <tr style={{ background:C.card2 }}>
+                  {['Pincode','City','State','Delivery Charge','Status','Actions'].map(h => (
+                    <th key={h} style={{ padding:'10px 14px', textAlign:'left', color:C.mute, fontWeight:700, fontSize:11, textTransform:'uppercase', letterSpacing:'.05em', borderBottom:`1px solid ${C.line}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {areas.map((a, i) => (
+                  <tr key={a._id} style={{ borderBottom:`1px solid ${C.line}`, background: i%2===0?'transparent':C.card2+'44' }}>
+                    <td style={{ padding:'10px 14px', fontWeight:700, color:C.text, fontFamily:'monospace', letterSpacing:'.05em' }}>{a.pincode}</td>
+                    <td style={{ padding:'10px 14px', color:C.sub }}>{a.city || '—'}</td>
+                    <td style={{ padding:'10px 14px', color:C.sub }}>{a.state || '—'}</td>
+                    <td style={{ padding:'10px 14px', color: a.deliveryCharge===0 ? C.green : C.text, fontWeight:600 }}>
+                      {a.deliveryCharge === 0 ? 'Free' : `Rs. ${a.deliveryCharge}`}
+                    </td>
+                    <td style={{ padding:'10px 14px' }}>
+                      <button onClick={() => handleToggle(a)}
+                        style={{ padding:'3px 10px', borderRadius:99, fontSize:11, fontWeight:700, cursor:'pointer', border:'none',
+                          background: a.isActive ? C.green+'22' : C.red+'22',
+                          color: a.isActive ? C.green : C.red }}>
+                        {a.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td style={{ padding:'10px 14px' }}>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={() => handleEdit(a)}
+                          style={{ padding:'4px 12px', borderRadius:6, border:`1px solid ${C.line}`, background:'transparent', color:C.accent, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                          Edit
+                        </button>
+                        <button onClick={() => handleDelete(a._id)}
+                          style={{ padding:'4px 12px', borderRadius:6, border:`1px solid ${C.red}33`, background:C.red+'14', color:C.red, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ marginTop:16, padding:'12px 16px', background:C.card2, borderRadius:8, fontSize:12, color:C.mute, border:`1px solid ${C.line}` }}>
+          <strong style={{ color:C.text }}>Tip:</strong> Set delivery charge to <strong style={{ color:C.green }}>0</strong> for free delivery in that area. Customers will see delivery availability before placing an order.
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 const NAV_TABS = [
-  { id:'Overview',    iconEl: Icon.grid  },
-  { id:'My Products', iconEl: Icon.bag   },
-  { id:'Orders',      iconEl: Icon.orders },
-  { id:'Returns',     iconEl: Icon.refund },
-  { id:'Add Product', iconEl: Icon.plus  },
+  { id:'Overview',        iconEl: Icon.grid  },
+  { id:'My Products',     iconEl: Icon.bag   },
+  { id:'Orders',          iconEl: Icon.orders },
+  { id:'Returns',         iconEl: Icon.refund },
+  { id:'Delivery Areas',  iconEl: Icon.box   },
+  { id:'Add Product',     iconEl: Icon.plus  },
 ];
 
 const TAB_SUBTITLES = {
-  Overview:     'Your shop performance and key metrics',
-  'My Products':'Manage your product listings',
-  Orders:       'Track and fulfil orders containing your products',
-  Returns:      'Review and respond to return requests from customers',
-  'Add Product':'Create a new product listing',
+  Overview:         'Your shop performance and key metrics',
+  'My Products':    'Manage your product listings',
+  Orders:           'Track and fulfil orders containing your products',
+  Returns:          'Review and respond to return requests from customers',
+  'Delivery Areas': 'Manage pincodes and delivery charges',
+  'Add Product':    'Create a new product listing',
 };
 
 export default function SellerDashboard() {
@@ -1323,7 +1592,7 @@ export default function SellerDashboard() {
           style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:99 }} />
       )}
 
-      {/* â”€â”€ Sidebar â”€â”€ */}
+      {/* â"€â"€ Sidebar â"€â"€ */}
       <div style={{
         position:'fixed', left:0, top:0, bottom:0, width:220,
         background:C.sidebar, display:'flex', flexDirection:'column',
@@ -1380,7 +1649,7 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {/* â”€â”€ Main content â”€â”€ */}
+      {/* â"€â"€ Main content â"€â"€ */}
       <div style={{ marginLeft: isMobile ? 0 : 220, flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
 
         {/* Topbar */}
@@ -1397,7 +1666,7 @@ export default function SellerDashboard() {
           ) : (
             <div style={{ flex:1, maxWidth:380, display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36 }}>
               <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={15} /></span>
-              <input placeholder="Search orders, productsâ€¦" style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:"'DM Sans',sans-serif" }} />
+              <input placeholder="Search orders, products…" style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:"'DM Sans',sans-serif" }} />
             </div>
           )}
 
@@ -1456,6 +1725,7 @@ export default function SellerDashboard() {
               {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} categories={categories} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
               {tab==='Orders'      && !editProduct && <OrdersTab onViewReturns={() => handleTabClick('Returns')} />}
               {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
+              {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
               {tab==='Add Product' && !editProduct && <ProductForm categories={categories} onSave={handleAddProduct} />}
             </>
           )}
