@@ -5,6 +5,7 @@ import { useOrders } from '../context/OrderContext';
 import { reviewsApi } from '../api/reviews';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 import SupportIcon from '../components/icons/SupportIcon';
+import { generateInvoice } from '../utils/generateInvoice';
 
 function StarPicker({ value, onChange }) {
   const [hovered, setHovered] = useState(0);
@@ -243,11 +244,19 @@ export default function OrdersPage() {
                       <div style={{ fontSize:13,fontWeight:600,marginTop:2 }}>{order.shippingAddress?.fullName || '—'}</div>
                     </div>
                     <div style={{ marginLeft:'auto', textAlign:'right' }}>
-                      <div style={{ fontSize:10,fontWeight:700,color:'#888',letterSpacing:'.06em',textTransform:'uppercase' }}>Order # {order._id?.slice(-8).toUpperCase()}</div>
-                      <button onClick={()=>navigate(`/track?id=${order._id}`)}
-                        style={{ fontSize:12,color:'#007185',background:'none',border:'none',cursor:'pointer',fontWeight:600,marginTop:2 }}>
-                        View order details →
-                      </button>
+                      <div style={{ fontSize:10,fontWeight:700,color:'#888',letterSpacing:'.06em',textTransform:'uppercase' }}>
+                        Order # {order.orderNumber || order._id?.slice(-8).toUpperCase()}
+                      </div>
+                      <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:4 }}>
+                        <button onClick={()=>navigate(`/track?id=${order._id}`)}
+                          style={{ fontSize:12,color:'#007185',background:'none',border:'none',cursor:'pointer',fontWeight:600 }}>
+                          View order details →
+                        </button>
+                        <button onClick={() => generateInvoice(order, user)}
+                          style={{ fontSize:12,color:'#c45500',background:'none',border:'none',cursor:'pointer',fontWeight:600 }}>
+                          📄 Download Invoice
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -356,6 +365,10 @@ export default function OrdersPage() {
                       <button onClick={()=>navigate(`/track?id=${order._id}`)}
                         style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',cursor:'pointer' }}>
                         Order Details
+                      </button>
+                      <button onClick={() => generateInvoice(order, user)}
+                        style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #c45500',background:'linear-gradient(to bottom,#fffbf5,#faebd0)',color:'#c45500',cursor:'pointer' }}>
+                        📄 Invoice
                       </button>
                       {isDelivered && order.orderItems?.length > 0 && (
                         <button

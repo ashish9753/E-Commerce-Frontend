@@ -1,19 +1,109 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Package, Heart, LogOut, Lock } from 'lucide-react';
+import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { usersApi } from '../api/users';
 import { validators } from '../utils/validators';
+
+const STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan',
+  'Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal',
+  'Delhi','Jammu & Kashmir','Ladakh','Chandigarh','Puducherry',
+];
+
+const EMPTY_ADDR = { fullName:'', phone:'', houseNo:'', area:'', city:'', state:'', pincode:'', landmark:'' };
+
+function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
+  const [form, setForm] = useState(initial);
+  const [errs, setErrs] = useState({});
+
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrs(e => ({ ...e, [k]: '' })); };
+
+  const validate = () => {
+    const e = {};
+    if (!form.fullName.trim()) e.fullName = 'Required';
+    if (!form.phone.trim())    e.phone    = 'Required';
+    if (!form.houseNo.trim())  e.houseNo  = 'Required';
+    if (!form.area.trim())     e.area     = 'Required';
+    if (!form.city.trim())     e.city     = 'Required';
+    if (!form.state)           e.state    = 'Required';
+    if (!/^\d{6}$/.test(form.pincode)) e.pincode = '6-digit pincode required';
+    return e;
+  };
+
+  const submit = () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrs(e); return; }
+    onSave(form);
+  };
+
+  const Field = ({ k, label, placeholder, type = 'text', half }) => (
+    <div className={`field${half ? ' col-span-1' : ''}`}>
+      <label>{label}</label>
+      <input className={`input${errs[k] ? ' error' : ''}`} type={type}
+        value={form[k]} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+      {errs[k] && <div className="field-error">{errs[k]}</div>}
+    </div>
+  );
+
+  return (
+    <div className="border border-line rounded-xl p-5 bg-surface mt-4">
+      <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+        <Field k="fullName" label="Full Name *" placeholder="Recipient name" half />
+        <Field k="phone"    label="Phone *"     placeholder="10-digit mobile" half />
+        <Field k="houseNo"  label="House / Flat / Block *" placeholder="e.g. 12B, 3rd Floor" half />
+        <Field k="area"     label="Street / Area / Locality *" placeholder="Colony or area name" half />
+        <Field k="city"     label="City *" placeholder="City" half />
+        <div className="field col-span-1">
+          <label>State *</label>
+          <select className={`input${errs.state ? ' error' : ''}`} value={form.state} onChange={e => set('state', e.target.value)}>
+            <option value="">— Select State —</option>
+            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {errs.state && <div className="field-error">{errs.state}</div>}
+        </div>
+        <Field k="pincode"  label="Pincode *" placeholder="6-digit code" half />
+        <Field k="landmark" label="Landmark (optional)" placeholder="Near school, temple…" half />
+      </div>
+      <div className="flex gap-3 mt-5">
+        <button className="btn btn-primary flex items-center gap-2" onClick={submit} disabled={saving}>
+          {saving ? <span className="spinner" /> : <Check size={15} />}
+          {saving ? 'Saving…' : 'Save Address'}
+        </button>
+        <button className="btn" onClick={onCancel} disabled={saving}>Cancel</button>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, logout, updateProfile, changePassword } = useAuth();
   const toast = useToast();
+
   const [activeTab, setActiveTab] = useState('profile');
-  const [form, setForm] = useState({ name: user?.name || '', phone: user?.phone || '' });
-  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [form, setForm]           = useState({ name: user?.name || '', phone: user?.phone || '' });
+  const [pwForm, setPwForm]       = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [loading, setLoading]     = useState(false);
+  const [errors, setErrors]       = useState({});
+
+  // Addresses
+  const [addresses, setAddresses]   = useState(user?.addresses || []);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editId, setEditId]           = useState(null);
+  const [addrSaving, setAddrSaving]   = useState(false);
+  const [deletingId, setDeletingId]   = useState(null);
+
+  useEffect(() => {
+    if (activeTab === 'addresses') {
+      usersApi.getProfile()
+        .then(r => setAddresses(r.data?.data?.addresses || r.data?.addresses || []))
+        .catch(() => {});
+    }
+  }, [activeTab]);
 
   if (!user) { navigate('/login'); return null; }
 
@@ -46,12 +136,49 @@ export default function ProfilePage() {
     else toast(result.error, 'error');
   };
 
+  const handleAddAddress = async (data) => {
+    setAddrSaving(true);
+    try {
+      const r = await usersApi.addAddress(data);
+      setAddresses(r.data?.data?.addresses || r.data?.addresses || [...addresses, data]);
+      setShowAddForm(false);
+      toast('Address added!');
+    } catch (e) {
+      toast(e?.response?.data?.message || 'Failed to add address', 'error');
+    } finally { setAddrSaving(false); }
+  };
+
+  const handleUpdateAddress = async (id, data) => {
+    setAddrSaving(true);
+    try {
+      const r = await usersApi.updateAddress(id, data);
+      setAddresses(r.data?.data?.addresses || r.data?.addresses || addresses.map(a => a._id === id ? { ...a, ...data } : a));
+      setEditId(null);
+      toast('Address updated!');
+    } catch (e) {
+      toast(e?.response?.data?.message || 'Failed to update address', 'error');
+    } finally { setAddrSaving(false); }
+  };
+
+  const handleDeleteAddress = async (id) => {
+    if (!window.confirm('Remove this address?')) return;
+    setDeletingId(id);
+    try {
+      const r = await usersApi.deleteAddress(id);
+      setAddresses(r.data?.data?.addresses || r.data?.addresses || addresses.filter(a => a._id !== id));
+      toast('Address removed');
+    } catch (e) {
+      toast(e?.response?.data?.message || 'Failed to remove address', 'error');
+    } finally { setDeletingId(null); }
+  };
+
   const navItems = [
-    { id: 'profile', icon: <User size={16} />, label: 'My Profile' },
-    { id: 'orders', icon: <Package size={16} />, label: 'My Orders', action: () => navigate('/orders') },
-    { id: 'wishlist', icon: <Heart size={16} />, label: 'Wishlist', action: () => navigate('/wishlist') },
-    { id: 'password', icon: <Lock size={16} />, label: 'Change Password' },
-    { id: 'logout', icon: <LogOut size={16} />, label: 'Sign Out', action: handleLogout, danger: true },
+    { id: 'profile',   icon: <User size={16} />,    label: 'My Profile' },
+    { id: 'addresses', icon: <MapPin size={16} />,   label: 'My Addresses' },
+    { id: 'orders',    icon: <Package size={16} />,  label: 'My Orders',        action: () => navigate('/orders') },
+    { id: 'wishlist',  icon: <Heart size={16} />,    label: 'Wishlist',         action: () => navigate('/wishlist') },
+    { id: 'password',  icon: <Lock size={16} />,     label: 'Change Password' },
+    { id: 'logout',    icon: <LogOut size={16} />,   label: 'Sign Out',         action: handleLogout, danger: true },
   ];
 
   return (
@@ -86,6 +213,8 @@ export default function ProfilePage() {
 
         {/* Content */}
         <div className="card p-8">
+
+          {/* ── My Profile ─────────────────────────────────── */}
           {activeTab === 'profile' && (
             <>
               <h2 className="text-lg font-bold mb-6 pb-4 border-b border-line">Personal Information</h2>
@@ -105,7 +234,7 @@ export default function ProfilePage() {
                     className="input"
                     value={form.phone}
                     onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="+977 98XXXXXXXX"
+                    placeholder="+91 98XXXXXXXX"
                   />
                 </div>
               </div>
@@ -120,6 +249,86 @@ export default function ProfilePage() {
             </>
           )}
 
+          {/* ── My Addresses ───────────────────────────────── */}
+          {activeTab === 'addresses' && (
+            <>
+              <div className="flex items-center justify-between pb-4 border-b border-line mb-6">
+                <h2 className="text-lg font-bold">My Addresses</h2>
+                {!showAddForm && (
+                  <button className="btn btn-primary flex items-center gap-2 text-sm py-2"
+                    onClick={() => { setShowAddForm(true); setEditId(null); }}>
+                    <Plus size={15} /> Add New Address
+                  </button>
+                )}
+              </div>
+
+              {/* Add form */}
+              {showAddForm && (
+                <AddressForm
+                  onSave={handleAddAddress}
+                  onCancel={() => setShowAddForm(false)}
+                  saving={addrSaving}
+                />
+              )}
+
+              {/* Address cards */}
+              {addresses.length === 0 && !showAddForm ? (
+                <div className="text-center py-16 text-mute">
+                  <MapPin size={40} className="mx-auto mb-3 opacity-30" />
+                  <div className="font-semibold text-base mb-1">No saved addresses</div>
+                  <div className="text-sm">Add an address for faster checkout</div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4 mt-2">
+                  {addresses.map((addr) => (
+                    <div key={addr._id} className="border border-line rounded-xl overflow-hidden">
+                      {editId === addr._id ? (
+                        <div className="p-5">
+                          <div className="font-semibold text-sm mb-1">Edit Address</div>
+                          <AddressForm
+                            initial={addr}
+                            onSave={(data) => handleUpdateAddress(addr._id, data)}
+                            onCancel={() => setEditId(null)}
+                            saving={addrSaving}
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-5 flex gap-4 items-start">
+                          <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <MapPin size={16} className="text-accent" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-sm">{addr.fullName}</div>
+                            <div className="text-sm text-mute mt-0.5">{addr.phone}</div>
+                            <div className="text-sm text-ink mt-1 leading-relaxed">
+                              {[addr.houseNo, addr.area, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ')}
+                              {addr.landmark && <span className="text-mute"> · Near {addr.landmark}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => { setEditId(addr._id); setShowAddForm(false); }}
+                              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-line hover:bg-surface transition-colors text-mute hover:text-ink">
+                              <Pencil size={12} /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAddress(addr._id)}
+                              disabled={deletingId === addr._id}
+                              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors text-red-500">
+                              {deletingId === addr._id ? <span className="spinner" style={{ width:12, height:12 }} /> : <Trash2 size={12} />}
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Change Password ────────────────────────────── */}
           {activeTab === 'password' && (
             <>
               <h2 className="text-lg font-bold mb-6 pb-4 border-b border-line">Change Password</h2>
@@ -145,6 +354,7 @@ export default function ProfilePage() {
               </button>
             </>
           )}
+
         </div>
       </div>
     </div>

@@ -1167,25 +1167,6 @@ function AdminReturnsTab() {
     if (!actionForm.status) return;
     setSaving(true);
     try {
-      // Auto-trigger Razorpay refund when admin sets REFUND_INITIATED on an ONLINE-paid order
-      if (actionForm.status === 'REFUND_INITIATED') {
-        const req = returns.find(r => r._id === id);
-        if (req?.order?.paymentMethod === 'ONLINE' && req?.order?.paymentStatus === 'PAID') {
-          try {
-            await paymentsApi.initiateRefund(req.order._id, {
-              refundAmount: Number(actionForm.refundAmount) || req.refundAmount,
-              reason: actionForm.adminNote || 'Admin initiated refund',
-            });
-          } catch (rzpErr) {
-            const msg = rzpErr?.response?.data?.message || 'Razorpay refund failed';
-            if (!window.confirm(`${msg}\n\nContinue updating status to REFUND_INITIATED anyway?`)) {
-              setSaving(false);
-              return;
-            }
-          }
-        }
-      }
-
       await returnsApi.process(id, actionForm);
       setActionId(null); setActionForm({ status:'', adminNote:'', refundAmount:'' });
       load();
@@ -1372,6 +1353,24 @@ function AdminReturnsTab() {
                       {req.adminNote  && <span><strong>Admin:</strong> {req.adminNote}</span>}
                     </div>
                   )}
+
+                  {/* Razorpay auto-refund success banner */}
+                  {req.status === 'REFUND_COMPLETED' && req.order?.paymentMethod === 'ONLINE' && (() => {
+                    const rzEntry = [...(req.timeline || [])].reverse().find(e => e.note?.includes('Auto-refunded'));
+                    if (!rzEntry) return null;
+                    const idMatch  = rzEntry.note?.match(/ID:\s*([\w]+)/);
+                    const amtMatch = rzEntry.note?.match(/₹([\d,.]+)/);
+                    return (
+                      <div style={{ padding:'10px 18px', background:'#f0fdf4', borderTop:`1px solid ${C.line}`, display:'flex', alignItems:'center', gap:10, fontSize:12 }}>
+                        <span style={{ fontSize:16 }}>✅</span>
+                        <div>
+                          <span style={{ fontWeight:700, color:'#16a34a' }}>Auto-refunded via Razorpay</span>
+                          {amtMatch && <span style={{ color:'#555', marginLeft:8 }}>₹{amtMatch[1]}</span>}
+                          {idMatch  && <span style={{ color:'#888', marginLeft:8, fontFamily:'monospace', fontSize:11 }}>ID: {idMatch[1]}</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Timeline preview */}
                   {req.timeline?.length > 0 && !isOpen && (
