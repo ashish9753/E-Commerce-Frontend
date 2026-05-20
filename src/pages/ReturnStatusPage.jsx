@@ -54,11 +54,19 @@ const REASONS = {
   changed_mind: 'Changed My Mind', missing_parts: 'Missing Parts/Accessories',
 };
 
+/* ── standalone input — must live OUTSIDE RefundMethodCard to avoid remount on every render ── */
+const BankInp = ({ label, value, onChange, placeholder, disabled }) => (
+  <div>
+    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 4, textTransform: 'uppercase' }}>{label}</label>
+    <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
+      style={{ width: '100%', height: 36, border: '1px solid #ddd', borderRadius: 6, padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+  </div>
+);
+
 /* ── Refund Method Selector ── */
 function RefundMethodCard({ ret, onUpdate }) {
   const isCOD = ret.order?.paymentMethod === 'COD';
 
-  // COD orders must use bank/UPI — cannot refund to "original payment"
   const defaultMode = isCOD
     ? (ret.refundMethod === 'original_payment' ? 'bank_transfer' : (ret.refundMethod || 'bank_transfer'))
     : (ret.refundMethod || 'original_payment');
@@ -67,16 +75,15 @@ function RefundMethodCard({ ret, onUpdate }) {
   const [bank, setBank]     = useState(ret.bankDetails || {});
   const [saving, setSaving] = useState(false);
 
-  // "done" = has saved a valid method already
   const alreadySaved = ret.refundMethod && (
     ret.refundMethod === 'original_payment'
-      ? !isCOD  // original_payment is only valid for non-COD
+      ? !isCOD
       : ret.refundMethod === 'bank_transfer'
         ? !!ret.bankDetails?.accountNumber
         : !!ret.bankDetails?.upiId
   );
-  const [done, setDone]     = useState(!!alreadySaved);
-  const [edit, setEdit]     = useState(!alreadySaved);
+  const [done, setDone] = useState(!!alreadySaved);
+  const [edit, setEdit] = useState(!alreadySaved);
 
   const setB = (k, v) => setBank(b => ({ ...b, [k]: v }));
 
@@ -113,14 +120,6 @@ function RefundMethodCard({ ret, onUpdate }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {mode === id && <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#FF5A1F' }} />}
       </div>
-    </div>
-  );
-
-  const Inp = ({ label, k, placeholder }) => (
-    <div>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 4, textTransform: 'uppercase' }}>{label}</label>
-      <input value={bank[k] || ''} onChange={e => setB(k, e.target.value)} placeholder={placeholder} disabled={blocked}
-        style={{ width: '100%', height: 36, border: '1px solid #ddd', borderRadius: 6, padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
     </div>
   );
 
@@ -172,19 +171,19 @@ function RefundMethodCard({ ret, onUpdate }) {
       {mode === 'bank_transfer' && (
         <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}><Inp label="Account Holder Name *" k="accountName" placeholder="As per bank records" /></div>
-            <div style={{ flex: 1 }}><Inp label="Bank Name *" k="bankName" placeholder="State Bank of India" /></div>
+            <div style={{ flex: 1 }}><BankInp label="Account Holder Name *" value={bank.accountName || ''} onChange={e => setB('accountName', e.target.value)} placeholder="As per bank records" disabled={blocked} /></div>
+            <div style={{ flex: 1 }}><BankInp label="Bank Name *" value={bank.bankName || ''} onChange={e => setB('bankName', e.target.value)} placeholder="State Bank of India" disabled={blocked} /></div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}><Inp label="Account Number *" k="accountNumber" placeholder="1234567890" /></div>
-            <div style={{ flex: 1 }}><Inp label="IFSC Code *" k="ifscCode" placeholder="SBIN0001234" /></div>
+            <div style={{ flex: 1 }}><BankInp label="Account Number *" value={bank.accountNumber || ''} onChange={e => setB('accountNumber', e.target.value)} placeholder="1234567890" disabled={blocked} /></div>
+            <div style={{ flex: 1 }}><BankInp label="IFSC Code *" value={bank.ifscCode || ''} onChange={e => setB('ifscCode', e.target.value)} placeholder="SBIN0001234" disabled={blocked} /></div>
           </div>
         </div>
       )}
 
       {mode === 'upi' && (
         <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
-          <Inp label="UPI ID *" k="upiId" placeholder="yourname@paytm / @gpay / @ybl" />
+          <BankInp label="UPI ID *" value={bank.upiId || ''} onChange={e => setB('upiId', e.target.value)} placeholder="yourname@paytm / @gpay / @ybl" disabled={blocked} />
         </div>
       )}
 

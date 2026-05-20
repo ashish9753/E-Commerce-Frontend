@@ -347,7 +347,7 @@ export default function OrderTrackingPage() {
                     ['Status',   order.paymentStatus],
                     ['Items',    formatPriceShort(order.itemsPrice)],
                     ['Shipping', order.shippingPrice===0 ? 'FREE' : formatPriceShort(order.shippingPrice)],
-                    ['Tax',      formatPriceShort(order.taxPrice)],
+                    [order.taxLabel || 'Tax', formatPriceShort(order.taxPrice)],
                     ...(order.discountAmount>0 ? [['Discount', `-${formatPriceShort(order.discountAmount)}`]] : []),
                   ].map(([label, val]) => (
                     <div key={label} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'5px 0', borderBottom:'1px solid #f5f5f5' }}>
@@ -355,10 +355,48 @@ export default function OrderTrackingPage() {
                       <span style={{ fontWeight:600, color: label==='Discount'?'#c45500':'#333' }}>{val}</span>
                     </div>
                   ))}
+
+                  {/* Order total row */}
                   <div style={{ display:'flex', justifyContent:'space-between', padding:'12px 0 0', borderTop:'2px solid #eee', marginTop:4 }}>
                     <span style={{ fontWeight:700, fontSize:15 }}>Order Total</span>
-                    <span style={{ fontWeight:800, fontSize:18, color:'#c45500' }}>{formatPriceShort(order.totalPrice)}</span>
+                    <span style={{ fontWeight:800, fontSize:18,
+                      color: order.codBookingStatus === 'PAID' ? '#aaa' : '#c45500',
+                      textDecoration: order.codBookingStatus === 'PAID' ? 'line-through' : 'none' }}>
+                      {formatPriceShort(order.totalPrice)}
+                    </span>
                   </div>
+
+                  {/* COD booking breakdown */}
+                  {order.codBookingAmount > 0 && (
+                    <div style={{ marginTop:12, padding:'12px 14px', borderRadius:8,
+                      background: order.codBookingStatus === 'PAID' ? '#f0fdf4' : '#fefce8',
+                      border: `1px solid ${order.codBookingStatus === 'PAID' ? '#bbf7d0' : '#fde68a'}` }}>
+                      {order.codBookingStatus === 'PAID' ? (
+                        <>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:8 }}>
+                            <span style={{ color:'#16a34a', fontWeight:700 }}>✓ Booking paid (Razorpay)</span>
+                            <span style={{ color:'#16a34a', fontWeight:700 }}>−{formatPriceShort(order.codBookingAmount)}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:900, borderTop:'1px dashed #bbf7d0', paddingTop:8 }}>
+                            <span style={{ color:'#111' }}>Pay on Delivery</span>
+                            <span style={{ color:'#c45500' }}>{formatPriceShort(order.totalPrice - order.codBookingAmount)}</span>
+                          </div>
+                          <div style={{ fontSize:11, color:'#6b7280', marginTop:5 }}>Cash at doorstep · Booking non-refundable</div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
+                            <span style={{ color:'#b45309', fontWeight:700 }}>⚡ Booking (pending payment)</span>
+                            <span style={{ color:'#b45309', fontWeight:700 }}>{formatPriceShort(order.codBookingAmount)}</span>
+                          </div>
+                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, fontWeight:800, borderTop:'1px dashed #fde68a', paddingTop:8 }}>
+                            <span>Pay on Delivery</span>
+                            <span>{formatPriceShort(order.totalPrice - order.codBookingAmount)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Help */}

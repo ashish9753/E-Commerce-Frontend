@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react';
 import { brandsApi, categoriesApi, attributesApi, eventsApi } from '../../api/catalog';
 import { useCatalog } from '../../context/CatalogContext';
 
-const C = { accent: '#FF5A1F', dark: '#0f172a', mute: '#6b7280', border: '#e5e7eb', surface: '#f8fafc' };
+const C = {
+  accent: '#f97316', mute: '#6b7280', sub: '#9ca3af',
+  border: '#252b3b', card: '#161a22', card2: '#1b2030',
+  text: '#e8eaf2', bg: '#0d0f14', surface: '#111318',
+  red: '#ef4444', green: '#22c55e',
+};
 
 const SECTIONS = [
   { id: 'brands',     label: 'Brands',            icon: '🏷️' },
@@ -15,14 +20,14 @@ const SECTIONS = [
 /* ── shared helpers ── */
 function Card({ children }) {
   return (
-    <div style={{ background: 'white', borderRadius: 10, border: `1px solid ${C.border}`, padding: '24px', marginBottom: 20 }}>
+    <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, padding: '22px', marginBottom: 16 }}>
       {children}
     </div>
   );
 }
 
 function SectionTitle({ children }) {
-  return <div style={{ fontWeight: 800, fontSize: 17, color: C.dark, marginBottom: 16 }}>{children}</div>;
+  return <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, color: C.text, marginBottom: 16 }}>{children}</div>;
 }
 
 function Input({ label, ...props }) {
@@ -30,7 +35,7 @@ function Input({ label, ...props }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       {label && <label style={{ fontSize: 12, fontWeight: 600, color: C.mute }}>{label}</label>}
       <input style={{ height: 38, padding: '0 12px', border: `1px solid ${C.border}`, borderRadius: 6,
-        fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box' }} {...props} />
+        fontSize: 13, outline: 'none', width: '100%', boxSizing: 'border-box', background: C.bg, color: C.text }} {...props} />
     </div>
   );
 }
@@ -40,7 +45,7 @@ function Select({ label, children, ...props }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       {label && <label style={{ fontSize: 12, fontWeight: 600, color: C.mute }}>{label}</label>}
       <select style={{ height: 38, padding: '0 10px', border: `1px solid ${C.border}`, borderRadius: 6,
-        fontSize: 13, outline: 'none', background: 'white', width: '100%' }} {...props}>
+        fontSize: 13, outline: 'none', background: C.bg, color: C.text, width: '100%' }} {...props}>
         {children}
       </select>
     </div>
@@ -48,11 +53,15 @@ function Select({ label, children, ...props }) {
 }
 
 function Btn({ children, variant = 'primary', ...props }) {
-  const bg = variant === 'primary' ? C.accent : variant === 'danger' ? '#ef4444' : '#f1f5f9';
-  const color = variant === 'ghost' ? C.dark : 'white';
+  const styles = {
+    primary: { background: C.accent,    color: 'white',  border: 'none' },
+    danger:  { background: C.red,       color: 'white',  border: 'none' },
+    ghost:   { background: C.card2,     color: C.sub,    border: `1px solid ${C.border}` },
+  };
   return (
-    <button style={{ padding: '8px 18px', background: bg, color, border: 'none', borderRadius: 6,
-      fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }} {...props}>
+    <button style={{ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+      cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif",
+      ...styles[variant] }} {...props}>
       {children}
     </button>
   );
@@ -60,11 +69,11 @@ function Btn({ children, variant = 'primary', ...props }) {
 
 function Tag({ label, onRemove }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0f4ff',
-      border: '1px solid #c7d2fe', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 600, color: '#3730a3' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(249,115,22,.12)',
+      border: '1px solid rgba(249,115,22,.3)', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 600, color: C.accent }}>
       {label}
       <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer',
-        color: '#6366f1', fontWeight: 800, fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+        color: C.accent, fontWeight: 800, fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
     </span>
   );
 }
@@ -131,7 +140,7 @@ function BrandsSection({ onMutate }) {
             {brands.length === 0 ? <EmptyRow cols={3} text="No brands yet" /> :
               brands.map(b => (
                 <tr key={b._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13 }}>{b.name}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text }}>{b.name}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute, fontFamily: 'monospace' }}>{b.slug}</td>
                   <td style={{ padding: '12px 14px' }}>
                     <Btn variant="danger" onClick={() => remove(b._id)}>Delete</Btn>
@@ -190,7 +199,7 @@ function CategoriesSection({ onMutate }) {
             {topLevel.length === 0 ? <EmptyRow cols={4} text="No categories yet" /> :
               topLevel.map(c => (
                 <tr key={c._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13 }}>{c.name}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text }}>{c.name}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute, fontFamily: 'monospace' }}>{c.slug}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>{c.description || '—'}</td>
                   <td style={{ padding: '12px 14px' }}>
@@ -256,7 +265,7 @@ function SubCategoriesSection({ onMutate }) {
             {subCats.length === 0 ? <EmptyRow cols={4} text="No sub-categories yet" /> :
               subCats.map(c => (
                 <tr key={c._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13 }}>{c.name}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text }}>{c.name}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>{c.parent?.name || '—'}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>{c.description || '—'}</td>
                   <td style={{ padding: '12px 14px' }}>
@@ -353,7 +362,7 @@ function AttributesSection({ onMutate }) {
             {attrs.length === 0 ? <EmptyRow cols={5} text="No attributes yet" /> :
               attrs.map(a => (
                 <tr key={a._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13 }}>{a.name}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text }}>{a.name}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>{a.unit || '—'}</td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>{a.subcategory?.name || '—'}</td>
                   <td style={{ padding: '12px 14px' }}>
@@ -459,30 +468,30 @@ function EventsSection({ onMutate }) {
               events.map(ev => (
                 <tr key={ev._id} style={{ borderBottom: `1px solid ${C.border}` }}>
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{ev.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{ev.name}</div>
                     {ev.description && <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>{ev.description}</div>}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     {ev.badge ? (
-                      <span style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 4,
-                        padding: '2px 8px', fontSize: 11, fontWeight: 800, color: '#c2410c', fontFamily: 'monospace' }}>
+                      <span style={{ background: 'rgba(249,115,22,.15)', border: '1px solid rgba(249,115,22,.3)', borderRadius: 4,
+                        padding: '2px 8px', fontSize: 11, fontWeight: 700, color: C.accent, fontFamily: 'monospace' }}>
                         {ev.badge}
                       </span>
-                    ) : '—'}
+                    ) : <span style={{ color: C.mute }}>—</span>}
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: C.accent }}>
-                    {ev.discountPercent > 0 ? `${ev.discountPercent}%` : '—'}
+                    {ev.discountPercent > 0 ? `${ev.discountPercent}%` : <span style={{ color: C.mute }}>—</span>}
                   </td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute }}>
                     {fmt(ev.startDate)} → {fmt(ev.endDate)}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     {isLive(ev) ? (
-                      <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>🟢 Live</span>
+                      <span style={{ background: 'rgba(34,197,94,.15)', color: C.green, borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>Live</span>
                     ) : ev.isActive ? (
-                      <span style={{ background: '#fef9c3', color: '#854d0e', borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>⏳ Scheduled</span>
+                      <span style={{ background: 'rgba(234,179,8,.15)', color: '#eab308', borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>Scheduled</span>
                     ) : (
-                      <span style={{ background: '#f1f5f9', color: C.mute, borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>⏸ Inactive</span>
+                      <span style={{ background: 'rgba(107,114,128,.15)', color: C.mute, borderRadius: 99, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>Inactive</span>
                     )}
                   </td>
                   <td style={{ padding: '12px 14px', display: 'flex', gap: 6 }}>
@@ -514,17 +523,18 @@ export default function AdminCatalogTab() {
   return (
     <div style={{ display: 'flex', gap: 24 }}>
       {/* Left mini-nav */}
-      <div style={{ width: 200, flexShrink: 0 }}>
-        <div style={{ background: 'white', borderRadius: 10, border: `1px solid ${C.border}`, overflow: 'hidden' }}>
+      <div style={{ width: 190, flexShrink: 0 }}>
+        <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.border}`, padding: '8px 8px' }}>
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => setSection(s.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '12px 16px',
-                background: section === s.id ? '#FFF4F0' : 'transparent',
-                borderLeft: `3px solid ${section === s.id ? C.accent : 'transparent'}`,
-                border: 'none', borderBottom: `1px solid ${C.border}`, cursor: 'pointer',
-                fontSize: 13, fontWeight: section === s.id ? 700 : 500,
-                color: section === s.id ? C.accent : C.dark, textAlign: 'left' }}>
-              <span>{s.icon}</span>
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px',
+                background: section === s.id ? '#1e2535' : 'transparent',
+                border: 'none', borderRadius: 8, cursor: 'pointer', marginBottom: 2,
+                fontSize: 13.5, fontWeight: section === s.id ? 600 : 400,
+                color: section === s.id ? C.text : C.sub, textAlign: 'left',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+              <span style={{ fontSize: 15, opacity: section === s.id ? 1 : 0.7 }}>{s.icon}</span>
               <span>{s.label}</span>
             </button>
           ))}

@@ -10,6 +10,7 @@ export const adminApi = {
   getEmployees: (params) => client.get('/employees', { params }),
   verifyEmployee: (id) => client.patch(`/employees/${id}/verify`),
   getEmployeeById: (id) => client.get(`/employees/${id}`),
+  createEmployee: (data) => client.post('/employees/admin/create', data),
 
   // Orders
   getOrders: (params) => client.get('/orders', { params }),

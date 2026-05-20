@@ -15,21 +15,30 @@ import {
 import SupportIcon from '../../components/icons/SupportIcon';
 import AdminCatalogTab from './AdminCatalogTab';
 import { settingsApi } from '../../api/settings';
+import { paymentsApi } from '../../api/payments';
 
-/* ── palette ── */
+/* ── Palette — matches HTML mockup exactly ── */
 const C = {
-  accent: '#FF5A1F',
-  blue:   '#3b82f6',
-  green:  '#22c55e',
-  yellow: '#f59e0b',
-  purple: '#8b5cf6',
-  red:    '#ef4444',
-  cyan:   '#06b6d4',
-  pink:   '#ec4899',
-  mute:   '#6b7280',
-  line:   '#e5e7eb',
-  surf:   '#f9fafb',
+  accent:  '#f97316',
+  blue:    '#3b82f6',
+  green:   '#22c55e',
+  yellow:  '#eab308',
+  purple:  '#8b5cf6',
+  red:     '#ef4444',
+  cyan:    '#06b6d4',
+  pink:    '#ec4899',
+  mute:    '#6b7280',
+  sub:     '#9ca3af',
+  line:    '#252b3b',
+  card:    '#161a22',
+  card2:   '#1b2030',
+  text:    '#e8eaf2',
+  bg:      '#0d0f14',
+  sidebar: '#111318',
+  active:  '#1e2535',
 };
+/* legacy aliases so existing code keeps working */
+const surf = C.bg;
 
 const STATUS_COLORS = {
   PLACED: C.yellow, CONFIRMED: C.blue, PACKED: C.purple,
@@ -39,75 +48,134 @@ const STATUS_COLORS = {
 
 const ROLE_COLORS = { admin: C.purple, employee: C.yellow, user: C.blue };
 
+/* ── Responsive hook ── */
+function useResponsive() {
+  const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
+  useEffect(() => {
+    const fn = () => setW(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  return { w, isMobile: w < 768, isTablet: w >= 768 && w < 1100, isDesktop: w >= 1100 };
+}
+
 /* ── shared helpers ── */
 const fmt = (n) => Number(n || 0).toLocaleString('en-IN');
-const fmtRs = (n) => `Rs. ${fmt(n)}`;
+const fmtRs = (n) => `Rs. ${Math.round(Number(n || 0)).toLocaleString('en-IN')}`;
+const fmtShort = (n) => {
+  const v = Math.round(Number(n || 0));
+  if (v >= 10000000) return `Rs. ${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000)   return `Rs. ${(v / 100000).toFixed(1)}L`;
+  if (v >= 10000)    return `Rs. ${(v / 1000).toFixed(1)}K`;
+  return fmtRs(v);
+};
+
+/* ── SVG icon helpers (match HTML mockup) ── */
+const Icon = {
+  users:  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  shield: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  bag:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>,
+  person: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  dollar: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  refund: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>,
+  truck:  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
+  orders: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+  bell:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+  gear:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M4.93 4.93l1.42 1.42M19.07 19.07l-1.42-1.42M4.93 19.07l1.42-1.42M20 12h2M2 12h2M12 20v2M12 2v2"/></svg>,
+  tag:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  book:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+  list:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M4 6h16M4 12h16M4 18h7"/></svg>,
+  coupon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
+  support:<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  grid:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:18,height:18}}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+  extlink:<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>,
+  lock:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:16,height:16}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+  trash:  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:13,height:13}}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>,
+  dots:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>,
+  search: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:15,height:15}}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  menu:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:20,height:20}}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  chevD:  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}><path d="M6 9l6 6 6-6"/></svg>,
+};
+
+/* Renders any Icon SVG at a fixed size */
+function SvgAt({ el, size = 17 }) {
+  if (!el) return null;
+  return (
+    <svg xmlns={el.props.xmlns} fill={el.props.fill} viewBox={el.props.viewBox}
+      stroke={el.props.stroke} strokeWidth={el.props.strokeWidth}
+      style={{ width: size, height: size, display: 'block', flexShrink: 0 }}>
+      {el.props.children}
+    </svg>
+  );
+}
 
 function Badge({ text, color }) {
   return (
     <span style={{
-      display: 'inline-block', fontSize: 11, fontWeight: 700,
-      padding: '2px 9px', borderRadius: 99,
-      background: color + '20', color,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 12, fontWeight: 600, padding: '3px 11px', borderRadius: 20,
+      background: color + '22', color, border: `1px solid ${color}44`,
     }}>{text}</span>
   );
 }
 
-function KpiCard({ label, value, sub, color, icon }) {
+const ICON_COLOR_MAP = { blue: C.blue, purple: C.purple, yellow: C.yellow, green: C.green, orange: C.accent, red: C.red };
+const ICON_BG_MAP   = { blue: 'rgba(59,130,246,.15)', purple: 'rgba(139,92,246,.15)', yellow: 'rgba(234,179,8,.15)', green: 'rgba(34,197,94,.15)', orange: 'rgba(249,115,22,.15)', red: 'rgba(239,68,68,.15)' };
+
+function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
+  const col = ICON_COLOR_MAP[colorKey] || C.blue;
+  const bg  = ICON_BG_MAP[colorKey]   || 'rgba(59,130,246,.15)';
+  const nowrap = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
   return (
-    <div style={{
-      background: 'white', borderRadius: 16, padding: '22px 24px',
-      flex: 1, minWidth: 170, boxShadow: '0 1px 3px #0000000d',
-      borderLeft: `4px solid ${color}`,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C.mute, marginBottom: 6 }}>{label}</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--ink)' }}>{value}</div>
-          {sub && <div style={{ fontSize: 12, color: C.mute, marginTop: 4 }}>{sub}</div>}
-        </div>
-        <div style={{ fontSize: 28, opacity: .6 }}>{icon}</div>
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11, color: C.mute, fontWeight: 500, marginBottom: 3, ...nowrap }}>{label}</div>
+        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
+        {sub && <div style={{ fontSize: 10.5, color: C.mute, ...nowrap }}>{sub}</div>}
+      </div>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, color: col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {iconEl}
       </div>
     </div>
   );
 }
 
-function Card({ title, children, action }) {
+function Card({ title, children, action, style }) {
   return (
-    <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 1px 3px #0000000d', overflow: 'hidden' }}>
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden', ...style }}>
       {(title || action) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px 0' }}>
-          {title && <div style={{ fontWeight: 800, fontSize: 15 }}>{title}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px 14px' }}>
+          {title && <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, color: C.text }}>{title}</div>}
           {action}
         </div>
       )}
-      <div style={{ padding: 24 }}>{children}</div>
+      <div style={{ padding: title || action ? '0 22px 22px' : '22px' }}>{children}</div>
     </div>
   );
 }
 
 function Th({ children }) {
-  return <th style={{ textAlign: 'left', padding: '8px 14px', fontSize: 11, fontWeight: 700, color: C.mute, letterSpacing: '.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap' }}>{children}</th>;
+  return <th style={{ textAlign: 'left', padding: '10px 14px', fontSize: 11.5, fontWeight: 600, color: C.mute, letterSpacing: '.07em', textTransform: 'uppercase', borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap' }}>{children}</th>;
 }
 function Td({ children, style }) {
-  return <td style={{ padding: '11px 14px', fontSize: 13, borderBottom: `1px solid ${C.line}`, ...style }}>{children}</td>;
+  return <td style={{ padding: '14px 14px', fontSize: 13.5, borderBottom: `1px solid ${C.line}`, color: C.text, verticalAlign: 'middle', ...style }}>{children}</td>;
 }
 function Input({ value, onChange, placeholder, style }) {
   return <input value={value} onChange={onChange} placeholder={placeholder}
-    style={{ height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.surf, ...style }} />;
+    style={{ height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.bg, color: C.text, fontFamily: 'inherit', ...style }} />;
 }
 function Select({ value, onChange, children, style }) {
   return <select value={value} onChange={onChange}
-    style={{ height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 10px', fontSize: 13, background: C.surf, cursor: 'pointer', ...style }}>{children}</select>;
+    style={{ height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 10px', fontSize: 13, background: C.bg, color: C.text, cursor: 'pointer', fontFamily: 'inherit', ...style }}>{children}</select>;
 }
 function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
-  const base = { fontSize: 12, fontWeight: 700, padding: '5px 12px', borderRadius: 8, cursor: 'pointer', border: 'none', transition: 'all .15s', ...style };
+  const base = { fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', border: 'none', transition: 'all .15s', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6, ...style };
   const variants = {
-    ghost:   { background: C.surf, color: C.mute, border: `1px solid ${C.line}` },
-    danger:  { background: '#ef444414', color: C.red },
-    success: { background: '#22c55e14', color: C.green },
-    warn:    { background: '#f59e0b14', color: C.yellow },
-    primary: { background: C.accent, color: 'white' },
+    ghost:   { background: 'rgba(255,255,255,.06)', color: C.sub, border: `1px solid ${C.line}` },
+    danger:  { background: 'rgba(239,68,68,.12)',   color: '#f87171', border: '1px solid rgba(239,68,68,.25)' },
+    success: { background: 'rgba(34,197,94,.12)',   color: C.green,   border: '1px solid rgba(34,197,94,.25)' },
+    warn:    { background: 'rgba(234,179,8,.12)',   color: C.yellow,  border: '1px solid rgba(234,179,8,.25)' },
+    primary: { background: '#ea580c', color: 'white' },
   };
   return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], opacity: disabled ? .5 : 1 }}>{children}</button>;
 }
@@ -115,102 +183,238 @@ function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
 /* ══════════════════════════════════════════════════════
    OVERVIEW TAB
 ══════════════════════════════════════════════════════ */
+const NOTIF_ICONS = { ORDER: '🛒', SYSTEM: '⚠️', PROMO: '🎉', SUPPORT: '💬' };
+
+function timeAgo(date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h>1?'s':''} ago`;
+  return `${Math.floor(h/24)} day${Math.floor(h/24)>1?'s':''} ago`;
+}
+
 function OverviewTab() {
+  const { isMobile, isTablet } = useResponsive();
   const [stats, setStats]       = useState(null);
   const [orders, setOrders]     = useState([]);
+  const [notifs, setNotifs]     = useState([]);
+  const [userCount, setUC]      = useState(0);
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    Promise.all([adminApi.getOrderStats(), adminApi.getOrders({ limit: 8 })])
-      .then(([s, o]) => {
-        setStats(s.data?.data || {});
-        setOrders(o.data?.data?.data || []);
-      }).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      adminApi.getOrderStats(),
+      adminApi.getOrders({ limit: 5 }),
+      notificationsApi.getMy({ limit: 6 }),
+      adminApi.getUsers({ limit: 1 }),
+    ]).then(([s, o, n, u]) => {
+      setStats(s.data?.data || {});
+      setOrders(o.data?.data?.data || []);
+      setNotifs(n.data?.data?.data || []);
+      setUC(u.data?.data?.pagination?.total || u.data?.data?.total || 0);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <Loader />;
 
-  const breakdown = stats?.statusBreakdown || [];
-  const delivered = breakdown.find(b => b._id === 'DELIVERED')?.count || 0;
-  const inProgress = breakdown.filter(b => ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY'].includes(b._id)).reduce((a,b) => a+b.count, 0);
-  const cancelled = breakdown.find(b => b._id === 'CANCELLED')?.count || 0;
-  const total = stats?.totalOrders || 0;
+  const breakdown    = stats?.statusBreakdown || [];
+  const delivered    = breakdown.find(b => b._id === 'DELIVERED')?.count || 0;
+  const inProgress   = breakdown.filter(b => ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY'].includes(b._id)).reduce((a,b) => a+b.count, 0);
+  const returned     = breakdown.find(b => b._id === 'RETURNED')?.count || 0;
+  const total        = stats?.totalOrders || 0;
+  const netRevenue   = stats?.netRevenue   || 0;
+  const refundedAmt  = stats?.refundedAmount || 0;
 
   const donutData = breakdown.map(b => ({ name: b._id, value: b.count }));
+  const totalDonut = donutData.reduce((a, b) => a + b.value, 0);
 
-  // Fake monthly trend using breakdown data (real would need a /stats/monthly endpoint)
-  const barData = breakdown.map(b => ({ name: b._id.slice(0,4), count: b.count }));
+  // Sales Overview: scatter orders across last 7 day labels
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const salesChart = days.map((d, i) => {
+    const dayOrders = orders.filter(o => new Date(o.createdAt).getDay() === (i + 1) % 7);
+    return { day: d, sales: dayOrders.reduce((a, o) => a + (o.totalPrice || 0), 0) };
+  });
+  const totalSales = netRevenue;
+
+  // Top payment/status breakdown for right panel
+  const payBreakdown = (stats?.paymentBreakdown || []).map(b => ({
+    label: b._id, count: b.count,
+    color: b._id === 'ONLINE' ? C.blue : C.yellow,
+  }));
+  const topStatuses = breakdown.slice(0, 5).map(b => ({
+    label: b._id, count: b.count,
+    color: STATUS_COLORS[b._id] || C.mute,
+    pct: totalDonut > 0 ? Math.round((b.count / totalDonut) * 100) : 0,
+  })).sort((a,b) => b.count - a.count);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* KPI row */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Orders"   value={fmt(total)}                   sub={`${delivered} delivered`}    color={C.blue}   icon="📦" />
-        <KpiCard label="Revenue"        value={fmtRs(stats?.totalRevenue)}   sub="From paid orders"            color={C.green}  icon="💰" />
-        <KpiCard label="In Progress"    value={fmt(inProgress)}              sub="Active orders"               color={C.yellow} icon="🚚" />
-        <KpiCard label="Cancelled"      value={fmt(cancelled)}               sub="Cancelled orders"            color={C.red}    icon="❌" />
+
+      {/* ── KPI row ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : isTablet ? 'repeat(3,1fr)' : 'repeat(5,1fr)', gap: 12 }}>
+        <KpiCard label="Total Orders"  value={fmt(total)}         sub={`${delivered} delivered`}      colorKey="blue"   iconEl={Icon.orders} />
+        <KpiCard label="Net Revenue"   value={fmtShort(netRevenue)}  sub="Paid minus refunded"           colorKey="green"  iconEl={Icon.dollar} />
+        <KpiCard label="Refunded"      value={fmtShort(refundedAmt)} sub={`${returned} returned`}        colorKey="red"    iconEl={Icon.refund} />
+        <KpiCard label="In Progress"   value={fmt(inProgress)}    sub="Active orders"                 colorKey="yellow" iconEl={Icon.truck} />
+        <KpiCard label="Active Users"  value={fmt(userCount)}     sub="Registered accounts"           colorKey="purple" iconEl={Icon.users} />
       </div>
 
-      {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 20 }}>
+      {/* ── Row 2: Donut | Sales Chart | Top Categories ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr 1fr' : '1fr 1.6fr 1fr', gap: 16 }}>
+
+        {/* Order Status Donut */}
         <Card title="Order Status">
           {donutData.length === 0
             ? <Empty text="No order data yet" />
-            : <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={60} outerRadius={90}
-                    paddingAngle={3} dataKey="value">
-                    {donutData.map(d => <Cell key={d.name} fill={STATUS_COLORS[d.name] || C.mute} />)}
-                  </Pie>
-                  <Tooltip formatter={(v, n) => [v, n]} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
+            : <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={80}
+                      paddingAngle={3} dataKey="value" startAngle={90} endAngle={450}>
+                      {donutData.map(d => <Cell key={d.name} fill={STATUS_COLORS[d.name] || C.mute} />)}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 12 }}
+                      formatter={(v, n) => [v, n]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Custom legend */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                  {donutData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLORS[d.name] || C.mute, flexShrink: 0 }} />
+                        <span style={{ color: C.mute }}>{d.name}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <span style={{ fontWeight: 700, color: C.text }}>{d.value}</span>
+                        <span style={{ color: C.mute }}>({totalDonut > 0 ? Math.round(d.value/totalDonut*100) : 0}%)</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
           }
         </Card>
 
-        <Card title="Orders by Status">
-          {barData.length === 0
+        {/* Sales Overview */}
+        <Card
+          title="Sales Overview"
+          action={<span style={{ fontSize: 12, color: C.mute }}>Last 7 Days</span>}
+        >
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={salesChart} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={C.blue} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={C.blue} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.mute }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: C.mute }} axisLine={false} tickLine={false} tickFormatter={v => v > 0 ? `${Math.round(v/1000)}K` : '0'} />
+              <Tooltip
+                contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 12 }}
+                formatter={(v) => [fmtRs(v), 'Sales']}
+              />
+              <Area type="monotone" dataKey="sales" stroke={C.blue} strokeWidth={2.5} fill="url(#salesGrad)" dot={{ fill: C.blue, r: 4 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+            <div style={{ fontSize: 12, color: C.mute }}>Total Sales</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{fmtRs(totalSales)}</div>
+          </div>
+        </Card>
+
+        {/* Top Statuses / Payment breakdown */}
+        <Card title="Orders by Status" action={<span style={{ fontSize: 11, color: C.mute }}>All time</span>}>
+          {topStatuses.length === 0
             ? <Empty text="No data" />
-            : <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={barData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[6,6,0,0]}>
-                    {barData.map(d => <Cell key={d.name} fill={STATUS_COLORS[d.name.toUpperCase().slice(0,4)] || C.accent} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {topStatuses.map(s => (
+                  <div key={s.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}>
+                      <span style={{ color: C.text, fontWeight: 600 }}>{s.label}</span>
+                      <span style={{ color: C.mute, fontSize: 12 }}>{fmtRs(0)}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 99, background: C.line }}>
+                      <div style={{ height: '100%', borderRadius: 99, background: s.color, width: `${s.pct}%`, minWidth: s.pct > 0 ? 6 : 0, transition: 'width .4s' }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: C.mute, marginTop: 3 }}>{s.count} orders · {s.pct}%</div>
+                  </div>
+                ))}
+              </div>
           }
         </Card>
       </div>
 
-      {/* Recent orders */}
-      <Card title="Recent Orders">
-        {orders.length === 0
-          ? <Empty text="No orders yet" />
-          : <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <Th>Order #</Th><Th>Customer</Th><Th>Items</Th><Th>Total</Th><Th>Payment</Th><Th>Status</Th><Th>Date</Th>
-              </tr></thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr key={o._id}>
-                    <Td><span style={{ fontWeight: 700 }}>{o.orderNumber}</span></Td>
-                    <Td><div style={{ fontWeight: 600 }}>{o.user?.name || '—'}</div><div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div></Td>
-                    <Td>{o.orderItems?.length}</Td>
-                    <Td><span style={{ fontWeight: 700 }}>{fmtRs(o.totalPrice)}</span></Td>
-                    <Td><Badge text={o.paymentStatus} color={o.paymentStatus === 'PAID' ? C.green : C.yellow} /></Td>
-                    <Td><Badge text={o.orderStatus} color={STATUS_COLORS[o.orderStatus] || C.mute} /></Td>
-                    <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString()}</Td>
+      {/* ── Row 3: Recent Orders | Latest Notifications ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1fr', gap: 16 }}>
+
+        {/* Recent Orders */}
+        <Card title="Recent Orders" action={<span style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all orders →</span>}>
+          {orders.length === 0
+            ? <Empty text="No orders yet" />
+            : <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <Th>Order #</Th><Th>Customer</Th><Th>Amount</Th><Th>Status</Th><Th>Date</Th><Th>Actions</Th>
                   </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o._id} style={{ transition: 'background .12s' }}>
+                      <Td><span style={{ fontWeight: 700, color: C.accent }}>{o.orderNumber}</span></Td>
+                      <Td>
+                        <div style={{ fontWeight: 600, color: C.text }}>{o.user?.name || '—'}</div>
+                        <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
+                      </Td>
+                      <Td><span style={{ fontWeight: 700, color: C.text }}>{fmtRs(o.totalPrice)}</span></Td>
+                      <Td><Badge text={o.orderStatus} color={STATUS_COLORS[o.orderStatus] || C.mute} /></Td>
+                      <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</Td>
+                      <Td>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.bg, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>
+                          👁
+                        </div>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+          }
+        </Card>
+
+        {/* Latest Notifications */}
+        <Card title="Latest Notifications" action={<span style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all →</span>}>
+          {notifs.length === 0
+            ? <Empty text="No notifications yet" />
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {notifs.map((n, i) => (
+                  <div key={n._id || i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 0',
+                    borderBottom: i < notifs.length - 1 ? `1px solid ${C.line}` : 'none',
+                  }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                      background: C.bg, border: `1px solid ${C.line}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                    }}>
+                      {NOTIF_ICONS[n.type] || '🔔'}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
+                      <div style={{ fontSize: 11, color: C.mute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.message}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.mute, flexShrink: 0 }}>{timeAgo(n.createdAt)}</div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-        }
-      </Card>
+              </div>
+          }
+        </Card>
+      </div>
     </div>
   );
 }
@@ -262,11 +466,11 @@ function UsersTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Mini KPI */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Users"   value={fmt(all.length)}            sub="All accounts"            color={C.blue}   icon="👥" />
-        <KpiCard label="Admins"        value={fmt(roleCounts.admin)}      sub="Admin accounts"          color={C.purple} icon="🛡️" />
-        <KpiCard label="Employees"       value={fmt(roleCounts.employee)}     sub="Employee accounts"         color={C.yellow} icon="🏪" />
-        <KpiCard label="Customers"     value={fmt(roleCounts.user)}       sub="Regular users"           color={C.green}  icon="🛍️" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        <KpiCard label="Total Users"   value={fmt(all.length)}           sub="All accounts"        colorKey="blue"   iconEl={Icon.users} />
+        <KpiCard label="Admins"        value={fmt(roleCounts.admin)}     sub="Admin accounts"      colorKey="purple" iconEl={Icon.shield} />
+        <KpiCard label="Employees"     value={fmt(roleCounts.employee)}  sub="Employee accounts"   colorKey="yellow" iconEl={Icon.bag} />
+        <KpiCard label="Customers"     value={fmt(roleCounts.user)}      sub="Regular users"       colorKey="green"  iconEl={Icon.person} />
       </div>
 
       {/* Role donut */}
@@ -365,12 +569,18 @@ function UsersTab() {
 /* ══════════════════════════════════════════════════════
    SELLERS TAB
 ══════════════════════════════════════════════════════ */
+const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', shopName:'', businessAddress:'', gstNumber:'', shopDescription:'' };
+
 function EmployeesTab() {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null);
   const [search, setSearch]   = useState('');
   const [verFilter, setVer]   = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm]       = useState(EMPTY_EMP_FORM);
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState('');
 
   useEffect(() => {
     adminApi.getEmployees({ limit: 200 })
@@ -394,6 +604,21 @@ function EmployeesTab() {
     setBusy(null);
   };
 
+  const handleCreate = async () => {
+    if (!form.name || !form.email || !form.phone || !form.password || !form.shopName) {
+      setCreateErr('Name, email, phone, password and shop name are required.'); return;
+    }
+    setCreating(true); setCreateErr('');
+    try {
+      const res = await adminApi.createEmployee(form);
+      const emp = res.data?.data?.employee;
+      if (emp) setAll(prev => [emp, ...prev]);
+      setShowAdd(false); setForm(EMPTY_EMP_FORM);
+    } catch (e) {
+      setCreateErr(e?.response?.data?.message || 'Failed to create employee.');
+    } finally { setCreating(false); }
+  };
+
   if (loading) return <Loader />;
 
   const donutData = [
@@ -401,12 +626,66 @@ function EmployeesTab() {
     { name: 'Pending', value: all.length - verified },
   ];
 
+  const F = (k) => ({ value: form[k], onChange: e => { setForm(p => ({...p, [k]: e.target.value})); setCreateErr(''); } });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <KpiCard label="Total Employees" value={fmt(all.length)} sub="Registered employees" color={C.yellow} icon="🏪" />
-        <KpiCard label="Verified"      value={fmt(verified)}   sub="Approved employees" color={C.green}  icon="✅" />
-        <KpiCard label="Pending"       value={fmt(all.length - verified)} sub="Awaiting approval" color={C.red} icon="⏳" />
+
+      {/* ── Add Employee Modal ── */}
+      {showAdd && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ background: C.card, borderRadius:16, padding:28, width:'100%', maxWidth:500, boxShadow:'0 24px 64px rgba(0,0,0,.35)', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, color:C.text }}>Add Employee</div>
+              <button onClick={() => { setShowAdd(false); setForm(EMPTY_EMP_FORM); setCreateErr(''); }}
+                style={{ background:'none', border:'none', color:C.mute, fontSize:20, cursor:'pointer', lineHeight:1 }}>✕</button>
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+              {[
+                { label:'Full Name *', key:'name', placeholder:'Employee full name' },
+                { label:'Email *', key:'email', placeholder:'employee@example.com', type:'email' },
+                { label:'Phone *', key:'phone', placeholder:'10-digit mobile number' },
+                { label:'Password *', key:'password', placeholder:'Set a password', type:'password' },
+                { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
+                { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
+                { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
+              ].map(({ label, key, placeholder, type='text' }) => (
+                <div key={key}>
+                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
+                  <input type={type} placeholder={placeholder} {...F(key)}
+                    style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
+                </div>
+              ))}
+              <div>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
+                <textarea placeholder="Brief description (optional)" {...F('shopDescription')} rows={2}
+                  style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
+              </div>
+            </div>
+
+            {createErr && (
+              <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background: C.red+'18', border:`1px solid ${C.red}44`, color: '#f87171', fontSize:13 }}>{createErr}</div>
+            )}
+
+            <div style={{ display:'flex', gap:10, marginTop:20, justifyContent:'flex-end' }}>
+              <button onClick={() => { setShowAdd(false); setForm(EMPTY_EMP_FORM); setCreateErr(''); }}
+                style={{ padding:'9px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:C.card2, color:C.sub, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
+                Cancel
+              </button>
+              <button onClick={handleCreate} disabled={creating}
+                style={{ padding:'9px 20px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', opacity: creating ? .6 : 1 }}>
+                {creating ? 'Creating…' : 'Create Employee'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
+        <KpiCard label="Total Employees" value={fmt(all.length)}          sub="Registered employees" colorKey="yellow" iconEl={Icon.bag} />
+        <KpiCard label="Verified"        value={fmt(verified)}            sub="Approved employees"   colorKey="green"  iconEl={Icon.shield} />
+        <KpiCard label="Pending"         value={fmt(all.length-verified)} sub="Awaiting approval"    colorKey="red"    iconEl={Icon.bell} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 20 }}>
@@ -440,7 +719,13 @@ function EmployeesTab() {
         </Card>
       </div>
 
-      <Card title={`Employees (${employees.length})`}>
+      <Card title={`Employees (${employees.length})`}
+        action={
+          <button onClick={() => setShowAdd(true)}
+            style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 16px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            <span style={{ fontSize:17, lineHeight:1 }}>+</span> Add Employee
+          </button>
+        }>
         {employees.length === 0
           ? <Empty text="No employees match your filters" />
           : <div style={{ overflowX: 'auto' }}>
@@ -528,7 +813,8 @@ function OrdersTab() {
   };
 
   const openRefund = (o) => {
-    setRefundForm({ reason: 'Admin initiated refund', adminNote: '', refundAmount: o.totalPrice });
+    const nonRefundable = (o.codBookingStatus === 'PAID' && o.codBookingAmount > 0) ? o.codBookingAmount : 0;
+    setRefundForm({ reason: 'Admin initiated refund', adminNote: '', refundAmount: o.totalPrice - nonRefundable });
     setRefundModal(o);
   };
 
@@ -536,12 +822,33 @@ function OrdersTab() {
     if (!refundForm.reason) return;
     setRefunding(true);
     try {
+      const refundAmount = Number(refundForm.refundAmount) || refundModal.totalPrice;
+
+      // For Razorpay-paid orders, attempt gateway refund — warn on failure but don't block
+      if (refundModal.paymentMethod === 'ONLINE' && refundModal.paymentStatus === 'PAID') {
+        try {
+          await paymentsApi.initiateRefund(refundModal._id, {
+            refundAmount,
+            reason: refundForm.reason,
+          });
+        } catch (rzpErr) {
+          const msg = rzpErr?.response?.data?.message || 'Razorpay refund could not be initiated';
+          // eslint-disable-next-line no-console
+          console.warn('Razorpay refund skipped:', msg);
+          // Inform admin but continue — manual refund may still be needed
+          if (!window.confirm(`Razorpay refund failed: "${msg}"\n\nContinue marking the order as RETURNED anyway?`)) {
+            setRefunding(false);
+            return;
+          }
+        }
+      }
+
       await adminApi.forceRefund(refundModal._id, {
         reason: refundForm.reason,
         adminNote: refundForm.adminNote,
-        refundAmount: Number(refundForm.refundAmount) || refundModal.totalPrice,
+        refundAmount,
       });
-      setAll(prev => prev.map(x => x._id === refundModal._id ? { ...x, orderStatus: 'RETURNED' } : x));
+      setAll(prev => prev.map(x => x._id === refundModal._id ? { ...x, orderStatus: 'RETURNED', paymentStatus: 'REFUNDED' } : x));
       setRefundModal(null);
     } catch (e) {
       alert(e?.response?.data?.message || 'Failed to initiate refund');
@@ -555,10 +862,15 @@ function OrdersTab() {
       {/* Force Refund Modal */}
       {refundModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'white', borderRadius:14, padding:28, width:440, boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
+          <div style={{ background: C.card, borderRadius:14, padding:28, width:440, boxShadow:'0 20px 60px rgba(0,0,0,.25)' }}>
             <div style={{ fontWeight:800, fontSize:17, marginBottom:4 }}>↩ Force Refund</div>
             <div style={{ fontSize:12, color:C.mute, marginBottom:20 }}>
               Order <strong>{refundModal.orderNumber}</strong> · {refundModal.user?.name} · {fmtRs(refundModal.totalPrice)}
+              {refundModal.codBookingStatus === 'PAID' && refundModal.codBookingAmount > 0 && (
+                <span style={{ display:'block', marginTop:5, color: C.yellow, fontWeight:600, background: C.yellow+'15', border:`1px solid ${C.yellow}40`, borderRadius:6, padding:'4px 8px' }}>
+                  ⚠ COD booking {fmtRs(refundModal.codBookingAmount)} is non-refundable — max refundable: {fmtRs(refundModal.totalPrice - refundModal.codBookingAmount)}
+                </span>
+              )}
             </div>
 
             <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -566,30 +878,32 @@ function OrdersTab() {
                 <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Reason *</label>
                 <input value={refundForm.reason} onChange={e => setRefundForm(f => ({...f, reason: e.target.value}))}
                   placeholder="Reason for refund"
-                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box', background: C.bg, color: C.text }} />
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Refund Amount (Rs.)</label>
                 <input type="number" value={refundForm.refundAmount}
                   onChange={e => setRefundForm(f => ({...f, refundAmount: e.target.value === '' ? '' : Number(e.target.value)}))}
-                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, fontWeight:700, outline:'none', boxSizing:'border-box' }} />
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, fontWeight:700, outline:'none', boxSizing:'border-box', background: C.bg, color: C.text }} />
                 <div style={{ fontSize:11, color:C.mute, marginTop:3 }}>Default: full order amount</div>
               </div>
               <div>
                 <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase' }}>Admin Note (optional)</label>
                 <input value={refundForm.adminNote} onChange={e => setRefundForm(f => ({...f, adminNote: e.target.value}))}
                   placeholder="Internal note for records"
-                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                  style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box', background: C.bg, color: C.text }} />
               </div>
             </div>
 
-            <div style={{ background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:8, padding:'10px 14px', marginTop:16, fontSize:12, color:'#9a3412' }}>
-              ⚠ This will mark the order as RETURNED and create an approved refund request. The customer will be notified.
+            <div style={{ background: C.yellow+'15', border:`1px solid ${C.yellow}40`, borderRadius:8, padding:'10px 14px', marginTop:16, fontSize:12, color: C.yellow }}>
+              {refundModal?.paymentMethod === 'ONLINE' && refundModal?.paymentStatus === 'PAID'
+                ? '⚠ This will issue a Razorpay gateway refund and mark the order as RETURNED.'
+                : '⚠ This will mark the order as RETURNED and create an approved refund request. The customer will be notified.'}
             </div>
 
             <div style={{ display:'flex', gap:10, marginTop:20, justifyContent:'flex-end' }}>
               <button onClick={() => setRefundModal(null)} disabled={refunding}
-                style={{ padding:'8px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:'white', fontSize:13, cursor:'pointer' }}>
+                style={{ padding:'8px 18px', borderRadius:8, border:`1px solid ${C.line}`, background: C.card, fontSize:13, cursor:'pointer' }}>
                 Cancel
               </button>
               <button onClick={submitForceRefund} disabled={refunding || !refundForm.reason}
@@ -628,12 +942,15 @@ function OrdersTab() {
           : <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>Order #</Th><Th>Customer</Th><Th>Items</Th><Th>Total</Th><Th>Method</Th><Th>Payment</Th><Th>Date</Th><Th>Status</Th><Th>Update</Th><Th>Action</Th>
+                  <Th>Order #</Th><Th>Customer</Th><Th>Items</Th><Th>Total</Th><Th>Method</Th><Th>Payment</Th><Th>Date</Th><Th>Status</Th><Th>Actions</Th>
                 </tr></thead>
                 <tbody>
-                  {orders.map(o => (
+                  {orders.map(o => {
+                    const isFinal = ['DELIVERED','CANCELLED','RETURNED'].includes(o.orderStatus);
+                    const canRefund = o.orderStatus === 'DELIVERED';
+                    return (
                     <tr key={o._id} style={{ opacity: updating === o._id ? .5 : 1 }}>
-                      <Td><span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }}>{o.orderNumber}</span></Td>
+                      <Td><span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12, color: C.accent }}>{o.orderNumber}</span></Td>
                       <Td>
                         <div style={{ fontWeight: 600 }}>{o.user?.name || '—'}</div>
                         <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
@@ -645,23 +962,41 @@ function OrdersTab() {
                       <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString()}</Td>
                       <Td><Badge text={o.orderStatus} color={STATUS_COLORS[o.orderStatus] || C.mute} /></Td>
                       <Td>
-                        <select value={o.orderStatus} disabled={updating === o._id || ['DELIVERED','CANCELLED','RETURNED'].includes(o.orderStatus)}
-                          onChange={e => handleStatusChange(o._id, e.target.value)}
-                          style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'white', cursor: 'pointer' }}>
-                          {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </Td>
-                      <Td>
-                        {o.orderStatus === 'DELIVERED' && o.orderStatus !== 'RETURNED' && (
-                          <button onClick={() => openRefund(o)}
-                            title="Force refund (non-returnable override)"
-                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, border:`1px solid ${C.red}`, background:'#fff1f0', color:C.red, cursor:'pointer', whiteSpace:'nowrap' }}>
-                            ↩ Refund
-                          </button>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                          {/* Status update dropdown */}
+                          <select value={o.orderStatus}
+                            disabled={updating === o._id || isFinal}
+                            onChange={e => handleStatusChange(o._id, e.target.value)}
+                            style={{
+                              fontSize: 12, padding: '5px 8px', borderRadius: 8,
+                              border: `1px solid ${isFinal ? C.line : C.accent+'55'}`,
+                              background: C.bg, color: isFinal ? C.mute : C.text,
+                              cursor: isFinal ? 'not-allowed' : 'pointer',
+                              opacity: isFinal ? 0.5 : 1, width: '100%',
+                            }}>
+                            {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          {/* Action buttons row */}
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            {canRefund && (
+                              <button onClick={() => openRefund(o)}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
+                                  border: `1px solid ${C.red}55`, background: C.red+'18', color: C.red,
+                                  cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+                                ↩ Refund
+                              </button>
+                            )}
+                            {isFinal && !canRefund && (
+                              <span style={{ fontSize: 11, color: C.mute, padding: '4px 0', fontStyle: 'italic' }}>
+                                {o.orderStatus === 'CANCELLED' ? 'Cancelled' : o.orderStatus === 'RETURNED' ? 'Returned' : ''}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </Td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -675,7 +1010,7 @@ function OrdersTab() {
 function Loader() {
   return (
     <div style={{ padding: 60, textAlign: 'center', color: C.mute }}>
-      <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 12px' }} />
+      <div className="spinner" style={{ width: 32, height: 32, margin: '0 auto 12px', borderColor: C.line, borderTopColor: C.accent }} />
       Loading…
     </div>
   );
@@ -719,12 +1054,14 @@ function ReturnStatusBadge({ status }) {
 }
 
 function AdminReturnsTab() {
+  const { isMobile, isTablet } = useResponsive();
   const [returns, setReturns]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [filter, setFilter]         = useState('ALL');
   const [actionId, setActionId]     = useState(null);
   const [actionForm, setActionForm] = useState({ status:'', adminNote:'', refundAmount:'' });
   const [saving, setSaving]         = useState(false);
+  const [search, setSearch]         = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -740,6 +1077,25 @@ function AdminReturnsTab() {
     if (!actionForm.status) return;
     setSaving(true);
     try {
+      // Auto-trigger Razorpay refund when admin sets REFUND_INITIATED on an ONLINE-paid order
+      if (actionForm.status === 'REFUND_INITIATED') {
+        const req = returns.find(r => r._id === id);
+        if (req?.order?.paymentMethod === 'ONLINE' && req?.order?.paymentStatus === 'PAID') {
+          try {
+            await paymentsApi.initiateRefund(req.order._id, {
+              refundAmount: Number(actionForm.refundAmount) || req.refundAmount,
+              reason: actionForm.adminNote || 'Admin initiated refund',
+            });
+          } catch (rzpErr) {
+            const msg = rzpErr?.response?.data?.message || 'Razorpay refund failed';
+            if (!window.confirm(`${msg}\n\nContinue updating status to REFUND_INITIATED anyway?`)) {
+              setSaving(false);
+              return;
+            }
+          }
+        }
+      }
+
       await returnsApi.process(id, actionForm);
       setActionId(null); setActionForm({ status:'', adminNote:'', refundAmount:'' });
       load();
@@ -748,7 +1104,23 @@ function AdminReturnsTab() {
     } finally { setSaving(false); }
   };
 
-  const filtered = filter === 'ALL' ? returns : returns.filter(r => r.status === filter);
+  const q = search.trim().toLowerCase();
+  const filtered = returns
+    .filter(r => filter === 'ALL' || r.status === filter)
+    .filter(r => {
+      if (!q) return true;
+      return (
+        r._id?.toLowerCase().includes(q) ||
+        r._id?.slice(-8).toLowerCase().includes(q) ||
+        r.user?.name?.toLowerCase().includes(q) ||
+        r.user?.email?.toLowerCase().includes(q) ||
+        r.user?.phone?.toLowerCase().includes(q) ||
+        r.order?.orderNumber?.toLowerCase().includes(q) ||
+        r.order?._id?.slice(-8).toLowerCase().includes(q) ||
+        r.product?.title?.toLowerCase().includes(q) ||
+        r.reason?.toLowerCase().includes(q)
+      );
+    });
 
   const stats = {
     total:            returns.length,
@@ -762,7 +1134,7 @@ function AdminReturnsTab() {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
       {/* Flow explanation */}
-      <div style={{ background:'white', borderRadius:12, padding:'14px 20px', boxShadow:'0 1px 3px #0000000d', display:'flex', gap:0, alignItems:'center', flexWrap:'wrap' }}>
+      <div style={{ background: C.card, borderRadius:12, padding:'14px 20px', boxShadow:'0 1px 3px #0000000d', display:'flex', gap:0, alignItems:'center', flexWrap:'wrap' }}>
         {[
           { icon:'📤', label:'Customer Submits', color:C.blue },
           { icon:'→', label:'', color:'#aaa' },
@@ -781,45 +1153,57 @@ function AdminReturnsTab() {
       </div>
 
       {/* KPIs */}
-      <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-        <KpiCard label="Total Returns"       value={stats.total}             color={C.blue}   icon="↩️" />
-        <KpiCard label="Awaiting Employee"   value={stats.employeePending}   color={C.yellow} icon="🏪" sub="Employee hasn't responded" />
-        <KpiCard label="Employee Rejected"   value={stats.employeeRejected}  color={C.red}    icon="⚠️" sub="May need admin override" />
-        <KpiCard label="Awaiting You"        value={stats.adminPending}      color={C.accent} icon="🛡️" sub="Employee approved — confirm" />
-        <KpiCard label="Refund Value"       value={fmtRs(stats.value)}   color={C.green}  icon="💳" />
+      <div style={{ display:'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : isTablet ? 'repeat(3,1fr)' : 'repeat(5,1fr)', gap:12 }}>
+        <KpiCard label="Total Returns"     value={stats.total}            colorKey="blue"   iconEl={Icon.refund} />
+        <KpiCard label="Awaiting Employee" value={stats.employeePending}  colorKey="yellow" iconEl={Icon.bag}    sub="Pending response" />
+        <KpiCard label="Employee Rejected" value={stats.employeeRejected} colorKey="red"    iconEl={Icon.bell}   sub="Override needed" />
+        <KpiCard label="Awaiting You"      value={stats.adminPending}     colorKey="orange" iconEl={Icon.shield} sub="Needs your approval" />
+        <KpiCard label="Refund Value"      value={fmtShort(stats.value)}  colorKey="green"  iconEl={Icon.dollar} />
       </div>
 
       {/* Employee-rejected alert banner */}
       {stats.employeeRejected > 0 && (
-        <div style={{ background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:12, padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:24 }}>⚠️</span>
+        <div style={{ background:'rgba(239,68,68,.08)', border:`1px solid rgba(239,68,68,.25)`, borderRadius:12, padding:'14px 18px', display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:20 }}>⚠️</span>
           <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14, color:'#dc2626' }}>{stats.employeeRejected} return{stats.employeeRejected > 1 ? 's' : ''} rejected by employee — needs your review</div>
-            <div style={{ fontSize:12, color:'#b91c1c', marginTop:2 }}>You can override the employee's decision and approve these returns if warranted.</div>
+            <div style={{ fontWeight:600, fontSize:13.5, color:'#f87171' }}>{stats.employeeRejected} return{stats.employeeRejected > 1 ? 's' : ''} rejected by employee — needs your review</div>
+            <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>You can override the employee's decision and approve these returns.</div>
           </div>
           <button onClick={() => setFilter('EMPLOYEE_REJECTED')}
-            style={{ padding:'7px 16px', borderRadius:8, background:'#dc2626', color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer' }}>
+            style={{ padding:'7px 16px', borderRadius:8, background:C.red, color:'white', border:'none', fontWeight:600, fontSize:13, cursor:'pointer', fontFamily:'inherit', flexShrink:0 }}>
             Review Now
           </button>
         </div>
       )}
 
-      <Card title="Return Requests">
+      <Card title="Return Requests"
+        action={
+          <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', height:34, minWidth:220 }}>
+            <span style={{ color:C.mute, display:'flex', alignItems:'center', flexShrink:0 }}><SvgAt el={Icon.search} size={14} /></span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Name, email, phone, order #, return ID…"
+              style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:12.5, color:C.text, fontFamily:'inherit', minWidth:0 }} />
+            {search && (
+              <button onClick={() => setSearch('')}
+                style={{ background:'none', border:'none', color:C.mute, cursor:'pointer', padding:0, fontSize:14, lineHeight:1 }}>✕</button>
+            )}
+          </div>
+        }>
         {/* Filter pills */}
         <div style={{ display:'flex', gap:8, marginBottom:18, flexWrap:'wrap' }}>
           <button key="ALL" onClick={() => setFilter('ALL')}
-            style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:700, cursor:'pointer',
+            style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
               border: filter==='ALL' ? `1px solid ${C.accent}` : `1px solid ${C.line}`,
-              background: filter==='ALL' ? C.accent : 'white',
-              color: filter==='ALL' ? 'white' : C.mute }}>
+              background: filter==='ALL' ? C.accent : C.card2,
+              color: filter==='ALL' ? 'white' : C.sub }}>
             All
           </button>
           {ADMIN_RETURN_STATUSES.map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:700, cursor:'pointer',
+              style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
                 border: filter===f ? `1px solid ${RETURN_STATUS_META[f]?.color}` : `1px solid ${C.line}`,
-                background: filter===f ? RETURN_STATUS_META[f]?.color : 'white',
-                color: filter===f ? 'white' : C.mute }}>
+                background: filter===f ? RETURN_STATUS_META[f]?.color + '22' : C.card2,
+                color: filter===f ? RETURN_STATUS_META[f]?.color : C.sub }}>
               {RETURN_STATUS_META[f]?.label || f}
             </button>
           ))}
@@ -830,7 +1214,7 @@ function AdminReturnsTab() {
         ) : filtered.length === 0 ? (
           <div style={{ textAlign:'center', padding:40, color:C.mute }}>
             <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
-            <div style={{ fontWeight:700 }}>No returns in this category</div>
+            <div style={{ fontWeight:700 }}>{q ? 'No returns match your search' : 'No returns in this category'}</div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -851,7 +1235,7 @@ function AdminReturnsTab() {
                       {fmtRs(req.refundAmount || 0)}
                     </div>
                     <button onClick={() => { setActionId(isOpen ? null : req._id); setActionForm({ status:'', adminNote:'', refundAmount: req.refundAmount || '' }); }}
-                      style={{ padding:'6px 14px', borderRadius:8, background: isOpen ? '#e2e8f0' : C.accent, color: isOpen ? C.mute : 'white',
+                      style={{ padding:'6px 14px', borderRadius:8, background: isOpen ? C.card2 : C.accent, color: isOpen ? C.sub : 'white',
                         border:'none', fontSize:12, fontWeight:700, cursor:'pointer' }}>
                       {isOpen ? 'Close' : 'Take Action'}
                     </button>
@@ -878,10 +1262,10 @@ function AdminReturnsTab() {
                           <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background:'#fef9c3', color:'#854d0e', border:'1px solid #fde047' }}>COD</span>
                         )}
                         {req.refundMethod === 'bank_transfer' && req.bankDetails?.accountNumber && (
-                          <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background:'#dcfce7', color:'#15803d' }}>Bank ✓</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background: C.green+'25', color: C.green }}>Bank ✓</span>
                         )}
                         {req.refundMethod === 'upi' && req.bankDetails?.upiId && (
-                          <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background:'#dcfce7', color:'#15803d' }}>UPI ✓</span>
+                          <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background: C.green+'25', color: C.green }}>UPI ✓</span>
                         )}
                         {req.resolution === 'refund' && !req.bankDetails?.accountNumber && !req.bankDetails?.upiId && req.refundMethod !== 'original_payment' && (
                           <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, background:'#fee2e2', color:'#dc2626' }}>Bank details pending</span>
@@ -893,7 +1277,7 @@ function AdminReturnsTab() {
 
                   {/* Notes from employee */}
                   {(req.employeeNote || req.adminNote) && (
-                    <div style={{ padding:'8px 18px', background:'#f8fafc', borderTop:`1px solid ${C.line}`, fontSize:12, color:'#555', display:'flex', gap:16, flexWrap:'wrap' }}>
+                    <div style={{ padding:'8px 18px', background: C.bg, borderTop:`1px solid ${C.line}`, fontSize:12, color:'#555', display:'flex', gap:16, flexWrap:'wrap' }}>
                       {req.employeeNote && <span><strong>Employee:</strong> {req.employeeNote}</span>}
                       {req.adminNote  && <span><strong>Admin:</strong> {req.adminNote}</span>}
                     </div>
@@ -913,7 +1297,7 @@ function AdminReturnsTab() {
 
                   {/* Admin action panel */}
                   {isOpen && (
-                    <div style={{ padding:'16px 18px', background:'#fffbf5', borderTop:`1px solid ${C.line}` }}>
+                    <div style={{ padding:'16px 18px', background: C.bg, borderTop:`1px solid ${C.line}` }}>
                       <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>Admin Action</div>
 
                       {/* Employee-rejection override notice */}
@@ -944,11 +1328,18 @@ function AdminReturnsTab() {
                           )}
                         </div>
                       )}
+                      {/* Auto Razorpay refund notice */}
+                      {actionForm.status === 'REFUND_INITIATED' && req.order?.paymentMethod === 'ONLINE' && req.order?.paymentStatus === 'PAID' && (
+                        <div style={{ background: C.green+'18', border:`1px solid ${C.green}40`, borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12, color: C.green, fontWeight:600 }}>
+                          ⚡ Razorpay refund of {fmtRs(Number(actionForm.refundAmount) || req.refundAmount)} will be issued automatically when you update this status.
+                        </div>
+                      )}
+
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
                         <div>
                           <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>New Status *</label>
                           <select value={actionForm.status} onChange={e=>setActionForm(f=>({...f,status:e.target.value}))}
-                            style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', background:'white' }}>
+                            style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', background: C.bg, color: C.text }}>
                             <option value="">— Select Status —</option>
                             {ADMIN_RETURN_STATUSES.map(s => (
                               <option key={s} value={s}>{RETURN_STATUS_META[s]?.label || s}</option>
@@ -958,23 +1349,23 @@ function AdminReturnsTab() {
                         <div>
                           <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>Refund Amount (Rs.)</label>
                           <input type="number" value={actionForm.refundAmount} onChange={e=>setActionForm(f=>({...f,refundAmount:e.target.value}))}
-                            style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', background:'white', boxSizing:'border-box' }} />
+                            style={{ width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:13, outline:'none', background: C.bg, color: C.text, boxSizing:'border-box' }} />
                         </div>
                       </div>
                       <div style={{ marginBottom:12 }}>
                         <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>Note to Customer</label>
                         <textarea rows={2} value={actionForm.adminNote} onChange={e=>setActionForm(f=>({...f,adminNote:e.target.value}))}
                           placeholder="Message to customer about this update…"
-                          style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
+                          style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', background: C.bg, color: C.text }} />
                       </div>
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={() => doProcess(req._id)} disabled={saving || !actionForm.status}
-                          style={{ padding:'9px 24px', borderRadius:8, background: !actionForm.status ? '#e2e8f0' : C.accent, color: !actionForm.status ? C.mute : 'white',
+                          style={{ padding:'9px 24px', borderRadius:8, background: !actionForm.status ? C.line : C.accent, color: !actionForm.status ? C.mute : 'white',
                             border:'none', fontWeight:700, fontSize:13, cursor: actionForm.status ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}>
                           {saving ? 'Saving…' : 'Update Return Status'}
                         </button>
                         <button onClick={() => setActionId(null)}
-                          style={{ padding:'9px 20px', borderRadius:8, background:'white', border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+                          style={{ padding:'9px 20px', borderRadius:8, background: C.card, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
                           Cancel
                         </button>
                       </div>
@@ -1074,17 +1465,17 @@ function AdminCouponsTab() {
   const inactive = coupons.filter(c => !c.isActive).length;
 
   const LabelStyle = { display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' };
-  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:'#f8fafc', width:'100%', boxSizing:'border-box' };
+  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background: C.bg, color: C.text, width:'100%', boxSizing:'border-box' };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
       {/* KPIs */}
-      <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-        <KpiCard label="Total Coupons" value={coupons.length} color={C.blue}   icon="🎟️" />
-        <KpiCard label="Active"        value={active}         color={C.green}  icon="✅" />
-        <KpiCard label="Expired"       value={expired}        color={C.red}    icon="⏰" />
-        <KpiCard label="Inactive"      value={inactive}       color={C.mute}   icon="🔒" />
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+        <KpiCard label="Total Coupons" value={coupons.length} colorKey="blue"   iconEl={Icon.coupon} />
+        <KpiCard label="Active"        value={active}         colorKey="green"  iconEl={Icon.shield} />
+        <KpiCard label="Expired"       value={expired}        colorKey="red"    iconEl={Icon.bell} />
+        <KpiCard label="Inactive"      value={inactive}       colorKey="yellow" iconEl={Icon.lock} />
       </div>
 
       {/* Create button */}
@@ -1153,7 +1544,7 @@ function AdminCouponsTab() {
               {saving ? 'Saving…' : editId ? 'Save Changes' : 'Create Coupon'}
             </button>
             <button onClick={()=>setShowForm(false)}
-              style={{ padding:'10px 18px', borderRadius:8, background:'white', border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+              style={{ padding:'10px 18px', borderRadius:8, background: C.card, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
               Cancel
             </button>
           </div>
@@ -1178,9 +1569,9 @@ function AdminCouponsTab() {
                   const statusColor = isExpired ? C.red : !c.isActive ? C.mute : C.green;
                   const statusLabel = isExpired ? 'Expired' : !c.isActive ? 'Inactive' : 'Active';
                   return (
-                    <tr key={c._id} style={{ background: isExpired ? '#fff5f5' : 'white' }}>
+                    <tr key={c._id} style={{ background: isExpired ? C.red+'10' : C.card }}>
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
-                        <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:13, background:'#f1f5f9', padding:'3px 8px', borderRadius:6, letterSpacing:'.08em' }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:13, background: C.bg, padding:'3px 8px', borderRadius:6, letterSpacing:'.08em' }}>
                           {c.code}
                         </span>
                       </td>
@@ -1215,11 +1606,11 @@ function AdminCouponsTab() {
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
                         <div style={{ display:'flex', gap:6 }}>
                           <button onClick={()=>openEdit(c)}
-                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background:'#f1f5f9', border:`1px solid ${C.line}`, cursor:'pointer', color:'#333' }}>
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background: C.bg, border:`1px solid ${C.line}`, cursor:'pointer', color: C.text }}>
                             ✏️ Edit
                           </button>
                           <button onClick={()=>handleToggle(c)}
-                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background: c.isActive?'#fef2f2':'#f0fdf4', border:`1px solid ${c.isActive?C.red:C.green}`, cursor:'pointer', color:c.isActive?C.red:C.green }}>
+                            style={{ fontSize:11, fontWeight:700, padding:'4px 10px', borderRadius:6, background: c.isActive ? C.red+'18':'#22c55e18', border:`1px solid ${c.isActive?C.red:C.green}40`, cursor:'pointer', color:c.isActive?C.red:C.green }}>
                             {c.isActive ? 'Disable' : 'Enable'}
                           </button>
                           <button onClick={()=>handleDelete(c._id)} disabled={deleting===c._id}
@@ -1284,12 +1675,12 @@ function AdminNotificationsTab() {
   };
 
   const LabelStyle = { display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' };
-  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:'#f8fafc', width:'100%', boxSizing:'border-box' };
+  const InpStyle   = { height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background: C.bg, color: C.text, width:'100%', boxSizing:'border-box' };
 
   const TARGET_OPTIONS = [
-    { value:'user',     label:'👤 All Customers', desc:'Every registered buyer' },
-    { value:'employee', label:'🏪 All Employees', desc:'Every registered employee' },
-    { value:'all',      label:'📢 Everyone',      desc:'All users on the platform' },
+    { value:'user',     label:'All Customers', desc:'Every registered buyer',      iconEl: Icon.users,  color: C.blue },
+    { value:'employee', label:'All Employees', desc:'Every registered employee',   iconEl: Icon.person, color: C.yellow },
+    { value:'all',      label:'Everyone',      desc:'All users on the platform',   iconEl: Icon.bell,   color: C.pink },
   ];
   const TYPE_OPTIONS = ['SYSTEM','ORDER','OFFER','PAYMENT','REFUND'];
 
@@ -1305,13 +1696,15 @@ function AdminNotificationsTab() {
             <label style={LabelStyle}>Send to</label>
             <div style={{ display:'flex', gap:0, border:`1px solid ${C.line}`, borderRadius:10, overflow:'hidden', width:'fit-content' }}>
               {[
-                { mode:'broadcast', label:'📢 Broadcast (group)' },
-                { mode:'personal',  label:'👤 Personal (one user)' },
+                { mode:'broadcast', label:'Broadcast (group)',  iconEl: Icon.bell },
+                { mode:'personal',  label:'Personal (one user)', iconEl: Icon.person },
               ].map(opt => (
                 <button key={opt.mode} onClick={() => set('sendMode', opt.mode)}
-                  style={{ padding:'9px 20px', border:'none', cursor:'pointer', fontWeight:700, fontSize:13, transition:'all .15s',
-                    background: form.sendMode===opt.mode ? C.accent : 'white',
-                    color:      form.sendMode===opt.mode ? 'white' : C.mute }}>
+                  style={{ padding:'9px 20px', border:'none', cursor:'pointer', fontWeight:600, fontSize:13, transition:'all .15s',
+                    background: form.sendMode===opt.mode ? C.accent : C.card2,
+                    color:      form.sendMode===opt.mode ? 'white' : C.sub,
+                    display:'flex', alignItems:'center', gap:8, fontFamily:'inherit' }}>
+                  <SvgAt el={opt.iconEl} size={15} />
                   {opt.label}
                 </button>
               ))}
@@ -1321,15 +1714,25 @@ function AdminNotificationsTab() {
           {/* Broadcast: pick role */}
           {form.sendMode === 'broadcast' && (
             <div style={{ gridColumn:'1/-1', display:'flex', gap:10, flexWrap:'wrap' }}>
-              {TARGET_OPTIONS.map(opt => (
+              {TARGET_OPTIONS.map(opt => {
+                const active = form.targetRole === opt.value;
+                return (
                 <div key={opt.value} onClick={() => set('targetRole', opt.value)}
-                  style={{ flex:'1 1 150px', padding:'12px 16px', borderRadius:10,
-                    border:`2px solid ${form.targetRole===opt.value ? C.accent : C.line}`,
-                    background: form.targetRole===opt.value ? C.accent+'10' : 'white', cursor:'pointer', transition:'all .15s' }}>
-                  <div style={{ fontWeight:700, fontSize:13 }}>{opt.label}</div>
-                  <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{opt.desc}</div>
+                  style={{ flex:'1 1 150px', padding:'14px 16px', borderRadius:10,
+                    border:`1.5px solid ${active ? opt.color : C.line}`,
+                    background: active ? opt.color + '18' : C.card2, cursor:'pointer', transition:'all .15s',
+                    display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:36, height:36, borderRadius:9, background: opt.color+'20', color: opt.color,
+                    display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                    <SvgAt el={opt.iconEl} size={18} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:13, color: active ? C.text : C.sub }}>{opt.label}</div>
+                    <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{opt.desc}</div>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -1365,7 +1768,7 @@ function AdminNotificationsTab() {
                 placeholder="e.g. SAVE20" style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', flex:1 }} />
               {form.couponCode && (
                 <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 14px', borderRadius:8,
-                  background:'#f0fdf4', border:`1px solid ${C.green}`, fontSize:13, fontWeight:700, color:C.green, whiteSpace:'nowrap' }}>
+                  background: C.green+'18', border:`1px solid ${C.green}40`, fontSize:13, fontWeight:700, color:C.green, whiteSpace:'nowrap' }}>
                   🎟️ {form.couponCode}
                 </div>
               )}
@@ -1400,7 +1803,7 @@ function AdminNotificationsTab() {
             {sending ? 'Sending…' : '📤 Send Notification'}
           </button>
           <button onClick={() => { setForm(EMPTY_NOTIF); setResult(null); }}
-            style={{ padding:'11px 18px', borderRadius:8, background:'white', border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+            style={{ padding:'11px 18px', borderRadius:8, background: C.card, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
             Clear
           </button>
         </div>
@@ -1411,7 +1814,7 @@ function AdminNotificationsTab() {
         <Card title="Recent Sends">
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {history.map((h, i) => (
-              <div key={i} style={{ display:'flex', gap:12, alignItems:'center', padding:'10px 14px', background:'#f8fafc', borderRadius:8, fontSize:13 }}>
+              <div key={i} style={{ display:'flex', gap:12, alignItems:'center', padding:'10px 14px', background: C.bg, borderRadius:8, fontSize:13 }}>
                 <span style={{ fontSize:20 }}>{ {SYSTEM:'🔔',ORDER:'📦',OFFER:'🎁',PAYMENT:'💳',REFUND:'↩️'}[h.type] }</span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:700 }}>{h.title}</div>
@@ -1434,10 +1837,10 @@ function AdminNotificationsTab() {
    ADMIN SUPPORT TAB
 ══════════════════════════════════════════════════════ */
 const TICKET_STATUS_META = {
-  OPEN:        { label: 'Open',        color: '#3b82f6', bg: '#dbeafe' },
-  IN_PROGRESS: { label: 'In Progress', color: '#f59e0b', bg: '#fef3c7' },
-  RESOLVED:    { label: 'Resolved',    color: '#16a34a', bg: '#dcfce7' },
-  CLOSED:      { label: 'Closed',      color: '#6b7280', bg: '#f3f4f6' },
+  OPEN:        { label: 'Open',        color: '#3b82f6', bg: '#3b82f625' },
+  IN_PROGRESS: { label: 'In Progress', color: '#f59e0b', bg: '#f59e0b25' },
+  RESOLVED:    { label: 'Resolved',    color: '#22c55e', bg: '#22c55e25' },
+  CLOSED:      { label: 'Closed',      color: '#94a3b8', bg: '#94a3b825' },
 };
 
 function TicketStatusBadge({ status }) {
@@ -1461,6 +1864,7 @@ function AdminSupportTab() {
   const [reply, setReply]           = useState('');
   const [sending, setSend]          = useState(false);
   const [updatingStatus, setUpdSt]  = useState(false);
+  const [search, setSearch]         = useState('');
   const bottomRef = useRef(null);
 
   useEffect(() => { fetchAll(); }, [filterStatus]);
@@ -1535,7 +1939,7 @@ function AdminSupportTab() {
         </div>
 
         <div style={{ fontSize:13, color:C.mute }}>
-          From: <strong style={{ color:'#0f172a' }}>{activeTicket.user?.name}</strong> ({activeTicket.user?.email})
+          From: <strong style={{ color: C.text }}>{activeTicket.user?.name}</strong> ({activeTicket.user?.email})
           {activeTicket.order && <> · Order #{activeTicket.order.orderNumber || activeTicket.order._id?.slice(-8).toUpperCase()}</>}
           {' · '}#{activeTicket._id?.slice(-8).toUpperCase()}
         </div>
@@ -1549,15 +1953,15 @@ function AdminSupportTab() {
                 <div key={i} style={{ display:'flex', justifyContent: isAdmin ? 'flex-end' : 'flex-start' }}>
                   <div style={{ maxWidth:'72%' }}>
                     {!isAdmin && (
-                      <div style={{ fontSize:11, fontWeight:700, color:'#555', marginBottom:4, paddingLeft:4 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color: C.mute, marginBottom:4, paddingLeft:4 }}>
                         {msg.sender?.name || activeTicket.user?.name}
                       </div>
                     )}
                     <div style={{
                       padding:'10px 14px',
                       borderRadius: isAdmin ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                      background: isAdmin ? C.accent : C.surf,
-                      color: isAdmin ? 'white' : '#1a1a1a',
+                      background: isAdmin ? C.accent : C.bg,
+                      color: isAdmin ? 'white' : C.text,
                       border: isAdmin ? 'none' : `1px solid ${C.line}`,
                       fontSize:13, lineHeight:1.6,
                     }}>
@@ -1589,7 +1993,7 @@ function AdminSupportTab() {
               placeholder="Type your reply… (Enter to send)"
               rows={4}
               style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'10px 12px',
-                fontSize:13, resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10 }} />
+                fontSize:13, resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10, background: C.bg, color: C.text }} />
             <Btn variant="primary" onClick={sendReply} disabled={sending || !reply.trim()}>
               {sending ? 'Sending…' : 'Send Reply'}
             </Btn>
@@ -1599,6 +2003,21 @@ function AdminSupportTab() {
     );
   }
 
+  const sq = search.trim().toLowerCase();
+  const visibleTickets = tickets.filter(t => {
+    if (!sq) return true;
+    return (
+      t._id?.toLowerCase().includes(sq) ||
+      t._id?.slice(-8).toLowerCase().includes(sq) ||
+      t.subject?.toLowerCase().includes(sq) ||
+      t.user?.name?.toLowerCase().includes(sq) ||
+      t.user?.email?.toLowerCase().includes(sq) ||
+      t.user?.phone?.toLowerCase().includes(sq) ||
+      t.order?.orderNumber?.toLowerCase().includes(sq) ||
+      t.order?._id?.slice(-8).toLowerCase().includes(sq)
+    );
+  });
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
@@ -1606,13 +2025,25 @@ function AdminSupportTab() {
           <option value="">All Status</option>
           {Object.keys(TICKET_STATUS_META).map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
         </Select>
+        {/* Search */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', height:36, flex:1, maxWidth:340 }}>
+          <span style={{ color:C.mute, display:'flex', alignItems:'center', flexShrink:0 }}><SvgAt el={Icon.search} size={14} /></span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Name, email, phone, ticket ID, order #…"
+            style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:12.5, color:C.text, fontFamily:'inherit', minWidth:0 }} />
+          {search && (
+            <button onClick={() => setSearch('')}
+              style={{ background:'none', border:'none', color:C.mute, cursor:'pointer', padding:0, fontSize:14, lineHeight:1 }}>✕</button>
+          )}
+        </div>
         <Btn onClick={fetchAll}>Refresh</Btn>
       </div>
 
-      {loading ? <Loader /> : tickets.length === 0 ? (
-        <Empty text="No support tickets found" />
+      {loading ? <Loader /> : visibleTickets.length === 0 ? (
+        <Empty text={sq ? 'No tickets match your search' : 'No support tickets found'} />
       ) : (
         <Card>
+          <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr>
@@ -1625,7 +2056,7 @@ function AdminSupportTab() {
               </tr>
             </thead>
             <tbody>
-              {tickets.map(t => (
+              {visibleTickets.map(t => (
                 <tr key={t._id}>
                   <Td>
                     <div style={{ fontWeight:700, fontSize:13 }}>{t.subject}</div>
@@ -1647,6 +2078,7 @@ function AdminSupportTab() {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       )}
     </div>
@@ -1659,11 +2091,21 @@ function AdminSupportTab() {
 function AdminSettingsTab() {
   const [cfg, setCfg] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved,  setSaved]  = useState(false);
 
   useEffect(() => {
     settingsApi.getCodSettings()
-      .then(r => setCfg(r.data?.data?.codSettings))
+      .then(r => {
+        const s = r.data?.data?.codSettings || {};
+        setCfg({
+          minOrderAmount: s.minOrderAmount ?? 0,
+          maxOrderAmount: s.maxOrderAmount ?? 0,
+          codEnabled:     s.codEnabled     ?? true,
+          bookingEnabled: s.bookingEnabled ?? false,
+          bookingType:    s.bookingType    ?? 'flat',
+          bookingValue:   s.bookingValue   ?? 500,
+        });
+      })
       .catch(() => {});
   }, []);
 
@@ -1672,124 +2114,131 @@ function AdminSettingsTab() {
   const save = async () => {
     setSaving(true);
     await settingsApi.updateCodSettings(cfg).catch(() => {});
-    setSaving(false);
-    setSaved(true);
+    setSaving(false); setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const fmtRs = n => `Rs. ${Number(n || 0).toLocaleString('en-IN')}`;
+  if (!cfg) return <div style={{ padding: 40, textAlign: 'center', color: C.mute }}>Loading settings…</div>;
 
-  if (!cfg) return <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>Loading settings…</div>;
+  const inp = {
+    width: '100%', height: 40, padding: '0 12px',
+    border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontWeight: 600,
+    outline: 'none', boxSizing: 'border-box', background: C.bg, color: C.text, fontFamily: 'inherit',
+  };
+  const lbl = { fontSize: 11.5, fontWeight: 600, color: C.mute, display: 'block', marginBottom: 6 };
+  const hint = { fontSize: 11, color: C.mute, marginTop: 5 };
 
-  const bookingAmt = cfg.bookingType === 'percent'
-    ? `${cfg.bookingValue}% of order total`
-    : fmtRs(cfg.bookingValue);
+  function Toggle({ on, onChange }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={onChange}>
+        <div style={{ position: 'relative', width: 44, height: 24 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 12, background: on ? C.accent : C.mute, transition: 'background .2s' }} />
+          <div style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600, color: on ? C.green : C.mute, minWidth: 52 }}>{on ? 'Enabled' : 'Disabled'}</span>
+      </div>
+    );
+  }
+
+  function SectionCard({ icon, title, sub, children, toggle }) {
+    return (
+      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 9, background: 'rgba(249,115,22,.12)', color: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {icon}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text }}>{title}</div>
+            {sub && <div style={{ fontSize: 11.5, color: C.mute, marginTop: 1 }}>{sub}</div>}
+          </div>
+          {toggle}
+        </div>
+        <div style={{ padding: '20px' }}>{children}</div>
+      </div>
+    );
+  }
+
+  const numVal = v => v === 0 ? '' : v;
+  const numChg = (k) => (e) => set(k, e.target.value === '' ? 0 : Number(e.target.value));
 
   return (
-    <div style={{ maxWidth: 680 }}>
-      {/* COD Booking Amount */}
-      <div style={{ background: 'white', borderRadius: 10, border: '1px solid #e5e7eb', overflow: 'hidden', marginBottom: 20 }}>
-        <div style={{ background: '#131921', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20 }}>💵</span>
-          <div>
-            <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>COD Booking Amount</div>
-            <div style={{ color: 'rgba(255,255,255,.55)', fontSize: 12 }}>Require partial UPI payment for Cash on Delivery orders</div>
-          </div>
-          <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <div style={{ position: 'relative', width: 42, height: 24 }} onClick={() => set('enabled', !cfg.enabled)}>
-              <div style={{ position: 'absolute', inset: 0, borderRadius: 12,
-                background: cfg.enabled ? '#FF5A1F' : '#6b7280', transition: 'background .2s' }} />
-              <div style={{ position: 'absolute', top: 3, left: cfg.enabled ? 21 : 3, width: 18, height: 18,
-                borderRadius: '50%', background: 'white', transition: 'left .2s' }} />
-            </div>
-            <span style={{ color: 'white', fontSize: 13, fontWeight: 600 }}>{cfg.enabled ? 'Enabled' : 'Disabled'}</span>
-          </label>
-        </div>
+    <div style={{ maxWidth: 620 }}>
+      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
 
-        <div style={{ padding: '24px 24px', opacity: cfg.enabled ? 1 : .45, pointerEvents: cfg.enabled ? 'auto' : 'none' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            {/* Min order amount */}
+        {/* ── Row: Order limits ── */}
+        <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>COD Order Amount Limits</div>
+          <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Applies to COD orders only. Online (Razorpay) orders have no restrictions. Leave empty for no limit.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>
-                Minimum Order Amount (Rs.)
-              </label>
-              <input type="number" min="0" value={cfg.minOrderAmount}
-                onChange={e => set('minOrderAmount', e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
-                  borderRadius: 6, fontSize: 14, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>Booking required only for orders ≥ this amount</div>
+              <label style={lbl}>Minimum Amount (Rs.)</label>
+              <input type="number" min="0" value={numVal(cfg.minOrderAmount)} placeholder="No minimum"
+                onChange={numChg('minOrderAmount')} style={inp} />
             </div>
-
-            {/* Booking amount type */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>Booking Amount Type</label>
-              <select value={cfg.bookingType} onChange={e => set('bookingType', e.target.value)}
-                style={{ width: '100%', height: 40, padding: '0 10px', border: '1px solid #e5e7eb',
-                  borderRadius: 6, fontSize: 13, outline: 'none', background: 'white', boxSizing: 'border-box' }}>
-                <option value="flat">Flat Amount (Rs.)</option>
-                <option value="percent">Percentage (%)</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            {/* Booking value */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>
-                {cfg.bookingType === 'percent' ? 'Percentage (%)' : 'Flat Amount (Rs.)'}
-              </label>
-              <input type="number" min="0" max={cfg.bookingType === 'percent' ? 100 : undefined}
-                value={cfg.bookingValue} onChange={e => set('bookingValue', e.target.value === '' ? '' : Number(e.target.value))}
-                style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
-                  borderRadius: 6, fontSize: 14, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }} />
-            </div>
-
-            {/* Preview */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-              <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#9a3412', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '.06em' }}>Preview</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: '#c2410c' }}>
-                  Booking: {bookingAmt}
-                </div>
-                <div style={{ fontSize: 11, color: '#9a3412', marginTop: 2 }}>
-                  ⚠ Non-refundable · Paid via UPI
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* UPI details */}
-          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20, marginBottom: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>UPI Payment Details</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>UPI ID</label>
-                <input value={cfg.upiId || ''} onChange={e => set('upiId', e.target.value)}
-                  placeholder="yourshop@upi"
-                  style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
-                    borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: 6 }}>Account / Business Name</label>
-                <input value={cfg.upiName || ''} onChange={e => set('upiName', e.target.value)}
-                  placeholder="TradeEngine Pvt. Ltd."
-                  style={{ width: '100%', height: 40, padding: '0 12px', border: '1px solid #e5e7eb',
-                    borderRadius: 6, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-              </div>
-            </div>
-            <div style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '10px 14px', fontSize: 12, color: '#166534' }}>
-              ℹ️ ZeroPay integration will be added later. Customers will see your UPI ID and enter the UTR number after payment.
+              <label style={lbl}>Maximum Amount (Rs.)</label>
+              <input type="number" min="0" value={numVal(cfg.maxOrderAmount)} placeholder="No maximum"
+                onChange={numChg('maxOrderAmount')} style={inp} />
             </div>
           </div>
         </div>
 
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={save} disabled={saving}
-            style={{ padding: '10px 28px', background: '#FF5A1F', color: 'white', border: 'none',
-              borderRadius: 6, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+        {/* ── Row: COD toggle + Booking toggle ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.line}` }}>
+          {/* COD enabled */}
+          <div style={{ padding: '18px 22px', borderRight: `1px solid ${C.line}` }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>Cash on Delivery</div>
+            <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Allow customers to pay cash on delivery.</div>
+            <Toggle on={cfg.codEnabled} onChange={() => set('codEnabled', !cfg.codEnabled)} />
+          </div>
+          {/* Booking enabled */}
+          <div style={{ padding: '18px 22px' }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>COD Booking Amount</div>
+            <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Collect non-refundable advance via Razorpay for COD orders.</div>
+            <Toggle on={cfg.bookingEnabled} onChange={() => set('bookingEnabled', !cfg.bookingEnabled)} />
+          </div>
+        </div>
+
+        {/* ── Row: Booking fields (only when booking enabled) ── */}
+        {cfg.bookingEnabled && (
+          <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={lbl}>Booking Amount Type</label>
+                <select value={cfg.bookingType} onChange={e => set('bookingType', e.target.value)}
+                  style={{ ...inp, fontWeight: 500 }}>
+                  <option value="flat">Fixed Amount (Rs.)</option>
+                  <option value="percent">Percentage of Order (%)</option>
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>{cfg.bookingType === 'percent' ? 'Percentage (%)' : 'Amount (Rs.)'}</label>
+                <input type="number" min="0" max={cfg.bookingType === 'percent' ? 100 : undefined}
+                  value={numVal(cfg.bookingValue)} placeholder="e.g. 500"
+                  onChange={numChg('bookingValue')} style={inp} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ background: C.accent + '12', border: `1px solid ${C.accent}30`, borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: C.accent, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>Preview</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
+                  {cfg.bookingType === 'percent' ? `${cfg.bookingValue || 0}% of order total` : `Rs. ${Number(cfg.bookingValue || 0).toLocaleString('en-IN')}`}
+                </div>
+                <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>Razorpay (UPI) · Non-refundable</div>
+              </div>
+              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center' }}>
+                ⚠ This booking is <strong>&nbsp;non-refundable&nbsp;</strong> and collected before the order is confirmed.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Footer ── */}
+        <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Btn variant="primary" onClick={save} disabled={saving} style={{ padding: '9px 26px' }}>
             {saving ? 'Saving…' : 'Save Settings'}
-          </button>
-          {saved && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 13 }}>✓ Saved!</span>}
+          </Btn>
+          {saved && <span style={{ color: C.green, fontWeight: 600, fontSize: 13 }}>✓ Saved</span>}
         </div>
       </div>
     </div>
@@ -1798,21 +2247,40 @@ function AdminSettingsTab() {
 
 /* ════════════════════════════════════════════════════════════════ */
 
-const TABS = [
-  { id: 'Overview',      icon: '📊' },
-  { id: 'Users',         icon: '👥' },
-  { id: 'Employees',       icon: '🏪' },
-  { id: 'Orders',        icon: '📦' },
-  { id: 'Returns',       icon: '↩️' },
-  { id: 'Coupons',       icon: '🎟️' },
-  { id: 'Notifications', icon: '🔔' },
-  { id: 'Support',       icon: null },
-  { id: 'Catalog',       icon: '🗂️' },
-  { id: 'Settings',      icon: '⚙️' },
+const NAV_SECTIONS = [
+  {
+    label: null,
+    tabs: [
+      { id: 'Overview',      iconEl: Icon.grid },
+      { id: 'Users',         iconEl: Icon.users },
+      { id: 'Employees',     iconEl: Icon.person },
+      { id: 'Orders',        iconEl: Icon.orders },
+      { id: 'Returns',       iconEl: Icon.refund },
+      { id: 'Coupons',       iconEl: Icon.coupon },
+      { id: 'Notifications', iconEl: Icon.bell },
+      { id: 'Support',       iconEl: Icon.support },
+    ],
+  },
+  {
+    label: 'CATALOG',
+    tabs: [
+      { id: 'Catalog',  iconEl: Icon.book },
+    ],
+  },
+  {
+    label: 'SETTINGS',
+    tabs: [
+      { id: 'Settings', iconEl: Icon.gear },
+    ],
+  },
 ];
 
+const TABS = NAV_SECTIONS.flatMap(s => s.tabs);
+
 export default function AdminDashboard() {
+  const { isMobile, isTablet } = useResponsive();
   const [tab, setTab]               = useState('Overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openTicketCount, setOTC]   = useState(0);
   const navigate                    = useNavigate();
   const { user }                    = useAuth();
@@ -1837,106 +2305,223 @@ export default function AdminDashboard() {
   const handleTabClick = (id) => {
     setTab(id);
     if (id === 'Support') setOTC(0);
+    if (isMobile) setSidebarOpen(false);
   };
 
   if (user && user.role !== 'admin') { navigate('/'); return null; }
 
+  const TAB_SUBTITLES = {
+    Overview:      'Welcome back, Admin! Here\'s what\'s happening with your store today.',
+    Users:         'Manage all registered accounts',
+    Employees:     'Manage and verify employee accounts',
+    Orders:        'View and manage all customer orders',
+    Returns:       'Monitor and take action on all return & refund requests',
+    Coupons:       'Create and manage discount coupons for customers',
+    Notifications: 'Broadcast notifications to customers, employees, or everyone',
+    Support:       'View and respond to customer support tickets',
+    Catalog:       'Manage brands, categories, sub-categories, attributes and events',
+    Settings:      'Configure COD availability, order amount limits, and booking payments',
+  };
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
-      {/* Sidebar */}
-      <div style={{ position: 'fixed', left: 0, top: 0, bottom: 0, width: 220, background: '#0f172a', display: 'flex', flexDirection: 'column', zIndex: 100 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', fontFamily: "'DM Sans', sans-serif" }}>
+
+      {/* ── Mobile sidebar backdrop ── */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 99 }} />
+      )}
+
+      {/* ── Sidebar ── */}
+      <div style={{
+        position: 'fixed', left: 0, top: 0, bottom: 0, width: 220,
+        background: C.sidebar, display: 'flex', flexDirection: 'column',
+        zIndex: 100, borderRight: `1px solid ${C.line}`,
+        transform: isMobile ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : 'translateX(0)',
+        transition: 'transform .25s ease',
+      }}>
+
         {/* Logo */}
-        <div style={{ padding: '24px 20px', borderBottom: '1px solid #1e293b' }}>
-          <div style={{ fontWeight: 800, fontSize: 17, color: 'white' }}>
+        <div style={{ padding: '20px 18px 18px', borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 19, color: C.text, letterSpacing: '-.4px', lineHeight: 1 }}>
             <span style={{ color: C.accent }}>Trade</span>Engine
           </div>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Admin Panel</div>
+          <div style={{ fontSize: 11, color: C.mute, marginTop: 4, fontWeight: 500, letterSpacing: '.02em' }}>Admin Panel</div>
         </div>
 
-        {/* User info */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #1e293b' }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: C.accent, fontSize: 16, marginBottom: 8 }}>
-            {user?.name?.[0]?.toUpperCase()}
-          </div>
-          <div style={{ fontWeight: 700, color: 'white', fontSize: 13 }}>{user?.name}</div>
-          <div style={{ fontSize: 11, color: '#64748b' }}>{user?.email}</div>
-          <Badge text="Admin" color={C.purple} />
-        </div>
-
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '12px 0' }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => handleTabClick(t.id)}
-              style={{
-                width: '100%', textAlign: 'left', padding: '11px 20px',
-                background: tab === t.id ? C.accent + '22' : 'none',
-                border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-                color: tab === t.id ? C.accent : '#94a3b8',
-                fontWeight: tab === t.id ? 700 : 500, fontSize: 14,
-                borderLeft: tab === t.id ? `3px solid ${C.accent}` : '3px solid transparent',
-                transition: 'all .15s',
-              }}>
-              <span style={{ display:'flex', alignItems:'center' }}>
-                {t.id === 'Support' ? <SupportIcon size={18} color={tab === t.id ? C.accent : '#6b7280'} /> : t.icon}
-              </span>
-              <span style={{ flex: 1 }}>{t.id}</span>
-              {t.id === 'Support' && openTicketCount > 0 && (
-                <span style={{
-                  background: C.accent, color: 'white', fontSize: 11, fontWeight: 800,
-                  minWidth: 20, height: 20, borderRadius: 99, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', padding: '0 5px',
-                }}>
-                  {openTicketCount > 99 ? '99+' : openTicketCount}
-                </span>
+        {/* Nav sections */}
+        <nav style={{ flex: 1, padding: '8px 10px', overflowY: 'auto' }}>
+          {NAV_SECTIONS.map((section, si) => (
+            <div key={si} style={{ marginBottom: 4 }}>
+              {section.label && (
+                <div style={{ padding: '12px 10px 5px', fontSize: 10, fontWeight: 600, color: C.mute, letterSpacing: '.1em', textTransform: 'uppercase' }}>
+                  {section.label}
+                </div>
               )}
-            </button>
+              {section.tabs.map(t => {
+                const active = tab === t.id;
+                const label = t.id === 'Support' ? 'Support Tickets' : t.id;
+                return (
+                  <button key={t.id} onClick={() => handleTabClick(t.id)}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      padding: '9px 12px',
+                      background: active ? C.active : 'transparent',
+                      border: 'none', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      color: active ? C.text : C.sub,
+                      fontWeight: active ? 600 : 400,
+                      fontSize: 13.5,
+                      borderRadius: 8,
+                      transition: 'all .12s',
+                      marginBottom: 2,
+                    }}>
+                    <span style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: active ? C.accent : 'inherit',
+                      opacity: active ? 1 : 0.75, flexShrink: 0,
+                    }}>
+                      <SvgAt el={t.iconEl} size={17} />
+                    </span>
+                    <span style={{ flex: 1 }}>{label}</span>
+                    {t.id === 'Support' && openTicketCount > 0 && (
+                      <span style={{
+                        background: C.red, color: 'white', fontSize: 10, fontWeight: 700,
+                        minWidth: 18, height: 18, borderRadius: 99, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+                      }}>{openTicketCount > 99 ? '99+' : openTicketCount}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
 
-        {/* Back to store */}
-        <div style={{ padding: '16px 20px', borderTop: '1px solid #1e293b' }}>
+        {/* Sidebar footer */}
+        <div style={{ padding: '12px 10px', borderTop: `1px solid ${C.line}` }}>
+          {/* User row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, marginBottom: 6 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: "'Syne', sans-serif", fontWeight: 800, color: 'white', fontSize: 14, flexShrink: 0,
+            }}>
+              {user?.name?.[0]?.toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
+              <div style={{ fontSize: 11, color: C.mute }}>Admin</div>
+            </div>
+          </div>
+          {/* Back to store */}
           <button onClick={() => navigate('/')}
-            style={{ width: '100%', padding: '9px 16px', background: '#1e293b', border: 'none', borderRadius: 10, color: '#94a3b8', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
-            ← Back to Store
+            style={{
+              width: '100%', padding: '8px 12px',
+              background: 'rgba(255,255,255,.04)', border: `1px solid ${C.line}`,
+              borderRadius: 8, color: C.sub, fontWeight: 500, fontSize: 13,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              fontFamily: 'inherit',
+            }}>
+            <span style={{ flex: 1, textAlign: 'left' }}>Back to Store</span>
+            <span style={{ color: C.mute, display: 'flex', alignItems: 'center' }}>{Icon.extlink}</span>
           </button>
         </div>
       </div>
 
-      {/* Main area */}
-      <div style={{ marginLeft: 220, padding: '32px 36px' }}>
-        {/* Page title */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, display:'flex', alignItems:'center', gap:8 }}>
-            {tab === 'Support'
-              ? <SupportIcon size={24} color="#0f172a" />
-              : tab === 'Catalog' ? '🗂️'
-              : TABS.find(t => t.id === tab)?.icon}
-            {tab}
-          </h1>
-          <p style={{ color: C.mute, margin: '4px 0 0', fontSize: 13 }}>
-            {tab === 'Overview' && 'Platform performance at a glance'}
-            {tab === 'Users'    && 'Manage all registered accounts'}
-            {tab === 'Employees'  && 'Manage and verify employee accounts'}
-            {tab === 'Orders'   && 'View and manage all customer orders'}
-            {tab === 'Returns'  && 'Monitor and take action on all return & refund requests'}
-            {tab === 'Coupons'       && 'Create and manage discount coupons for customers'}
-            {tab === 'Notifications' && 'Broadcast notifications to customers, employees, or everyone'}
-            {tab === 'Support'       && 'View and respond to customer support tickets'}
-            {tab === 'Catalog'       && 'Manage brands, categories, sub-categories, attributes and events'}
-            {tab === 'Settings'      && 'Configure COD booking amount, UPI details and payment rules'}
-          </p>
+      {/* ── Main content ── */}
+      <div style={{ marginLeft: isMobile ? 0 : 220, flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+
+        {/* ── Topbar ── */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 90,
+          background: C.sidebar, borderBottom: `1px solid ${C.line}`,
+          padding: isMobile ? '0 14px' : '0 24px', height: 58, display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14,
+        }}>
+          {/* Hamburger */}
+          <div onClick={() => setSidebarOpen(s => !s)}
+            style={{ color: C.mute, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            {Icon.menu}
+          </div>
+
+          {/* Search — hidden on mobile */}
+          {!isMobile && (
+            <div style={{
+              flex: 1, maxWidth: 380,
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8,
+              padding: '0 12px', height: 36,
+            }}>
+              <span style={{ color: C.mute, display: 'flex', alignItems: 'center' }}>{Icon.search}</span>
+              <input placeholder="Search orders, users, products…" style={{
+                flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                fontSize: 13, color: C.text, fontFamily: "'DM Sans', sans-serif",
+              }} />
+            </div>
+          )}
+          {/* Mobile: page title in topbar */}
+          {isMobile && (
+            <div style={{ flex: 1, fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tab}
+            </div>
+          )}
+
+          {/* Right actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 'auto' }}>
+            {/* Notification bell */}
+            <div style={{ position: 'relative', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center' }}
+              onClick={() => handleTabClick('Notifications')}>
+              {Icon.bell}
+              {openTicketCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -5, right: -5, background: C.red, color: 'white',
+                  fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 99,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+                }}>{openTicketCount}</span>
+              )}
+            </div>
+            {/* User chip */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: C.accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: "'Syne', sans-serif", fontWeight: 800, color: 'white', fontSize: 13, flexShrink: 0,
+              }}>
+                {user?.name?.[0]?.toUpperCase()}
+              </div>
+              {!isMobile && (
+                <>
+                  <div style={{ lineHeight: 1.25 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: C.text }}>{user?.name}</div>
+                    <div style={{ fontSize: 11, color: C.mute }}>Administrator</div>
+                  </div>
+                  <span style={{ color: C.mute, display: 'flex', alignItems: 'center' }}>{Icon.chevD}</span>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
-        {tab === 'Overview'      && <OverviewTab />}
-        {tab === 'Users'         && <UsersTab />}
-        {tab === 'Employees'       && <EmployeesTab />}
-        {tab === 'Orders'        && <OrdersTab />}
-        {tab === 'Returns'       && <AdminReturnsTab />}
-        {tab === 'Coupons'       && <AdminCouponsTab />}
-        {tab === 'Notifications' && <AdminNotificationsTab />}
-        {tab === 'Support'       && <AdminSupportTab />}
-        {tab === 'Catalog'       && <AdminCatalogTab />}
-        {tab === 'Settings'      && <AdminSettingsTab />}
+        {/* ── Page content ── */}
+        <div style={{ padding: isMobile ? '18px 14px' : isTablet ? '22px 20px' : '28px 30px', flex: 1 }}>
+          {/* Page title — hidden on mobile (shown in topbar instead) */}
+          {!isMobile && (
+            <div style={{ marginBottom: 22 }}>
+              <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: C.text, margin: 0, lineHeight: 1 }}>{tab}</h1>
+              <p style={{ color: C.mute, margin: '6px 0 0', fontSize: 13 }}>{TAB_SUBTITLES[tab]}</p>
+            </div>
+          )}
+
+          {tab === 'Overview'      && <OverviewTab />}
+          {tab === 'Users'         && <UsersTab />}
+          {tab === 'Employees'     && <EmployeesTab />}
+          {tab === 'Orders'        && <OrdersTab />}
+          {tab === 'Returns'       && <AdminReturnsTab />}
+          {tab === 'Coupons'       && <AdminCouponsTab />}
+          {tab === 'Notifications' && <AdminNotificationsTab />}
+          {tab === 'Support'       && <AdminSupportTab />}
+          {tab === 'Catalog'       && <AdminCatalogTab />}
+          {tab === 'Settings'      && <AdminSettingsTab />}
+        </div>
       </div>
     </div>
   );
