@@ -107,7 +107,7 @@ function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: C.mute, fontWeight: 500, marginBottom: 3, ...nowrap }}>{label}</div>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.mute, ...nowrap }}>{sub}</div>}
       </div>
       <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, color: col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -218,7 +218,7 @@ function OverviewTab({ profile }) {
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: cols3, gap: 16 }}>
         <Card title="Inventory Value">
-          <div style={{ fontFamily:"'Syne',sans-serif", fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 4 }}>{fmtShort(stockValue)}</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 4 }}>{fmtShort(stockValue)}</div>
           <div style={{ fontSize: 12, color: C.mute, marginBottom: 16 }}>{fmt(totalStock)} units in stock</div>
           {outOfStock.length > 0 && (
             <div style={{ background: C.red+'14', border:`1px solid ${C.red}33`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.red, marginBottom: 8, display:'flex', alignItems:'center', gap:8 }}>

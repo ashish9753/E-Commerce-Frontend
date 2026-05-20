@@ -130,7 +130,7 @@ function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: C.mute, fontWeight: 500, marginBottom: 3, ...nowrap }}>{label}</div>
-        <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.mute, ...nowrap }}>{sub}</div>}
       </div>
       <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, color: col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -401,11 +401,11 @@ function OverviewTab() {
           <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
               <div style={{ fontSize: 12, color: C.mute }}>Period Revenue</div>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 800, color: C.text }}>{fmtRs(chartTotal)}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{fmtRs(chartTotal)}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 12, color: C.mute }}>All-time Net</div>
-              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, color: C.green }}>{fmtShort(totalSales)}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{fmtShort(totalSales)}</div>
             </div>
           </div>
         </Card>
@@ -1315,7 +1315,7 @@ function AdminReturnsTab() {
                   {/* Header */}
                   <div style={{ background:C.surf, padding:'12px 18px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:700, fontSize:13 }}>Return #{req._id?.slice(-8).toUpperCase()}</div>
+                      <div style={{ fontWeight:700, fontSize:13, color:C.text }}>Return #{req._id?.slice(-8).toUpperCase()}</div>
                       <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>
                         {req.user?.name} · {req.user?.email}
                       </div>
@@ -1338,12 +1338,12 @@ function AdminReturnsTab() {
                       : <div style={{ width:52, height:52, background:C.surf, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>📦</div>
                     }
                     <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:600, fontSize:13 }}>{req.product?.title || 'Product'}</div>
+                      <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
                       <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
                         Reason: <strong>{req.reason?.replace(/_/g,' ')}</strong>
                         {' · '}Resolution: <strong>{req.resolution || 'refund'}</strong>
                       </div>
-                      {req.description && <div style={{ fontSize:12, color:'#666', marginTop:2 }}>"{req.description}"</div>}
+                      {req.description && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>"{req.description}"</div>}
                     </div>
                     <div style={{ textAlign:'right', fontSize:12, color:C.mute }}>
                       <div>Order: {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}</div>

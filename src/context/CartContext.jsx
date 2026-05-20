@@ -7,7 +7,7 @@ const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
   const { user } = useAuth();
-  const [cart, setCart] = useState(null); // raw backend cart object
+  const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const fetchCart = useCallback(async () => {
@@ -83,14 +83,13 @@ export function CartProvider({ children }) {
     }
   };
 
-  // Derived values from backend cart
-  const items = cart?.items || [];
-  const count = cart?.totalItems || 0;
-  const subtotal = cart?.totalPrice || 0;
+  const items          = cart?.items         || [];
+  const count          = cart?.totalItems    || 0;
+  const subtotal       = cart?.totalPrice    || 0;
   const discountAmount = cart?.discountAmount || 0;
-  const finalPrice = cart?.finalPrice || subtotal;
-  const deliveryCharge = subtotal >= 5000 ? 0 : 120;
-  const total = finalPrice + deliveryCharge;
+  const finalPrice     = cart?.finalPrice    || subtotal;
+  const deliveryCharge = subtotal >= 5000    ? 0 : 120;
+  const total          = finalPrice + deliveryCharge;
 
   return (
     <CartContext.Provider value={{
