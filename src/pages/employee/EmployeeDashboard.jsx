@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { employeeApi } from '../../api/seller';
+import { employeeApi } from '../../api/employee';
 import { categoriesApi } from '../../api/categories';
 import { returnsApi } from '../../api/returns';
 import { getErrorMessage } from '../../api/client';
@@ -11,7 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
-/* ── Palette — matches admin dashboard exactly ── */
+/* â”€â”€ Palette â€” matches admin dashboard exactly â”€â”€ */
 const C = {
   accent:  '#f97316',
   blue:    '#3b82f6',
@@ -47,7 +47,7 @@ const fmtShort = (n) => {
   return fmtRs(v);
 };
 
-/* ── Responsive hook ── */
+/* â”€â”€ Responsive hook â”€â”€ */
 function useResponsive() {
   const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   useEffect(() => {
@@ -58,7 +58,7 @@ function useResponsive() {
   return { w, isMobile: w < 768, isTablet: w >= 768 && w < 1100, isDesktop: w >= 1100 };
 }
 
-/* ── SVG Icons ── */
+/* â”€â”€ SVG Icons â”€â”€ */
 const Icon = {
   grid:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   bag:     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>,
@@ -95,7 +95,7 @@ function SvgAt({ el, size = 17 }) {
   );
 }
 
-/* ── Shared UI components ── */
+/* â”€â”€ Shared UI components â”€â”€ */
 const ICON_COLOR_MAP = { blue: C.blue, purple: C.purple, yellow: C.yellow, green: C.green, orange: C.accent, red: C.red, cyan: C.cyan };
 const ICON_BG_MAP   = { blue: 'rgba(59,130,246,.15)', purple: 'rgba(139,92,246,.15)', yellow: 'rgba(234,179,8,.15)', green: 'rgba(34,197,94,.15)', orange: 'rgba(249,115,22,.15)', red: 'rgba(239,68,68,.15)', cyan: 'rgba(6,182,212,.15)' };
 
@@ -159,15 +159,15 @@ function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
   return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], opacity: disabled ? .5 : 1 }}>{children}</button>;
 }
 function Loader() {
-  return <div style={{ padding: 60, textAlign: 'center', color: C.mute, fontFamily: "'DM Sans',sans-serif" }}>Loading…</div>;
+  return <div style={{ padding: 60, textAlign: 'center', color: C.mute, fontFamily: "'DM Sans',sans-serif" }}>Loadingâ€¦</div>;
 }
 function Empty({ text }) {
   return <div style={{ padding: '40px 0', textAlign: 'center', color: C.mute, fontSize: 14 }}>{text}</div>;
 }
 
-/* ══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OVERVIEW TAB
-══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function OverviewTab({ profile }) {
   const { isMobile, isTablet } = useResponsive();
   const [products, setProducts] = useState([]);
@@ -229,7 +229,7 @@ function OverviewTab({ profile }) {
           {lowStock.length > 0 && (
             <div style={{ background: C.yellow+'14', border:`1px solid ${C.yellow}33`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.yellow, display:'flex', alignItems:'center', gap:8 }}>
               <SvgAt el={Icon.warn} size={14} />
-              <strong>{lowStock.length} products</strong>&nbsp;with ≤5 units left
+              <strong>{lowStock.length} products</strong>&nbsp;with â‰¤5 units left
             </div>
           )}
         </Card>
@@ -284,8 +284,8 @@ function OverviewTab({ profile }) {
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3,1fr)', gap: 20 }}>
           {[
             ['Shop Name',       profile?.shopName],
-            ['GST Number',      profile?.gstNumber || '—'],
-            ['Business Address',profile?.businessAddress || '—'],
+            ['GST Number',      profile?.gstNumber || 'â€”'],
+            ['Business Address',profile?.businessAddress || 'â€”'],
             ['Rating',          `${(profile?.rating||0).toFixed(1)} / 5`],
             ['Total Sales',     fmtRs(profile?.totalSales)],
             ['Status',          profile?.isVerified ? 'Verified' : 'Pending'],
@@ -307,9 +307,9 @@ function OverviewTab({ profile }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MY PRODUCTS TAB
-══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function ProductsTab({ onEdit }) {
   const { isMobile } = useResponsive();
   const [all, setAll]       = useState([]);
@@ -367,13 +367,13 @@ function ProductsTab({ onEdit }) {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
             <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search products…"
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search productsâ€¦"
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
           </div>
           <Sel value={stockF} onChange={e=>setStockF(e.target.value)} style={{ width: 150 }}>
             <option value="">All Stock</option>
             <option value="ok">In Stock (&gt;5)</option>
-            <option value="low">Low Stock (≤5)</option>
+            <option value="low">Low Stock (â‰¤5)</option>
             <option value="out">Out of Stock</option>
           </Sel>
           <Sel value={pubF} onChange={e=>setPubF(e.target.value)} style={{ width: 130 }}>
@@ -414,10 +414,10 @@ function ProductsTab({ onEdit }) {
                           </div>
                         </div>
                       </Td>
-                      <Td style={{ color:C.mute }}>{catName || '—'}</Td>
+                      <Td style={{ color:C.mute }}>{catName || 'â€”'}</Td>
                       <Td style={{ color: disc > 0 ? C.mute : C.text, textDecoration: disc>0?'line-through':'none' }}>{fmtRs(mrp)}</Td>
                       <Td><span style={{ fontWeight:700, color:C.green }}>{fmtRs(sale)}</span></Td>
-                      <Td>{disc > 0 ? <Badge text={`-${disc}%`} color={C.green} /> : <span style={{ color:C.mute }}>—</span>}</Td>
+                      <Td>{disc > 0 ? <Badge text={`-${disc}%`} color={C.green} /> : <span style={{ color:C.mute }}>â€”</span>}</Td>
                       <Td>
                         <span style={{ fontWeight:700, color: p.stock===0?C.red:p.stock<=5?C.yellow:C.green }}>
                           {p.stock}
@@ -454,9 +454,9 @@ function ProductsTab({ onEdit }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ORDERS TAB
-══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const EMPLOYEE_STATUSES = ['CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED'];
 const STATUS_NEXT = {
   PLACED: 'CONFIRMED', CONFIRMED: 'PACKED', PACKED: 'SHIPPED',
@@ -499,7 +499,7 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
             style={{ fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:6,
               background: open ? C.card2 : C.active,
               border:`1px solid ${C.line}`, cursor:'pointer', color:C.sub }}>
-            {open ? '✕' : 'Change'}
+            {open ? 'âœ•' : 'Change'}
           </button>
         )}
       </div>
@@ -511,7 +511,7 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
             border:`1px solid ${STATUS_COLORS[nextStatus]}44`, cursor:'pointer',
             opacity: saving ? 0.6 : 1, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
           <SvgAt el={Icon.arrow} size={11} />
-          {saving ? '…' : `Mark ${nextStatus.replace(/_/g,' ')}`}
+          {saving ? 'â€¦' : `Mark ${nextStatus.replace(/_/g,' ')}`}
         </button>
       )}
 
@@ -626,7 +626,7 @@ function OrdersTab({ onViewReturns }) {
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
             <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, customer name…"
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, customer nameâ€¦"
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
           </div>
           <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:170 }}>
@@ -668,7 +668,7 @@ function OrdersTab({ onViewReturns }) {
                       {o.trackingId && <div style={{ fontSize:10, color:C.mute, marginTop:2 }}>Track: {o.trackingId}</div>}
                     </Td>
                     <Td>
-                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'—'}</div>
+                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'â€”'}</div>
                       <div style={{ fontSize:11, color:C.mute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.email}</div>
                       <div style={{ fontSize:11, color:C.mute }}>{o.user?.phone}</div>
                     </Td>
@@ -714,11 +714,13 @@ function OrdersTab({ onViewReturns }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    PRODUCT FORM (Add / Edit)
-══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function ProductForm({ initial, categories, onSave, onCancel }) {
   const { brands: catalogBrands } = useCatalog();
+  const fileInputRef = useRef(null);
+
   const empty = { title:'',description:'',shortDescription:'',brand:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'GST',taxRate:18 };
   const [form, setForm] = useState(initial ? {
     title: initial.title||'', description: initial.description||'',
@@ -730,15 +732,50 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
     taxLabel: initial.taxLabel || 'GST', taxRate: initial.taxRate ?? 18,
   } : empty);
+
+  /* â”€â”€ image state â”€â”€ */
+  const [existingImgs, setExistingImgs] = useState(initial?.images || []);
+  const [newFiles,     setNewFiles]     = useState([]);      // File objects
+  const [newPreviews,  setNewPreviews]  = useState([]);      // data-URL strings
+  const [dragOver,     setDragOver]     = useState(false);
+
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [error,  setError]  = useState('');
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-  const mrp  = Number(form.price)||0;
-  const sale = Number(form.discountPrice)||0;
-  const disc = mrp > sale && sale > 0 ? Math.round(((mrp-sale)/mrp)*100) : 0;
+  const mrp    = Number(form.price)||0;
+  const sale   = Number(form.discountPrice)||0;
+  const disc   = mrp > sale && sale > 0 ? Math.round(((mrp-sale)/mrp)*100) : 0;
   const profit = sale > 0 ? sale : mrp;
+  const totalImgs = existingImgs.length + newFiles.length;
 
+  /* â”€â”€ file handling â”€â”€ */
+  const addFiles = (fileList) => {
+    const allowed = ['image/jpeg','image/jpg','image/png','image/webp'];
+    const valid   = Array.from(fileList).filter(f => allowed.includes(f.type));
+    const slots   = Math.max(0, 5 - totalImgs);
+    const toAdd   = valid.slice(0, slots);
+    if (!toAdd.length) return;
+    setNewFiles(prev => [...prev, ...toAdd]);
+    toAdd.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = e => setNewPreviews(prev => [...prev, e.target.result]);
+      reader.readAsDataURL(f);
+    });
+  };
+
+  const removeExisting = (idx) => setExistingImgs(prev => prev.filter((_,i) => i !== idx));
+  const removeNew = (idx) => {
+    setNewFiles(prev    => prev.filter((_,i) => i !== idx));
+    setNewPreviews(prev => prev.filter((_,i) => i !== idx));
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault(); setDragOver(false);
+    addFiles(e.dataTransfer.files);
+  };
+
+  /* â”€â”€ submit â”€â”€ */
   const handleSubmit = async () => {
     if (!form.title||!form.description||!form.price||form.stock===''||!form.category) {
       setError('Title, description, price, stock, and category are required.');
@@ -746,8 +783,17 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     }
     setSaving(true); setError('');
     try {
-      const payload = { ...form, price:Number(form.price), stock:Number(form.stock), discountPrice:form.discountPrice?Number(form.discountPrice):undefined, returnWindow: form.returnable ? Number(form.returnWindow) : undefined };
-      await onSave(payload);
+      const fd = new FormData();
+      // scalar fields
+      const scalar = { ...form, price: Number(form.price), stock: Number(form.stock),
+        discountPrice: form.discountPrice ? Number(form.discountPrice) : '',
+        returnWindow: form.returnable ? Number(form.returnWindow) : '' };
+      Object.entries(scalar).forEach(([k,v]) => { if (v !== '' && v !== undefined) fd.append(k, v); });
+      // images: tell backend which existing URLs to keep
+      existingImgs.forEach(url => fd.append('keepImages', url));
+      // new uploads
+      newFiles.forEach(f => fd.append('images', f));
+      await onSave(fd);
     } catch(err) { setError(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
@@ -759,10 +805,10 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
       {(mrp > 0 || sale > 0) && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
-          <KpiCard label="MRP"         value={fmtRs(mrp)}                           sub="Original price"  colorKey="blue"   iconEl={Icon.tag} />
-          <KpiCard label="Sale Price"  value={fmtRs(profit)}                        sub="Customer pays"   colorKey="green"  iconEl={Icon.dollar} />
-          <KpiCard label="Discount"    value={disc>0?`${disc}%`:'—'}                sub="Off MRP"         colorKey="orange" iconEl={Icon.tag} />
-          <KpiCard label="Stock Value" value={fmtShort(profit*(Number(form.stock)||0))} sub="At sale price" colorKey="purple" iconEl={Icon.box} />
+          <KpiCard label="MRP"         value={fmtRs(mrp)}                               sub="Original price"  colorKey="blue"   iconEl={Icon.tag} />
+          <KpiCard label="Sale Price"  value={fmtRs(profit)}                            sub="Customer pays"   colorKey="green"  iconEl={Icon.dollar} />
+          <KpiCard label="Discount"    value={disc>0?`${disc}%`:'â€”'}                    sub="Off MRP"         colorKey="orange" iconEl={Icon.tag} />
+          <KpiCard label="Stock Value" value={fmtShort(profit*(Number(form.stock)||0))} sub="At sale price"   colorKey="purple" iconEl={Icon.box} />
         </div>
       )}
 
@@ -772,14 +818,14 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
           <div>
             <label style={LS}>Brand</label>
             <select value={form.brand} onChange={e=>set('brand',e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
-              <option value="">— Select Brand —</option>
+              <option value="">â€” Select Brand â€”</option>
               {catalogBrands.map(b => <option key={b._id} value={b.name}>{b.name}</option>)}
             </select>
           </div>
           <div>
             <label style={LS}>Category *</label>
             <select value={form.category} onChange={e=>set('category',e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
-              <option value="">Select category…</option>
+              <option value="">Select categoryâ€¦</option>
               {categories.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}
             </select>
           </div>
@@ -789,7 +835,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
             <input type="number" value={form.price} onChange={e=>set('price',e.target.value)} placeholder="0" style={inpStyle} />
           </div>
           <div>
-            <label style={LS}>Sale Price (Rs.) <span style={{ color:C.green, textTransform:'none' }}>— Optional</span></label>
+            <label style={LS}>Sale Price (Rs.) <span style={{ color:C.green, textTransform:'none' }}>â€” Optional</span></label>
             <input type="number" value={form.discountPrice} onChange={e=>set('discountPrice',e.target.value)} placeholder="Leave blank = no discount" style={inpStyle} />
             {disc > 0 && <div style={{ fontSize:12, color:C.green, marginTop:4 }}>{disc}% off MRP</div>}
           </div>
@@ -801,8 +847,72 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
         </div>
         <div style={{ marginTop:16 }}>
           <label style={LS}>Full Description *</label>
-          <textarea rows={4} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product description…"
+          <textarea rows={4} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product descriptionâ€¦"
             style={{ ...inpStyle, height:'auto', padding:'10px 12px', resize:'vertical' }} />
+        </div>
+
+        {/* â”€â”€ IMAGE UPLOAD â”€â”€ */}
+        <div style={{ marginTop:20 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <label style={LS}>Product Images <span style={{ color:C.sub, textTransform:'none', fontWeight:500 }}>({totalImgs}/5)</span></label>
+            <span style={{ fontSize:11, color:C.mute }}>JPEG Â· PNG Â· WebP Â· max 5 MB each</span>
+          </div>
+
+          {/* Existing + new previews */}
+          {totalImgs > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:12 }}>
+              {existingImgs.map((url, i) => (
+                <div key={`ex-${i}`} style={{ position:'relative', width:90, height:90, borderRadius:8, overflow:'hidden', border:`1px solid ${C.line}` }}>
+                  <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <button onClick={() => removeExisting(i)} title="Remove"
+                    style={{ position:'absolute', top:3, right:3, width:20, height:20, borderRadius:'50%',
+                      background:'rgba(0,0,0,.75)', color:'white', border:'none', cursor:'pointer',
+                      fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                    Ã—
+                  </button>
+                  {i === 0 && <span style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(0,0,0,.6)', color:'white', fontSize:9, fontWeight:700, textAlign:'center', padding:'2px 0' }}>MAIN</span>}
+                </div>
+              ))}
+              {newPreviews.map((src, i) => (
+                <div key={`new-${i}`} style={{ position:'relative', width:90, height:90, borderRadius:8, overflow:'hidden', border:`2px solid ${C.accent}` }}>
+                  <img src={src} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <button onClick={() => removeNew(i)} title="Remove"
+                    style={{ position:'absolute', top:3, right:3, width:20, height:20, borderRadius:'50%',
+                      background:'rgba(0,0,0,.75)', color:'white', border:'none', cursor:'pointer',
+                      fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                    Ã—
+                  </button>
+                  <span style={{ position:'absolute', bottom:0, left:0, right:0, background:C.accent+'cc', color:'white', fontSize:9, fontWeight:700, textAlign:'center', padding:'2px 0' }}>NEW</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Drop zone */}
+          {totalImgs < 5 && (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              style={{ border:`2px dashed ${dragOver ? C.accent : C.line}`, borderRadius:10, padding:'28px 20px',
+                textAlign:'center', cursor:'pointer', background: dragOver ? C.accent+'0a' : C.card2,
+                transition:'all .15s' }}>
+              <div style={{ fontSize:30, marginBottom:8 }}>ðŸ–¼ï¸</div>
+              <div style={{ fontWeight:700, fontSize:13, color:C.text, marginBottom:4 }}>
+                Click to upload or drag &amp; drop
+              </div>
+              <div style={{ fontSize:12, color:C.mute }}>Up to {5-totalImgs} more image{5-totalImgs!==1?'s':''} Â· Max 5 MB each</div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                style={{ display:'none' }}
+                onChange={e => { addFiles(e.target.files); e.target.value=''; }}
+              />
+            </div>
+          )}
         </div>
 
         <div style={{ display:'flex', gap:24, marginTop:16, flexWrap:'wrap', alignItems:'center' }}>
@@ -872,7 +982,7 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
 
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <Btn variant="primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Saving…' : initial ? 'Save Changes' : 'Add Product'}
+            {saving ? 'Uploadingâ€¦' : initial ? 'Save Changes' : 'Add Product'}
           </Btn>
           {onCancel && <Btn onClick={onCancel}>Cancel</Btn>}
         </div>
@@ -881,9 +991,9 @@ function ProductForm({ initial, categories, onSave, onCancel }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════
-   RETURNS TAB — employee
-══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   RETURNS TAB â€” employee
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const RETURN_STATUS_META = {
   REQUESTED:         { label:'Requested',        color: C.yellow },
   EMPLOYEE_APPROVED: { label:'You Approved',     color: C.green  },
@@ -1017,7 +1127,7 @@ function EmployeeReturnsTab() {
                   <div style={{ background:C.card2, padding:'12px 18px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:700, fontSize:13, color:C.text }}>Return #{req._id?.slice(-8).toUpperCase()}</div>
-                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{req.user?.name} · {req.user?.email}</div>
+                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{req.user?.name} Â· {req.user?.email}</div>
                     </div>
                     <ReturnBadge status={req.status} />
                     <span style={{ fontSize:14, fontWeight:800, color:C.accent }}>{fmtRs(req.refundAmount || 0)}</span>
@@ -1040,12 +1150,12 @@ function EmployeeReturnsTab() {
                       <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
                       <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
                         Reason: <strong style={{color:C.sub}}>{req.reason?.replace(/_/g,' ')}</strong>
-                        {' · '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
+                        {' Â· '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
                       </div>
                       {req.description && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>"{req.description}"</div>}
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0, fontSize:12, color:C.mute }}>
-                      {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}
+                      {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || 'â€”'}
                     </div>
                   </div>
 
@@ -1083,7 +1193,7 @@ function EmployeeReturnsTab() {
                     <div style={{ padding:'14px 18px', background:C.bg, borderTop:`1px solid ${C.line}` }}>
                       <div style={{ fontSize:13, fontWeight:700, marginBottom:10, color:C.text }}>Your response to customer:</div>
                       <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
-                        placeholder="Optional note to customer…"
+                        placeholder="Optional note to customerâ€¦"
                         style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10, background:C.card2, color:C.text }} />
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={() => doAction(req._id, 'approve')} disabled={saving}
@@ -1108,14 +1218,14 @@ function EmployeeReturnsTab() {
                         style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none',
                           fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, whiteSpace:'nowrap', fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
                         <SvgAt el={adv.iconEl} size={14} />
-                        {saving ? '…' : adv.label}
+                        {saving ? 'â€¦' : adv.label}
                       </button>
                     </div>
                   )}
 
                   {req.status === 'REFUND_COMPLETED' && (
                     <div style={{ padding:'10px 18px', background:C.green+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.green, fontWeight:700, display:'flex', alignItems:'center', gap:8 }}>
-                      <SvgAt el={Icon.check} size={14} /> Refund completed — this return is closed
+                      <SvgAt el={Icon.check} size={14} /> Refund completed â€” this return is closed
                     </div>
                   )}
                   {req.status === 'EMPLOYEE_REJECTED' && (
@@ -1140,9 +1250,9 @@ function EmployeeReturnsTab() {
   );
 }
 
-/* ══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAIN EMPLOYEE DASHBOARD
-══════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const NAV_TABS = [
   { id:'Overview',    iconEl: Icon.grid  },
   { id:'My Products', iconEl: Icon.bag   },
@@ -1168,7 +1278,7 @@ export default function SellerDashboard() {
   const [editProduct, setEdit]  = useState(null);
   const [loading, setLoading]   = useState(true);
   const navigate                = useNavigate();
-  const { user }                = useAuth();
+  const { user, logout }        = useAuth();
 
   const loadProfile = useCallback(() => {
     setLoading(true);
@@ -1213,7 +1323,7 @@ export default function SellerDashboard() {
           style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:99 }} />
       )}
 
-      {/* ── Sidebar ── */}
+      {/* â”€â”€ Sidebar â”€â”€ */}
       <div style={{
         position:'fixed', left:0, top:0, bottom:0, width:220,
         background:C.sidebar, display:'flex', flexDirection:'column',
@@ -1270,7 +1380,7 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {/* ── Main content ── */}
+      {/* â”€â”€ Main content â”€â”€ */}
       <div style={{ marginLeft: isMobile ? 0 : 220, flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
 
         {/* Topbar */}
@@ -1287,7 +1397,7 @@ export default function SellerDashboard() {
           ) : (
             <div style={{ flex:1, maxWidth:380, display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36 }}>
               <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={15} /></span>
-              <input placeholder="Search orders, products…" style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:"'DM Sans',sans-serif" }} />
+              <input placeholder="Search orders, productsâ€¦" style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:"'DM Sans',sans-serif" }} />
             </div>
           )}
 
@@ -1296,15 +1406,21 @@ export default function SellerDashboard() {
               {user?.name?.[0]?.toUpperCase()}
             </div>
             {!isMobile && (
-              <>
-                <div style={{ lineHeight:1.25 }}>
-                  <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{user?.name}</div>
-                  <div style={{ fontSize:11, color:C.mute }}>Employee</div>
-                </div>
-                <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.chevD} size={14} /></span>
-              </>
+              <div style={{ lineHeight:1.25 }}>
+                <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{user?.name}</div>
+                <div style={{ fontSize:11, color:C.mute }}>Employee</div>
+              </div>
             )}
           </div>
+          {/* Logout */}
+          <button onClick={() => { logout(); navigate('/login'); }}
+            style={{ display:'flex', alignItems:'center', gap:6, background:C.red+'18', border:`1px solid ${C.red}44`,
+              borderRadius:8, padding:'6px 14px', color:C.red, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            {!isMobile && 'Logout'}
+          </button>
         </div>
 
         {/* Page content */}
@@ -1348,3 +1464,4 @@ export default function SellerDashboard() {
     </div>
   );
 }
+

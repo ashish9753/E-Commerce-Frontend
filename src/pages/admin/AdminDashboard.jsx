@@ -198,20 +198,24 @@ function timeAgo(date) {
 function OverviewTab() {
   const { isMobile, isTablet } = useResponsive();
   const [stats, setStats]       = useState(null);
-  const [orders, setOrders]     = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
   const [notifs, setNotifs]     = useState([]);
   const [userCount, setUC]      = useState(0);
   const [loading, setLoading]   = useState(true);
+  const [chartPeriod, setChartPeriod] = useState('1Y');
 
   useEffect(() => {
     Promise.all([
       adminApi.getOrderStats(),
-      adminApi.getOrders({ limit: 5 }),
+      adminApi.getOrders({ limit: 1000 }),
       notificationsApi.getMy({ limit: 6 }),
       adminApi.getUsers({ limit: 1 }),
     ]).then(([s, o, n, u]) => {
       setStats(s.data?.data || {});
-      setOrders(o.data?.data?.data || []);
+      const allO = o.data?.data?.data || [];
+      setAllOrders(allO);
+      setRecentOrders(allO.slice(0, 5));
       setNotifs(n.data?.data?.data || []);
       setUC(u.data?.data?.pagination?.total || u.data?.data?.total || 0);
     }).catch(() => {}).finally(() => setLoading(false));
@@ -230,13 +234,70 @@ function OverviewTab() {
   const donutData = breakdown.map(b => ({ name: b._id, value: b.count }));
   const totalDonut = donutData.reduce((a, b) => a + b.value, 0);
 
-  // Sales Overview: scatter orders across last 7 day labels
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const salesChart = days.map((d, i) => {
-    const dayOrders = orders.filter(o => new Date(o.createdAt).getDay() === (i + 1) % 7);
-    return { day: d, sales: dayOrders.reduce((a, o) => a + (o.totalPrice || 0), 0) };
-  });
-  const totalSales = netRevenue;
+  // Sales chart — build buckets for selected period
+  const buildSalesChart = (period) => {
+    const now   = new Date();
+    const msDay = 86400000;
+    const periodDays = { '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365 }[period] || 365;
+    const cutoff = new Date(now - periodDays * msDay);
+
+    const inRange = allOrders.filter(o => new Date(o.createdAt) >= cutoff);
+
+    if (period === '1W' || period === '1M') {
+      // Daily buckets
+      const map = {};
+      for (let i = periodDays - 1; i >= 0; i--) {
+        const d = new Date(now - i * msDay);
+        const key = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        map[key] = 0;
+      }
+      inRange.forEach(o => {
+        const d = new Date(o.createdAt);
+        const key = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        if (key in map) map[key] += o.totalPrice || 0;
+      });
+      return Object.entries(map).map(([day, sales]) => ({ day, sales }));
+    } else if (period === '3M' || period === '6M') {
+      // Weekly buckets
+      const weeks = Math.ceil(periodDays / 7);
+      const map = {};
+      for (let i = weeks - 1; i >= 0; i--) {
+        const d = new Date(now - i * 7 * msDay);
+        const key = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        map[key] = 0;
+      }
+      inRange.forEach(o => {
+        const d   = new Date(o.createdAt);
+        const diffDays = Math.floor((now - d) / msDay);
+        const weekIdx  = weeks - 1 - Math.floor(diffDays / 7);
+        if (weekIdx >= 0) {
+          const wkDate = new Date(now - (weeks - 1 - weekIdx) * 7 * msDay);
+          const key = wkDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+          if (key in map) map[key] += o.totalPrice || 0;
+        }
+      });
+      return Object.entries(map).map(([day, sales]) => ({ day, sales }));
+    } else {
+      // Monthly buckets for 1Y
+      const map = {};
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+        map[key] = 0;
+      }
+      inRange.forEach(o => {
+        const d   = new Date(o.createdAt);
+        const key = d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+        if (key in map) map[key] += o.totalPrice || 0;
+      });
+      return Object.entries(map).map(([day, sales]) => ({ day, sales }));
+    }
+  };
+
+  const salesChart  = buildSalesChart(chartPeriod);
+  const chartTotal  = salesChart.reduce((a, b) => a + b.sales, 0);
+  const totalSales  = netRevenue;
+  const PERIODS     = ['1W','1M','3M','6M','1Y'];
 
   // Top payment/status breakdown for right panel
   const payBreakdown = (stats?.paymentBreakdown || []).map(b => ({
@@ -303,9 +364,18 @@ function OverviewTab() {
         {/* Sales Overview */}
         <Card
           title="Sales Overview"
-          action={<span style={{ fontSize: 12, color: C.mute }}>Last 7 Days</span>}
+          action={
+            <div style={{ display: 'flex', gap: 4 }}>
+              {PERIODS.map(p => (
+                <button key={p} onClick={() => setChartPeriod(p)}
+                  style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 6, border: `1px solid ${chartPeriod === p ? C.accent : C.line}`, background: chartPeriod === p ? C.accent : 'transparent', color: chartPeriod === p ? 'white' : C.mute, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {p}
+                </button>
+              ))}
+            </div>
+          }
         >
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={210}>
             <AreaChart data={salesChart} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
@@ -314,18 +384,29 @@ function OverviewTab() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.mute }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.mute }} axisLine={false} tickLine={false} tickFormatter={v => v > 0 ? `${Math.round(v/1000)}K` : '0'} />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.mute }} axisLine={false} tickLine={false}
+                interval={chartPeriod === '1Y' ? 0 : chartPeriod === '6M' ? 1 : chartPeriod === '3M' ? 1 : 'preserveStartEnd'} />
+              <YAxis tick={{ fontSize: 10, fill: C.mute }} axisLine={false} tickLine={false}
+                tickFormatter={v => v >= 100000 ? `${(v/100000).toFixed(0)}L` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : v > 0 ? v : '0'} />
               <Tooltip
-                contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 12 }}
-                formatter={(v) => [fmtRs(v), 'Sales']}
+                contentStyle={{ background: C.card2, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text, fontSize: 12 }}
+                formatter={(v) => [fmtRs(v), 'Revenue']}
+                labelStyle={{ color: C.sub, marginBottom: 4 }}
               />
-              <Area type="monotone" dataKey="sales" stroke={C.blue} strokeWidth={2.5} fill="url(#salesGrad)" dot={{ fill: C.blue, r: 4 }} />
+              <Area type="monotone" dataKey="sales" stroke={C.blue} strokeWidth={2.5} fill="url(#salesGrad)"
+                dot={chartPeriod === '1Y' ? false : { fill: C.blue, r: 3, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: C.blue, stroke: C.card, strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
-            <div style={{ fontSize: 12, color: C.mute }}>Total Sales</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.text }}>{fmtRs(totalSales)}</div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div>
+              <div style={{ fontSize: 12, color: C.mute }}>Period Revenue</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 20, fontWeight: 800, color: C.text }}>{fmtRs(chartTotal)}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 12, color: C.mute }}>All-time Net</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, color: C.green }}>{fmtShort(totalSales)}</div>
+            </div>
           </div>
         </Card>
 
@@ -355,8 +436,11 @@ function OverviewTab() {
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1fr', gap: 16 }}>
 
         {/* Recent Orders */}
-        <Card title="Recent Orders" action={<span style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all orders →</span>}>
-          {orders.length === 0
+        <Card title="Recent Orders" action={
+          <span onClick={() => { const ev = new CustomEvent('overview-nav', { detail: 'Orders' }); window.dispatchEvent(ev); }}
+            style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all orders →</span>
+        }>
+          {recentOrders.length === 0
             ? <Empty text="No orders yet" />
             : <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
@@ -365,20 +449,23 @@ function OverviewTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map(o => (
-                    <tr key={o._id} style={{ transition: 'background .12s' }}>
-                      <Td><span style={{ fontWeight: 700, color: C.accent }}>{o.orderNumber}</span></Td>
+                  {recentOrders.map(o => (
+                    <tr key={o._id}>
+                      <Td><span style={{ fontWeight: 700, color: C.accent, fontFamily:'monospace', fontSize:12 }}>{o.orderNumber}</span></Td>
                       <Td>
                         <div style={{ fontWeight: 600, color: C.text }}>{o.user?.name || '—'}</div>
                         <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
                       </Td>
                       <Td><span style={{ fontWeight: 700, color: C.text }}>{fmtRs(o.totalPrice)}</span></Td>
                       <Td><Badge text={o.orderStatus} color={STATUS_COLORS[o.orderStatus] || C.mute} /></Td>
-                      <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</Td>
+                      <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(o.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</Td>
                       <Td>
-                        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.bg, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14 }}>
-                          👁
-                        </div>
+                        <button
+                          onClick={() => { const ev = new CustomEvent('overview-nav', { detail: 'Orders' }); window.dispatchEvent(ev); }}
+                          title="View in Orders tab"
+                          style={{ width: 30, height: 30, borderRadius: 8, background: C.bg, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: C.sub }}>
+                          <SvgAt el={Icon.list} size={14} />
+                        </button>
                       </Td>
                     </tr>
                   ))}
@@ -388,7 +475,10 @@ function OverviewTab() {
         </Card>
 
         {/* Latest Notifications */}
-        <Card title="Latest Notifications" action={<span style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all →</span>}>
+        <Card title="Latest Notifications" action={
+          <span onClick={() => { const ev = new CustomEvent('overview-nav', { detail: 'Notifications' }); window.dispatchEvent(ev); }}
+            style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all →</span>
+        }>
           {notifs.length === 0
             ? <Empty text="No notifications yet" />
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -2283,7 +2373,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openTicketCount, setOTC]   = useState(0);
   const navigate                    = useNavigate();
-  const { user }                    = useAuth();
+  const { user, logout }            = useAuth();
   const { notifications }           = useNotifications();
 
   // Fetch open ticket count on mount
@@ -2307,6 +2397,13 @@ export default function AdminDashboard() {
     if (id === 'Support') setOTC(0);
     if (isMobile) setSidebarOpen(false);
   };
+
+  // Overview "View all" shortcut links dispatch this event
+  useEffect(() => {
+    const handler = (e) => handleTabClick(e.detail);
+    window.addEventListener('overview-nav', handler);
+    return () => window.removeEventListener('overview-nav', handler);
+  }, [isMobile]);
 
   if (user && user.role !== 'admin') { navigate('/'); return null; }
 
@@ -2494,10 +2591,18 @@ export default function AdminDashboard() {
                     <div style={{ fontWeight: 600, fontSize: 13, color: C.text }}>{user?.name}</div>
                     <div style={{ fontSize: 11, color: C.mute }}>Administrator</div>
                   </div>
-                  <span style={{ color: C.mute, display: 'flex', alignItems: 'center' }}>{Icon.chevD}</span>
                 </>
               )}
             </div>
+            {/* Logout */}
+            <button onClick={() => { logout(); navigate('/login'); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.red + '18', border: `1px solid ${C.red}44`,
+                borderRadius: 8, padding: '6px 14px', color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              {!isMobile && 'Logout'}
+            </button>
           </div>
         </div>
 

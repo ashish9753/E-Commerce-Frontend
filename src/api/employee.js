@@ -6,8 +6,8 @@ export const employeeApi = {
   registerEmployee: (data) => client.post('/employees/register', data),
 
   getMyProducts: (params) => client.get('/products/employee/my-products', { params }),
-  createProduct: (data) => client.post('/products', data),
-  updateProduct: (id, data) => client.patch(`/products/${id}`, data),
+  createProduct: (data) => client.post('/products', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {}),
+  updateProduct: (id, data) => client.patch(`/products/${id}`, data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {}),
   deleteProduct: (id) => client.delete(`/products/${id}`),
 
   getMyOrders:         (params)     => client.get('/orders/employee/my-orders', { params }),

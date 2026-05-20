@@ -18,7 +18,7 @@ import ReturnsPage from './pages/ReturnsPage';
 import ReturnStatusPage from './pages/ReturnStatusPage';
 import ComparePage from './pages/ComparePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import SellerDashboard from './pages/seller/SellerDashboard';
+import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import NotificationsPage from './pages/NotificationsPage';
 import SupportPage from './pages/SupportPage';
 
@@ -89,7 +89,7 @@ export default function App() {
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
 
         {/* Employee */}
-        <Route path="/employee" element={<EmployeeRoute><SellerDashboard /></EmployeeRoute>} />
+        <Route path="/employee" element={<EmployeeRoute><EmployeeDashboard /></EmployeeRoute>} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />

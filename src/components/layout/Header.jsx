@@ -350,16 +350,49 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Category bar */}
-      <div style={{ background: '#232f3e', borderBottom: '1px solid #37475a' }}>
-        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 8px',
-          display: 'flex', alignItems: 'center', gap: 2, height: 40,
-          overflowX: 'auto', scrollbarWidth: 'none' }}>
-          <CategoryBtn label="All Products" active={activeCategory === 'All'} onClick={() => { setActiveCategory('All'); navigate('/products'); }} />
-          {navCats.map(c => (
-            <CategoryBtn key={c.id} label={`${c.emo} ${c.name}`} active={activeCategory === c.name}
-              onClick={() => { setActiveCategory(c.name); navigate(`/products?category=${encodeURIComponent(c.name)}`); }} />
-          ))}
+      {/* Nav bar */}
+      <div style={{ background: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
+        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
+          display: 'flex', alignItems: 'center', gap: 0, height: 44 }}>
+          {/* All Categories */}
+          <button onClick={() => navigate('/products')}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FF5A1F', color: 'white',
+              border: 'none', borderRadius: 4, padding: '0 16px', height: 34, fontWeight: 700, fontSize: 13,
+              cursor: 'pointer', flexShrink: 0, marginRight: 4 }}>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+            </span>
+            All Categories
+          </button>
+          {/* Nav links */}
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', gap: 2 }}>
+            {[
+              { label: 'Brands', path: '/products?sort=brand' },
+              { label: 'Events & Offers', path: '/products?sort=events' },
+              { label: 'Flash Sale', path: '/products?sort=discount' },
+              { label: 'New Arrivals', path: '/products?sort=newest' },
+              { label: 'Top Selling', path: '/products?sort=popular' },
+              ...navCats.slice(0, 4).map(c => ({ label: c.name, path: `/products?category=${encodeURIComponent(c.name)}` })),
+            ].map(item => (
+              <button key={item.label} onClick={() => navigate(item.path)}
+                style={{ background: 'none', border: 'none', color: '#d1d5db', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer', padding: '0 14px', height: 44, whiteSpace: 'nowrap', flexShrink: 0,
+                  borderBottom: '2px solid transparent', transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.borderBottomColor = '#FF5A1F'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#d1d5db'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {/* Get App */}
+          <button onClick={() => {}}
+            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: 'none',
+              border: '1px solid #3a3a3a', borderRadius: 4, color: '#d1d5db', fontSize: 12, fontWeight: 600,
+              padding: '0 12px', height: 32, cursor: 'pointer', marginLeft: 8 }}>
+            📱 Get App
+          </button>
         </div>
       </div>
     </nav>

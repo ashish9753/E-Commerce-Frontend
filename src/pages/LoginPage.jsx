@@ -33,7 +33,10 @@ export default function LoginPage() {
     setLoading(false);
     if (result.success) {
       toast(`Welcome back, ${result.user.name.split(' ')[0]}!`);
-      navigate('/');
+      const role = result.user.role;
+      if (role === 'admin') navigate('/admin');
+      else if (role === 'employee') navigate('/employee');
+      else navigate('/');
     } else {
       toast(result.error, 'error');
       setErrors({ password: result.error });
