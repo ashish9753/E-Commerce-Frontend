@@ -3,6 +3,7 @@ import client from './client';
 export const employeeApi = {
   getMyProfile: () => client.get('/employees/me'),
   updateProfile: (data) => client.patch('/employees/me', data),
+  uploadShopLogo: (formData) => client.patch('/employees/me/logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   registerEmployee: (data) => client.post('/employees/register', data),
 
   getMyProducts: (params) => client.get('/products/employee/my-products', { params }),

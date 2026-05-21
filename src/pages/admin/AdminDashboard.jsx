@@ -16,6 +16,7 @@ import SupportIcon from '../../components/icons/SupportIcon';
 import AdminCatalogTab from './AdminCatalogTab';
 import { settingsApi } from '../../api/settings';
 import { paymentsApi } from '../../api/payments';
+import { useFormDraft } from '../../hooks/useFormDraft';
 
 /* ── Palette — matches HTML mockup exactly ── */
 const C = {
@@ -577,6 +578,144 @@ function buildUserGrowthData(all, period) {
   return buckets;
 }
 
+/* ── User Detail Modal (addresses + orders) ── */
+function UserDetailModal({ user, onClose }) {
+  const [activeTab, setActiveTab] = useState('addresses');
+  const [userData, setUserData]   = useState(user);
+  const [orders, setOrders]       = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [dataLoading, setDataLoading]     = useState(true);
+
+  useEffect(() => {
+    adminApi.getUserById(user._id)
+      .then(r => setUserData(r.data?.data?.user || user))
+      .catch(() => {})
+      .finally(() => setDataLoading(false));
+
+    setOrdersLoading(true);
+    adminApi.getUserOrders(user._id)
+      .then(r => setOrders(r.data?.data?.data || r.data?.data || []))
+      .catch(() => {})
+      .finally(() => setOrdersLoading(false));
+  }, [user._id]);
+
+  const addresses = userData.addresses || [];
+
+  return (
+    <div onClick={e => e.target === e.currentTarget && onClose()}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 500,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, width: '100%',
+        maxWidth: 660, maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: (ROLE_COLORS[userData.role] || C.blue) + '22',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800,
+            color: ROLE_COLORS[userData.role] || C.blue, fontSize: 17, flexShrink: 0 }}>
+            {userData.name?.[0]?.toUpperCase()}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{userData.name}</div>
+            <div style={{ fontSize: 12, color: C.mute }}>{userData.email} · {userData.phone}</div>
+          </div>
+          <Badge text={userData.role} color={ROLE_COLORS[userData.role] || C.mute} />
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.mute, fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: '0 4px', marginLeft: 4 }}>✕</button>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${C.line}`, padding: '0 20px', flexShrink: 0 }}>
+          {[
+            { key: 'addresses', label: `Addresses (${addresses.length})` },
+            { key: 'orders',    label: `Orders (${orders.length})` },
+          ].map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              style={{ padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+                color: activeTab === t.key ? C.accent : C.mute,
+                borderBottom: activeTab === t.key ? `2px solid ${C.accent}` : '2px solid transparent',
+                marginBottom: -1, transition: 'all .15s' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+
+          {/* Addresses */}
+          {activeTab === 'addresses' && (
+            dataLoading ? <Loader /> :
+            addresses.length === 0
+              ? <Empty text="This user has no saved addresses" />
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {addresses.map((addr, i) => (
+                    <div key={addr._id || i} style={{ background: C.card2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <span style={{ fontSize: 16 }}>📍</span>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{addr.fullName}</div>
+                        {i === 0 && <Badge text="Default" color={C.green} />}
+                      </div>
+                      <div style={{ fontSize: 12, color: C.mute, lineHeight: 1.7 }}>
+                        {[addr.houseNo, addr.area, addr.city, addr.state].filter(Boolean).join(', ')}
+                        {addr.pincode && ` – ${addr.pincode}`}
+                      </div>
+                      {addr.phone    && <div style={{ fontSize: 12, color: C.mute, marginTop: 4 }}>📱 {addr.phone}</div>}
+                      {addr.landmark && <div style={{ fontSize: 12, color: C.mute }}>Near: {addr.landmark}</div>}
+                    </div>
+                  ))}
+                </div>
+          )}
+
+          {/* Orders */}
+          {activeTab === 'orders' && (
+            ordersLoading ? <Loader /> :
+            orders.length === 0
+              ? <Empty text="No orders placed by this user" />
+              : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {orders.map(order => (
+                    <div key={order._id} style={{ background: C.card2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '14px 16px' }}>
+                      {/* Order header row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
+                            #{order.orderNumber || order._id?.slice(-8).toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: 11, color: C.mute, marginLeft: 10 }}>
+                            {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <Badge text={order.orderStatus || 'PLACED'} color={STATUS_COLORS[order.orderStatus] || C.mute} />
+                          <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
+                            Rs. {Number(order.totalPrice || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Items list */}
+                      <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8 }}>
+                        {(order.orderItems || []).map((item, idx) => (
+                          <div key={idx} style={{ fontSize: 12, color: C.mute, marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                            <span>• {item.title} × {item.quantity}</span>
+                            <span>Rs. {Number((item.price || 0) * item.quantity).toLocaleString('en-IN')}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Payment */}
+                      <div style={{ marginTop: 8, fontSize: 11, color: C.mute }}>
+                        Payment: <strong style={{ color: order.paymentStatus === 'PAID' ? C.green : C.yellow }}>{order.paymentStatus}</strong>
+                        {' · '}{order.paymentMethod}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UsersTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
@@ -585,6 +724,7 @@ function UsersTab({ globalSearch = '' }) {
   const [roleFilter, setRole] = useState('');
   const [statusFilter, setSt] = useState('');
   const [period, setPeriod]   = useState('month');
+  const [viewUser, setViewUser] = useState(null);
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
@@ -644,6 +784,7 @@ function UsersTab({ globalSearch = '' }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {viewUser && <UserDetailModal user={viewUser} onClose={() => setViewUser(null)} />}
       {/* Mini KPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
         <KpiCard label="Total Users"   value={fmt(all.length)}           sub="All accounts"        colorKey="blue"   iconEl={Icon.users} />
@@ -743,7 +884,7 @@ function UsersTab({ globalSearch = '' }) {
           : <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
-                  <Th>User</Th><Th>Phone</Th><Th>Role</Th><Th>Joined</Th><Th>Last Login</Th><Th>Status</Th><Th>Actions</Th>
+                  <Th>User</Th><Th>Phone</Th><Th>Role</Th><Th>Joined</Th><Th>Last Login</Th><Th>Status</Th><Th>Actions</Th><Th>Detail</Th>
                 </tr></thead>
                 <tbody>
                   {users.map(u => (
@@ -774,6 +915,9 @@ function UsersTab({ globalSearch = '' }) {
                           </Btn>
                         </div>
                       </Td>
+                      <Td>
+                        <Btn onClick={() => setViewUser(u)}>View</Btn>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -797,7 +941,7 @@ function EmployeesTab({ globalSearch = '' }) {
   const [search, setSearch]   = useState('');
   const [verFilter, setVer]   = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm]       = useState(EMPTY_EMP_FORM);
+  const [form, setForm, clearEmpDraft] = useFormDraft('admin-emp-draft', EMPTY_EMP_FORM);
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState('');
 
@@ -834,7 +978,7 @@ function EmployeesTab({ globalSearch = '' }) {
       const res = await adminApi.createEmployee(form);
       const emp = res.data?.data?.employee;
       if (emp) setAll(prev => [emp, ...prev]);
-      setShowAdd(false); setForm(EMPTY_EMP_FORM);
+      setShowAdd(false); clearEmpDraft();
     } catch (e) {
       setCreateErr(e?.response?.data?.message || 'Failed to create employee.');
     } finally { setCreating(false); }
@@ -858,7 +1002,7 @@ function EmployeesTab({ globalSearch = '' }) {
           <div style={{ background: C.card, borderRadius:16, padding:28, width:'100%', maxWidth:500, boxShadow:'0 24px 64px rgba(0,0,0,.35)', maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
               <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, color:C.text }}>Add Employee</div>
-              <button onClick={() => { setShowAdd(false); setForm(EMPTY_EMP_FORM); setCreateErr(''); }}
+              <button onClick={() => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); }}
                 style={{ background:'none', border:'none', color:C.mute, fontSize:20, cursor:'pointer', lineHeight:1 }}>✕</button>
             </div>
 
@@ -890,7 +1034,7 @@ function EmployeesTab({ globalSearch = '' }) {
             )}
 
             <div style={{ display:'flex', gap:10, marginTop:20, justifyContent:'flex-end' }}>
-              <button onClick={() => { setShowAdd(false); setForm(EMPTY_EMP_FORM); setCreateErr(''); }}
+              <button onClick={() => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); }}
                 style={{ padding:'9px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:C.card2, color:C.sub, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
                 Cancel
               </button>
@@ -1679,6 +1823,13 @@ function AdminCouponsTab({ globalSearch = '' }) {
   const [deleting, setDeleting] = useState(null);
   const [search, setSearch]     = useState('');
 
+  // Auto-save draft while in create mode; cleared on successful create
+  useEffect(() => {
+    if (!editId) {
+      try { sessionStorage.setItem('admin-coupon-draft', JSON.stringify(form)); } catch {}
+    }
+  }, [form, editId]);
+
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
   const load = useCallback(() => {
@@ -1693,7 +1844,11 @@ function AdminCouponsTab({ globalSearch = '' }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const openCreate = () => { setForm(EMPTY_COUPON); setEditId(null); setError(''); setShowForm(true); };
+  const openCreate = () => {
+    let draft = EMPTY_COUPON;
+    try { const s = sessionStorage.getItem('admin-coupon-draft'); if (s) draft = { ...EMPTY_COUPON, ...JSON.parse(s) }; } catch {}
+    setForm(draft); setEditId(null); setError(''); setShowForm(true);
+  };
   const openEdit   = (c) => {
     setForm({
       code: c.code, discountType: c.discountType, discountValue: c.discountValue,
@@ -1721,7 +1876,10 @@ function AdminCouponsTab({ globalSearch = '' }) {
         isActive: form.isActive,
       };
       if (editId) await couponsApi.update(editId, payload);
-      else        await couponsApi.create(payload);
+      else {
+        await couponsApi.create(payload);
+        try { sessionStorage.removeItem('admin-coupon-draft'); } catch {}
+      }
       setShowForm(false); load();
     } catch(e) {
       setError(e?.response?.data?.message || 'Failed to save coupon.');
@@ -1917,7 +2075,7 @@ function AdminCouponsTab({ globalSearch = '' }) {
 const EMPTY_NOTIF = { sendMode:'broadcast', targetRole:'user', userEmail:'', title:'', message:'', type:'SYSTEM', link:'', couponCode:'' };
 
 function AdminNotificationsTab() {
-  const [form, setForm]         = useState(EMPTY_NOTIF);
+  const [form, setForm, clearNotifDraft] = useFormDraft('admin-notif-draft', EMPTY_NOTIF);
   const [sending, setSending]   = useState(false);
   const [result, setResult]     = useState(null);
   const [history, setHistory]   = useState([]);
@@ -1950,7 +2108,7 @@ function AdminNotificationsTab() {
       const count = resp.data?.data?.count || 0;
       setResult({ ok: true, text: `✅ Sent to ${count} user${count !== 1 ? 's' : ''}!` });
       setHistory(prev => [{ ...form, sentAt: new Date().toISOString(), count }, ...prev.slice(0, 9)]);
-      setForm(EMPTY_NOTIF);
+      clearNotifDraft();
     } catch(e) {
       setResult({ ok: false, text: e?.response?.data?.message || e.message || 'Failed to send.' });
     } finally { setSending(false); }
@@ -2084,7 +2242,7 @@ function AdminNotificationsTab() {
             style={{ padding:'11px 28px', borderRadius:8, background:C.accent, color:'white', border:'none', fontWeight:700, fontSize:14, cursor:'pointer', opacity:sending?0.6:1 }}>
             {sending ? 'Sending…' : '📤 Send Notification'}
           </button>
-          <button onClick={() => { setForm(EMPTY_NOTIF); setResult(null); }}
+          <button onClick={() => { clearNotifDraft(); setResult(null); }}
             style={{ padding:'11px 18px', borderRadius:8, background: C.card, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
             Clear
           </button>

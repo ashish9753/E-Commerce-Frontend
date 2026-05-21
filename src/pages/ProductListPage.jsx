@@ -19,6 +19,7 @@ export default function ProductListPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState({ brands: [], prices: [], ratings: [] });
   const [sort, setSort] = useState('popular');
+  const [showFilter, setShowFilter] = useState(false);
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -87,12 +88,21 @@ export default function ProductListPage() {
       </div>
 
       <div className="grid grid-cols-[240px_1fr] gap-9 pb-20 max-md:grid-cols-1">
-        <FilterBar filters={filters} onChange={setFilters} />
+        <div className={!showFilter ? 'max-md:hidden' : ''}>
+          <FilterBar filters={filters} onChange={setFilters} />
+        </div>
         <div>
-          <div className="flex items-center justify-between mb-6">
-            <div className="text-[13px] text-mute">
-              Showing <b className="text-ink">{products.length}</b>{total > products.length ? ` of ${total}` : ''} products
-              {category && ` in ${category}`}
+          <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <button className="md:hidden btn btn-ghost btn-sm" onClick={() => setShowFilter(v => !v)}>
+                {showFilter ? '✕ Hide Filters' : '⊞ Filters'}
+                {!showFilter && (filters.brands.length + filters.prices.length + filters.ratings.length) > 0 &&
+                  <span className="tag tag-accent ml-1">{filters.brands.length + filters.prices.length + filters.ratings.length}</span>}
+              </button>
+              <div className="text-[13px] text-mute">
+                Showing <b className="text-ink">{products.length}</b>{total > products.length ? ` of ${total}` : ''} products
+                {category && ` in ${category}`}
+              </div>
             </div>
             <select className="select w-50" value={sort} onChange={e => setSort(e.target.value)}>
               {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

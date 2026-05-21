@@ -183,17 +183,17 @@ export default function OrdersPage() {
 
         {/* Filter + Search */}
         <div style={{ background:'white', borderRadius:8, border:'1px solid #ddd', marginBottom:16, overflow:'hidden' }}>
-          <div style={{ display:'flex', borderBottom:'1px solid #ddd', padding:'0 16px' }}>
+          <div className="ord-filter-row">
             {FILTERS.map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 style={{ padding:'14px 16px', border:'none', background:'none', fontWeight:filter===f?700:500,
                   fontSize:13, cursor:'pointer', color:filter===f?'#c45500':'#444',
                   borderBottom:filter===f?'2px solid #c45500':'2px solid transparent',
-                  marginBottom:-1, transition:'all .15s' }}>
+                  marginBottom:-1, transition:'all .15s', whiteSpace:'nowrap' }}>
                 {f}
               </button>
             ))}
-            <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8, padding:'8px 0' }}>
+            <div className="ord-search-wrap">
               <input value={search} onChange={e=>setSearch(e.target.value)}
                 placeholder="Search orders…"
                 style={{ height:34, border:'1px solid #ccc', borderRadius:6, padding:'0 12px', fontSize:13, outline:'none', width:220 }} />

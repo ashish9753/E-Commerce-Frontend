@@ -424,7 +424,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
+      <div className="r-checkout-layout">
 
         {/* Left column */}
         <div>

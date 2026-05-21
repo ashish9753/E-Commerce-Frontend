@@ -184,10 +184,10 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Main 3-col layout */}
-        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 300px', gap:24, alignItems:'start', paddingBottom:40 }}>
+        <div className="r-pdp-layout">
 
           {/* ── Col 1: Image Gallery ── */}
-          <div style={{ width:420 }}>
+          <div style={{ width:'100%', maxWidth:420 }}>
             {/* Thumbnails + main image side by side */}
             <div style={{ display:'flex', gap:10 }}>
               {/* Thumb strip */}

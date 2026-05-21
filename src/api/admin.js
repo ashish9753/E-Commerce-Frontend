@@ -3,6 +3,8 @@ import client from './client';
 export const adminApi = {
   // Users
   getUsers: (params) => client.get('/users', { params }),
+  getUserById: (id) => client.get(`/users/${id}`),
+  getUserOrders: (userId, params) => client.get('/orders', { params: { userId, limit: 50, ...params } }),
   blockUser: (id) => client.patch(`/users/${id}/block`),
   deleteUser: (id) => client.delete(`/users/${id}`),
 

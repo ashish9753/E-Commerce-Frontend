@@ -93,3 +93,69 @@ input[type=number] { -moz-appearance: textfield; }
 
   .spinner { @apply inline-block w-6 h-6 border-2 border-line border-t-ink rounded-full animate-spin; }
 }
+
+/* ── Responsive layout helpers ── */
+.r-pdp-layout {
+  display: grid;
+  grid-template-columns: auto 1fr 300px;
+  gap: 24px;
+  align-items: start;
+  padding-bottom: 40px;
+}
+.r-checkout-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+.r-promo-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.r-nl-2col {
+  max-width: 1520px;
+  margin: 0 auto;
+  padding: 30px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: center;
+}
+.r-hero { height: 420px; }
+
+@media (max-width: 768px) {
+  .r-pdp-layout { grid-template-columns: 1fr; }
+  .r-checkout-layout { grid-template-columns: 1fr; }
+  .r-promo-3col { grid-template-columns: 1fr; }
+  .r-nl-2col { grid-template-columns: 1fr; gap: 20px; }
+  .r-hero { height: 200px; }
+}
+
+/* Orders page filter row */
+.ord-filter-row {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  padding: 0 16px;
+  flex-wrap: wrap;
+}
+.ord-search-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+@media (max-width: 640px) {
+  .ord-search-wrap {
+    width: 100%;
+    margin-left: 0;
+    border-top: 1px solid #eee;
+    padding: 6px 0 8px;
+  }
+  .ord-search-wrap input { width: 100% !important; }
+}

@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useFormDraft } from '../../hooks/useFormDraft';
 import { useAuth } from '../../context/AuthContext';
 import { employeeApi } from '../../api/employee';
 import { returnsApi } from '../../api/returns';
 import { deliveryAreasApi } from '../../api/deliveryAreas';
 import { getErrorMessage } from '../../api/client';
+import { settingsApi } from '../../api/settings';
 import { useCatalog } from '../../context/CatalogContext';
+import AdminCatalogTab from '../admin/AdminCatalogTab';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -91,6 +94,8 @@ const Icon = {
   shop:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
   box:     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   arrow:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  catalog: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+  gear:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M4.93 4.93l1.42 1.42M19.07 19.07l-1.42-1.42M4.93 19.07l1.42-1.42M20 12h2M2 12h2M12 20v2M12 2v2"/></svg>,
 };
 
 function SvgAt({ el, size = 17 }) {
@@ -699,19 +704,21 @@ function SectionHead({ title, sub }) {
 function ProductForm({ initial, onSave, onCancel }) {
   const { brands: catalogBrands, topCategories, getSubcats } = useCatalog();
   const fileInputRef = useRef(null);
+  const isEditMode = !!initial;
 
   const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'No Tax',taxRate:0 };
 
   // Derive initial parentCat from the initial category's parent field
   const initCatId = initial ? (typeof initial.category==='object' ? initial.category?._id : initial.category)||'' : '';
-  const [parentCat, setParentCat] = useState(() => {
-    if (!initial) return '';
+  const editInitialParent = isEditMode ? (() => {
     const cat = initial.category;
     if (typeof cat === 'object' && cat?.parent) return (cat.parent?._id || cat.parent) + '';
-    return initCatId; // fallback: treat as parent
-  });
+    return initCatId;
+  })() : '';
+  const [parentCat, setParentCatRaw, clearParentDraft] = useFormDraft('emp-product-parent', editInitialParent, !isEditMode);
+  const setParentCat = (v) => { setParentCatRaw(v); };
 
-  const [form, setForm] = useState(initial ? {
+  const editInitialForm = isEditMode ? {
     title: initial.title||'', description: initial.description||'',
     shortDescription: initial.shortDescription||'', brand: initial.brand||'',
     price: initial.price||'', discountPrice: initial.discountPrice||'',
@@ -720,7 +727,9 @@ function ProductForm({ initial, onSave, onCancel }) {
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
     taxLabel: initial.taxLabel || 'No Tax', taxRate: initial.taxRate ?? 0,
-  } : empty);
+  } : empty;
+
+  const [form, setForm, clearFormDraft] = useFormDraft('emp-product-draft', editInitialForm, !isEditMode);
 
   const subcats = getSubcats(parentCat);
 
@@ -748,7 +757,7 @@ function ProductForm({ initial, onSave, onCancel }) {
     const rows = Object.entries(m || {}).map(([key, value]) => ({ key, value }));
     return rows.length ? rows : [{ key:'', value:'' }];
   };
-  const [specs, setSpecs] = useState(initSpecs);
+  const [specs, setSpecs, clearSpecsDraft] = useFormDraft('emp-product-specs', initSpecs(), !isEditMode);
   const [specBulkMode, setSpecBulkMode] = useState(false);
   const [specBulkText, setSpecBulkText] = useState('');
   const addSpec    = () => setSpecs(s => [...s, { key:'', value:'' }]);
@@ -819,6 +828,8 @@ function ProductForm({ initial, onSave, onCancel }) {
       specs.forEach(({ key, value }) => { if (key.trim()) specObj[key.trim()] = value.trim(); });
       if (Object.keys(specObj).length) fd.append('specifications', JSON.stringify(specObj));
       await onSave(fd);
+      // Clear draft only after successful save in create mode
+      if (!isEditMode) { clearFormDraft(); clearSpecsDraft(); clearParentDraft(); }
     } catch(err) { setError(getErrorMessage(err)); }
     finally { setSaving(false); }
   };
@@ -1434,6 +1445,13 @@ function DeliveryAreasTab() {
   const [form, setForm]         = useState(empty);
   const [showForm, setShowForm] = useState(false);
 
+  // Auto-save create draft (not edit) to sessionStorage
+  useEffect(() => {
+    if (!editId) {
+      try { sessionStorage.setItem('emp-delivery-draft', JSON.stringify(form)); } catch {}
+    }
+  }, [form, editId]);
+
   const load = () => {
     setLoading(true);
     deliveryAreasApi.getAllAdmin()
@@ -1455,6 +1473,7 @@ function DeliveryAreasTab() {
         await deliveryAreasApi.update(editId, { ...form, deliveryCharge: charge });
       } else {
         await deliveryAreasApi.create({ ...form, deliveryCharge: charge });
+        try { sessionStorage.removeItem('emp-delivery-draft'); } catch {}
       }
       setForm(empty); setEditId(null); setShowForm(false); load();
     } catch (e) { setError(e?.response?.data?.message || 'Failed to save'); }
@@ -1484,8 +1503,14 @@ function DeliveryAreasTab() {
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
       <Card title="Delivery Areas">
         <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:16 }}>
-          <Btn variant="primary" onClick={() => { setForm(empty); setEditId(null); setShowForm(s=>!s); setError(''); }}>
-            {showForm ? 'Cancel' : '+ Add Pincode'}
+          <Btn variant="primary" onClick={() => {
+            if (!showForm) {
+              // Restore any saved draft when opening create form
+              try { const s = sessionStorage.getItem('emp-delivery-draft'); setForm(s ? { ...empty, ...JSON.parse(s) } : empty); } catch { setForm(empty); }
+            }
+            setEditId(null); setShowForm(s => !s); setError('');
+          }}>
+            {showForm && !editId ? 'Cancel' : showForm ? 'Cancel' : '+ Add Pincode'}
           </Btn>
         </div>
 
@@ -1519,7 +1544,7 @@ function DeliveryAreasTab() {
               <Btn variant="primary" onClick={handleSubmit} disabled={saving}>
                 {saving ? 'Saving...' : editId ? 'Save Changes' : 'Add Area'}
               </Btn>
-              <Btn onClick={() => { setShowForm(false); setEditId(null); setForm(empty); }}>Cancel</Btn>
+              <Btn onClick={() => { setShowForm(false); setEditId(null); }}>Cancel</Btn>
             </div>
           </div>
         )}
@@ -1586,13 +1611,154 @@ function DeliveryAreasTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════
+   EMPLOYEE SETTINGS TAB  (identical to admin settings)
+══════════════════════════════════════════════════════ */
+function EmployeeSettingsTab() {
+  const [cfg, setCfg] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  useEffect(() => {
+    settingsApi.getCodSettings()
+      .then(r => {
+        const s = r.data?.data?.codSettings || {};
+        setCfg({
+          minOrderAmount: s.minOrderAmount ?? 0,
+          maxOrderAmount: s.maxOrderAmount ?? 0,
+          codEnabled:     s.codEnabled     ?? true,
+          bookingEnabled: s.bookingEnabled ?? false,
+          bookingType:    s.bookingType    ?? 'flat',
+          bookingValue:   s.bookingValue   ?? 500,
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  const set = (k, v) => setCfg(prev => ({ ...prev, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    await settingsApi.updateCodSettings(cfg).catch(() => {});
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  if (!cfg) return <div style={{ padding: 40, textAlign: 'center', color: C.mute }}>Loading settings…</div>;
+
+  const inp = {
+    width: '100%', height: 40, padding: '0 12px',
+    border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, fontWeight: 600,
+    outline: 'none', boxSizing: 'border-box', background: C.bg, color: C.text, fontFamily: 'inherit',
+  };
+  const lbl = { fontSize: 11.5, fontWeight: 600, color: C.mute, display: 'block', marginBottom: 6 };
+
+  function Toggle({ on, onChange }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={onChange}>
+        <div style={{ position: 'relative', width: 44, height: 24 }}>
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 12, background: on ? C.accent : C.mute, transition: 'background .2s' }} />
+          <div style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: 'white', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.3)' }} />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 600, color: on ? C.green : C.mute, minWidth: 52 }}>{on ? 'Enabled' : 'Disabled'}</span>
+      </div>
+    );
+  }
+
+  const numVal = v => v === 0 ? '' : v;
+  const numChg = (k) => (e) => set(k, e.target.value === '' ? 0 : Number(e.target.value));
+
+  return (
+    <div style={{ maxWidth: 620 }}>
+      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.line}`, overflow: 'hidden' }}>
+
+        {/* Order limits */}
+        <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>COD Order Amount Limits</div>
+          <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Applies to COD orders only. Online (Razorpay) orders have no restrictions. Leave empty for no limit.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <label style={lbl}>Minimum Amount (Rs.)</label>
+              <input type="number" min="0" value={numVal(cfg.minOrderAmount)} placeholder="No minimum"
+                onChange={numChg('minOrderAmount')} style={inp} />
+            </div>
+            <div>
+              <label style={lbl}>Maximum Amount (Rs.)</label>
+              <input type="number" min="0" value={numVal(cfg.maxOrderAmount)} placeholder="No maximum"
+                onChange={numChg('maxOrderAmount')} style={inp} />
+            </div>
+          </div>
+        </div>
+
+        {/* COD toggle + Booking toggle */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.line}` }}>
+          <div style={{ padding: '18px 22px', borderRight: `1px solid ${C.line}` }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>Cash on Delivery</div>
+            <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Allow customers to pay cash on delivery.</div>
+            <Toggle on={cfg.codEnabled} onChange={() => set('codEnabled', !cfg.codEnabled)} />
+          </div>
+          <div style={{ padding: '18px 22px' }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 2 }}>COD Booking Amount</div>
+            <div style={{ fontSize: 11.5, color: C.mute, marginBottom: 14 }}>Collect non-refundable advance via Razorpay for COD orders.</div>
+            <Toggle on={cfg.bookingEnabled} onChange={() => set('bookingEnabled', !cfg.bookingEnabled)} />
+          </div>
+        </div>
+
+        {/* Booking fields (only when enabled) */}
+        {cfg.bookingEnabled && (
+          <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.line}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={lbl}>Booking Amount Type</label>
+                <select value={cfg.bookingType} onChange={e => set('bookingType', e.target.value)}
+                  style={{ ...inp, fontWeight: 500 }}>
+                  <option value="flat">Fixed Amount (Rs.)</option>
+                  <option value="percent">Percentage of Order (%)</option>
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>{cfg.bookingType === 'percent' ? 'Percentage (%)' : 'Amount (Rs.)'}</label>
+                <input type="number" min="0" max={cfg.bookingType === 'percent' ? 100 : undefined}
+                  value={numVal(cfg.bookingValue)} placeholder="e.g. 500"
+                  onChange={numChg('bookingValue')} style={inp} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ background: C.accent + '12', border: `1px solid ${C.accent}30`, borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: C.accent, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 4 }}>Preview</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
+                  {cfg.bookingType === 'percent' ? `${cfg.bookingValue || 0}% of order total` : `Rs. ${Number(cfg.bookingValue || 0).toLocaleString('en-IN')}`}
+                </div>
+                <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>Razorpay (UPI) · Non-refundable</div>
+              </div>
+              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center' }}>
+                ⚠ This booking is <strong>&nbsp;non-refundable&nbsp;</strong> and collected before the order is confirmed.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ padding: '14px 22px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Btn variant="primary" onClick={save} disabled={saving} style={{ padding: '9px 26px' }}>
+            {saving ? 'Saving…' : 'Save Settings'}
+          </Btn>
+          {saved && <span style={{ color: C.green, fontWeight: 600, fontSize: 13 }}>✓ Saved</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NAV_TABS = [
-  { id:'Overview',        iconEl: Icon.grid  },
-  { id:'My Products',     iconEl: Icon.bag   },
-  { id:'Orders',          iconEl: Icon.orders },
-  { id:'Returns',         iconEl: Icon.refund },
-  { id:'Delivery Areas',  iconEl: Icon.box   },
-  { id:'Add Product',     iconEl: Icon.plus  },
+  { id:'Overview',        iconEl: Icon.grid    },
+  { id:'My Products',     iconEl: Icon.bag     },
+  { id:'Orders',          iconEl: Icon.orders  },
+  { id:'Returns',         iconEl: Icon.refund  },
+  { id:'Delivery Areas',  iconEl: Icon.box     },
+  { id:'Add Product',     iconEl: Icon.plus    },
+  { id:'Catalog',         iconEl: Icon.catalog },
+  { id:'Settings',        iconEl: Icon.gear    },
 ];
 
 const TAB_SUBTITLES = {
@@ -1602,6 +1768,8 @@ const TAB_SUBTITLES = {
   Returns:          'Review and respond to return requests from customers',
   'Delivery Areas': 'Manage pincodes and delivery charges',
   'Add Product':    'Create a new product listing',
+  Catalog:          'Manage brands, categories, attributes and events',
+  Settings:         'Configure COD availability, order amount limits, and booking payments',
 };
 
 export default function SellerDashboard() {
@@ -1789,6 +1957,8 @@ export default function SellerDashboard() {
               {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
               {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
               {tab==='Add Product' && !editProduct && <ProductForm onSave={handleAddProduct} />}
+              {tab==='Catalog'     && !editProduct && <AdminCatalogTab />}
+              {tab==='Settings'    && !editProduct && <EmployeeSettingsTab />}
             </>
           )}
         </div>

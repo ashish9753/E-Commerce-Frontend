@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { brandsApi, categoriesApi, attributesApi, eventsApi } from '../../api/catalog';
 import { useCatalog } from '../../context/CatalogContext';
+import { useFormDraft } from '../../hooks/useFormDraft';
 
 const C = {
   accent: '#f97316', mute: '#6b7280', sub: '#9ca3af',
@@ -101,7 +102,7 @@ function TableHead({ cols }) {
 /* ════════════════════ BRANDS ════════════════════ */
 function BrandsSection({ onMutate }) {
   const [brands, setBrands] = useState([]);
-  const [name, setName] = useState('');
+  const [draft, setDraft, clearDraft] = useFormDraft('catalog-brand', { name: '' });
   const [saving, setSaving] = useState(false);
 
   const load = () => brandsApi.getAll().then(r => setBrands(r.data?.data?.brands || [])).catch(() => {});
@@ -109,10 +110,10 @@ function BrandsSection({ onMutate }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!draft.name.trim()) return;
     setSaving(true);
-    await brandsApi.create({ name: name.trim() }).catch(() => {});
-    setName('');
+    await brandsApi.create({ name: draft.name.trim() }).catch(() => {});
+    clearDraft();
     setSaving(false);
     load(); onMutate?.();
   };
@@ -127,7 +128,7 @@ function BrandsSection({ onMutate }) {
       <Card>
         <SectionTitle>Add Brand</SectionTitle>
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}><Input label="Brand Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Samsung" required /></div>
+          <div style={{ flex: 1 }}><Input label="Brand Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Samsung" required /></div>
           <Btn type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add Brand'}</Btn>
         </form>
       </Card>
@@ -157,8 +158,7 @@ function BrandsSection({ onMutate }) {
 /* ════════════════════ CATEGORIES ════════════════════ */
 function CategoriesSection({ onMutate }) {
   const [cats, setCats] = useState([]);
-  const [name, setName] = useState('');
-  const [desc, setDesc] = useState('');
+  const [draft, setDraft, clearDraft] = useFormDraft('catalog-category', { name: '', desc: '' });
   const [saving, setSaving] = useState(false);
 
   const topLevel = cats.filter(c => !c.parent);
@@ -167,10 +167,10 @@ function CategoriesSection({ onMutate }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!draft.name.trim()) return;
     setSaving(true);
-    await categoriesApi.create({ name: name.trim(), description: desc }).catch(() => {});
-    setName(''); setDesc('');
+    await categoriesApi.create({ name: draft.name.trim(), description: draft.desc }).catch(() => {});
+    clearDraft();
     setSaving(false);
     load(); onMutate?.();
   };
@@ -185,8 +185,8 @@ function CategoriesSection({ onMutate }) {
       <Card>
         <SectionTitle>Add Category</SectionTitle>
         <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
-          <Input label="Category Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Washing Machines" required />
-          <Input label="Description (optional)" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Short description" />
+          <Input label="Category Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Washing Machines" required />
+          <Input label="Description (optional)" value={draft.desc} onChange={e => setDraft(d => ({ ...d, desc: e.target.value }))} placeholder="Short description" />
           <Btn type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add'}</Btn>
         </form>
       </Card>
@@ -217,9 +217,7 @@ function CategoriesSection({ onMutate }) {
 /* ════════════════════ SUB-CATEGORIES ════════════════════ */
 function SubCategoriesSection({ onMutate }) {
   const [cats, setCats] = useState([]);
-  const [name, setName] = useState('');
-  const [parent, setParent] = useState('');
-  const [desc, setDesc] = useState('');
+  const [draft, setDraft, clearDraft] = useFormDraft('catalog-subcat', { name: '', parent: '', desc: '' });
   const [saving, setSaving] = useState(false);
 
   const topLevel = cats.filter(c => !c.parent);
@@ -229,10 +227,10 @@ function SubCategoriesSection({ onMutate }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !parent) return;
+    if (!draft.name.trim() || !draft.parent) return;
     setSaving(true);
-    await categoriesApi.create({ name: name.trim(), description: desc, parent }).catch(() => {});
-    setName(''); setDesc(''); setParent('');
+    await categoriesApi.create({ name: draft.name.trim(), description: draft.desc, parent: draft.parent }).catch(() => {});
+    clearDraft();
     setSaving(false);
     load(); onMutate?.();
   };
@@ -247,12 +245,12 @@ function SubCategoriesSection({ onMutate }) {
       <Card>
         <SectionTitle>Add Sub-category</SectionTitle>
         <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
-          <Select label="Parent Category" value={parent} onChange={e => setParent(e.target.value)} required>
+          <Select label="Parent Category" value={draft.parent} onChange={e => setDraft(d => ({ ...d, parent: e.target.value }))} required>
             <option value="">Select parent…</option>
             {topLevel.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
           </Select>
-          <Input label="Sub-category Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Front Load" required />
-          <Input label="Description (optional)" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Short description" />
+          <Input label="Sub-category Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Front Load" required />
+          <Input label="Description (optional)" value={draft.desc} onChange={e => setDraft(d => ({ ...d, desc: e.target.value }))} placeholder="Short description" />
           <Btn type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add'}</Btn>
         </form>
       </Card>
@@ -282,14 +280,11 @@ function SubCategoriesSection({ onMutate }) {
 
 /* ════════════════════ ATTRIBUTES ════════════════════ */
 function AttributesSection({ onMutate }) {
-  const [attrs, setAttrs]     = useState([]);
-  const [cats, setCats]       = useState([]);
-  const [name, setName]       = useState('');
-  const [unit, setUnit]       = useState('');
-  const [subcat, setSubcat]   = useState('');
+  const [attrs, setAttrs] = useState([]);
+  const [cats, setCats]   = useState([]);
+  const [draft, setDraft, clearDraft] = useFormDraft('catalog-attr', { name: '', unit: '', subcat: '', options: [] });
   const [optInput, setOptInput] = useState('');
-  const [options, setOptions] = useState([]);
-  const [saving, setSaving]   = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const subCats = cats.filter(c => c.parent);
 
@@ -301,16 +296,16 @@ function AttributesSection({ onMutate }) {
 
   const addOption = () => {
     const val = optInput.trim();
-    if (val && !options.includes(val)) setOptions(prev => [...prev, val]);
+    if (val && !draft.options.includes(val)) setDraft(d => ({ ...d, options: [...d.options, val] }));
     setOptInput('');
   };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !subcat) return;
+    if (!draft.name.trim() || !draft.subcat) return;
     setSaving(true);
-    await attributesApi.create({ name: name.trim(), unit: unit.trim(), subcategory: subcat, options }).catch(() => {});
-    setName(''); setUnit(''); setSubcat(''); setOptions([]);
+    await attributesApi.create({ name: draft.name.trim(), unit: draft.unit.trim(), subcategory: draft.subcat, options: draft.options }).catch(() => {});
+    clearDraft();
     setSaving(false);
     load(); onMutate?.();
   };
@@ -326,12 +321,12 @@ function AttributesSection({ onMutate }) {
         <SectionTitle>Add Attribute</SectionTitle>
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
-            <Select label="Sub-category" value={subcat} onChange={e => setSubcat(e.target.value)} required>
+            <Select label="Sub-category" value={draft.subcat} onChange={e => setDraft(d => ({ ...d, subcat: e.target.value }))} required>
               <option value="">Select sub-category…</option>
               {subCats.map(c => <option key={c._id} value={c._id}>{c.name} ({c.parent?.name})</option>)}
             </Select>
-            <Input label="Attribute Name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Capacity" required />
-            <Input label="Unit (optional)" value={unit} onChange={e => setUnit(e.target.value)} placeholder="e.g. kg, ton, L" />
+            <Input label="Attribute Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Capacity" required />
+            <Input label="Unit (optional)" value={draft.unit} onChange={e => setDraft(d => ({ ...d, unit: e.target.value }))} placeholder="e.g. kg, ton, L" />
           </div>
 
           <div style={{ marginBottom: 14 }}>
@@ -343,9 +338,9 @@ function AttributesSection({ onMutate }) {
                 style={{ flex: 1, height: 36, padding: '0 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 13, outline: 'none' }} />
               <Btn type="button" variant="ghost" onClick={addOption}>Add</Btn>
             </div>
-            {options.length > 0 && (
+            {draft.options.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {options.map(o => <Tag key={o} label={o} onRemove={() => setOptions(prev => prev.filter(x => x !== o))} />)}
+                {draft.options.map(o => <Tag key={o} label={o} onRemove={() => setDraft(d => ({ ...d, options: d.options.filter(x => x !== o) }))} />)}
               </div>
             )}
           </div>
@@ -387,31 +382,27 @@ function AttributesSection({ onMutate }) {
 
 /* ════════════════════ EVENTS ════════════════════ */
 function EventsSection({ onMutate }) {
-  const [events, setEvents]     = useState([]);
-  const [name, setName]         = useState('');
-  const [badge, setBadge]       = useState('');
-  const [desc, setDesc]         = useState('');
-  const [discount, setDiscount] = useState('');
-  const [startDate, setStart]   = useState('');
-  const [endDate, setEnd]       = useState('');
-  const [saving, setSaving]     = useState(false);
+  const [events, setEvents] = useState([]);
+  const [draft, setDraft, clearDraft] = useFormDraft('catalog-event', { name: '', badge: '', desc: '', discount: '', startDate: '', endDate: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
   const load = () => eventsApi.getAll().then(r => setEvents(r.data?.data?.events || [])).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim() || !startDate || !endDate) return;
+    if (!draft.name.trim() || !draft.startDate || !draft.endDate) return;
     setSaving(true);
     const fd = new FormData();
-    fd.append('name', name.trim());
-    fd.append('badge', badge.trim());
-    fd.append('description', desc);
-    fd.append('discountPercent', discount || 0);
-    fd.append('startDate', startDate);
-    fd.append('endDate', endDate);
+    fd.append('name', draft.name.trim());
+    fd.append('badge', draft.badge.trim());
+    fd.append('description', draft.desc);
+    fd.append('discountPercent', draft.discount || 0);
+    fd.append('startDate', draft.startDate);
+    fd.append('endDate', draft.endDate);
     await eventsApi.create(fd).catch(() => {});
-    setName(''); setBadge(''); setDesc(''); setDiscount(''); setStart(''); setEnd('');
+    clearDraft();
     setSaving(false);
     load(); onMutate?.();
   };
@@ -440,17 +431,17 @@ function EventsSection({ onMutate }) {
         <SectionTitle>Create Event / Scheme</SectionTitle>
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <Input label="Event Name *" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Dashain Mega Sale" required />
-            <Input label="Badge / Code" value={badge} onChange={e => setBadge(e.target.value)} placeholder="e.g. DASHAIN50" />
+            <Input label="Event Name *" value={draft.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dashain Mega Sale" required />
+            <Input label="Badge / Code" value={draft.badge} onChange={e => set('badge', e.target.value)} placeholder="e.g. DASHAIN50" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <Input label="Discount %" type="number" min="0" max="100" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="e.g. 50" />
-            <Input label="Start Date *" type="date" value={startDate} onChange={e => setStart(e.target.value)} required />
-            <Input label="End Date *" type="date" value={endDate} onChange={e => setEnd(e.target.value)} required />
+            <Input label="Discount %" type="number" min="0" max="100" value={draft.discount} onChange={e => set('discount', e.target.value)} placeholder="e.g. 50" />
+            <Input label="Start Date *" type="date" value={draft.startDate} onChange={e => set('startDate', e.target.value)} required />
+            <Input label="End Date *" type="date" value={draft.endDate} onChange={e => set('endDate', e.target.value)} required />
           </div>
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: C.mute, display: 'block', marginBottom: 5 }}>Description</label>
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
+            <textarea value={draft.desc} onChange={e => set('desc', e.target.value)} rows={2}
               placeholder="Short description of the event…"
               style={{ width: '100%', padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 6,
                 fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />

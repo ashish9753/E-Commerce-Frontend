@@ -16,7 +16,7 @@ export default function HeroSection() {
   return (
     <div style={{ background: '#111' }}>
       {/* ── Main slider ── */}
-      <div style={{ position: 'relative', overflow: 'hidden', height: 420 }}>
+      <div className="r-hero" style={{ position: 'relative', overflow: 'hidden' }}>
         <div style={{
           display: 'flex', height: '100%',
           transform: `translateX(-${slide * 100}%)`,

@@ -162,6 +162,8 @@ export default function Header() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [showNotifs, setShowNotifs] = useState(false);
   const [hidden, setHidden] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 769);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const searchRef = useRef(null);
   const bellRef   = useRef(null);
   const lastScrollY = useRef(0);
@@ -185,6 +187,16 @@ export default function Header() {
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 769;
+      setIsMobile(mobile);
+      if (!mobile) setMobileOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const handleSearch = (e) => {
@@ -236,207 +248,386 @@ export default function Header() {
       transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
       transition: 'transform 0.25s ease',
     }}>
-      {/* Main dark bar */}
-      <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
-        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
-          display: 'grid', gridTemplateColumns: 'auto auto 1fr auto', gap: 16, alignItems: 'center', height: 76 }}>
+      {!isMobile ? (
+        <>
+          {/* Main dark bar — desktop */}
+          <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
+            <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
+              display: 'grid', gridTemplateColumns: 'auto auto 1fr auto', gap: 16, alignItems: 'center', height: 76 }}>
 
-          {/* Logo */}
-          <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
-            fontWeight: 800, fontSize: 22, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
-            padding: '6px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
-            Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
-          </div>
-
-          {/* Deliver to widget */}
-          {(() => {
-            const addr = user?.addresses?.[0];
-            return (
-              <div onClick={() => navigate('/profile?tab=addresses')}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
-                  padding: '5px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+              {/* Logo */}
+              <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
+                fontWeight: 800, fontSize: 22, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
+                padding: '6px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                </svg>
-                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                  <span style={{ fontSize: 11, color: '#ccc' }}>
-                    {addr ? `Delivering to ${addr.city || addr.state || ''}` : 'Deliver to'}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
-                    {addr ? addr.pincode : 'Update location'}
-                  </span>
-                </div>
+                Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
               </div>
-            );
-          })()}
 
-          {/* Search */}
-          <div style={{ position: 'relative', maxWidth: 700, width: '100%', margin: '0 auto' }} ref={searchRef}>
-            <form onSubmit={handleSearchSubmit} style={{ display: 'flex' }}>
-              <input
-                style={{ flex: 1, height: 46, padding: '0 12px 0 16px', border: 'none', borderRadius: '4px 0 0 4px',
-                  fontSize: 14, outline: 'none', background: 'white', color: '#0f172a' }}
-                placeholder="Search products, brands & categories…"
-                value={query}
-                onChange={handleSearch}
-                onFocus={() => query.trim().length > 1 && setShowResults(true)}
-                autoComplete="off"
-              />
-              <button type="submit" style={{ height: 46, padding: '0 18px', background: '#FF5A1F',
-                border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                <Search size={20} color="white" />
-              </button>
-            </form>
-
-            {showResults && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'white',
-                border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px #00000022', zIndex: 200,
-                overflow: 'hidden', maxHeight: 320, overflowY: 'auto' }}>
-                {results.length > 0 ? results.map(p => (
-                  <div key={p._id || p.id} onClick={() => selectResult(p)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'white'}>
-                    <div style={{ width: 40, height: 40, background: '#f4f6f8', borderRadius: 6, display: 'flex',
-                      alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                      {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🛍️'}
+              {/* Deliver to widget */}
+              {(() => {
+                const addr = user?.addresses?.[0];
+                return (
+                  <div onClick={() => navigate('/profile?tab=addresses')}
+                    style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                      padding: '5px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      <span style={{ fontSize: 11, color: '#ccc' }}>
+                        {addr ? `Delivering to ${addr.city || addr.state || ''}` : 'Deliver to'}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>
+                        {addr ? addr.pincode : 'Update location'}
+                      </span>
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
-                      <div style={{ fontSize: 11, color: '#9ca3af' }}>{p.brand}</div>
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{formatPriceShort(p.price)}</div>
                   </div>
-                )) : (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No products found for "{query}"</div>
+                );
+              })()}
+
+              {/* Search */}
+              <div style={{ position: 'relative', maxWidth: 700, width: '100%', margin: '0 auto' }} ref={searchRef}>
+                <form onSubmit={handleSearchSubmit} style={{ display: 'flex' }}>
+                  <input
+                    style={{ flex: 1, height: 46, padding: '0 12px 0 16px', border: 'none', borderRadius: '4px 0 0 4px',
+                      fontSize: 14, outline: 'none', background: 'white', color: '#0f172a' }}
+                    placeholder="Search products, brands & categories…"
+                    value={query}
+                    onChange={handleSearch}
+                    onFocus={() => query.trim().length > 1 && setShowResults(true)}
+                    autoComplete="off"
+                  />
+                  <button type="submit" style={{ height: 46, padding: '0 18px', background: '#FF5A1F',
+                    border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Search size={20} color="white" />
+                  </button>
+                </form>
+                {showResults && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'white',
+                    border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px #00000022', zIndex: 200,
+                    overflow: 'hidden', maxHeight: 320, overflowY: 'auto' }}>
+                    {results.length > 0 ? results.map(p => (
+                      <div key={p._id || p.id} onClick={() => selectResult(p)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', cursor: 'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+                        <div style={{ width: 40, height: 40, background: '#f4f6f8', borderRadius: 6, display: 'flex',
+                          alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                          {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🛍️'}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                          <div style={{ fontSize: 11, color: '#9ca3af' }}>{p.brand}</div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{formatPriceShort(p.price)}</div>
+                      </div>
+                    )) : (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No products found for "{query}"</div>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+
+              {/* Right icons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {compareCount > 0 && iconBtn(() => navigate('/compare'), (
+                  <>
+                    <GitCompare size={22} />
+                    <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17, borderRadius: '50%',
+                      background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center' }}>{compareCount}</span>
+                  </>
+                ))}
+                {iconBtn(() => navigate('/wishlist'), (
+                  <>
+                    <Heart size={22} />
+                    {wishCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
+                      borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{wishCount}</span>}
+                  </>
+                ))}
+                {user && (
+                  <div style={{ position: 'relative' }} ref={bellRef}>
+                    {iconBtn(() => setShowNotifs(v => !v), (
+                      <>
+                        <Bell size={22} />
+                        {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
+                          borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>}
+                      </>
+                    ))}
+                    {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
+                  </div>
+                )}
+                {iconBtn(() => navigate('/cart'), (
+                  <>
+                    <ShoppingCart size={22} />
+                    {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
+                      borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartCount}</span>}
+                  </>
+                ))}
+                {user ? (
+                  <>
+                    {iconBtn(() => navigate('/orders'), <Package size={22} />)}
+                    {user.role === 'admin' && iconBtn(() => navigate('/admin'), (
+                      <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
+                        background: '#7c3aed33', color: '#c4b5fd' }}>ADMIN</span>
+                    ))}
+                    {user.role === 'employee' && iconBtn(() => navigate('/employee'), (
+                      <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
+                        background: '#f59e0b22', color: '#fcd34d' }}>EMPLOYEE</span>
+                    ))}
+                    {iconBtn(() => navigate('/support'), <SupportIcon size={22} color="white" />)}
+                    {iconBtn(() => navigate('/profile'), (
+                      <>
+                        <User size={22} />
+                        <span>{user.name.split(' ')[0]}</span>
+                      </>
+                    ))}
+                  </>
+                ) : (
+                  <button onClick={() => navigate('/login')} style={{ padding: '8px 18px', background: 'transparent',
+                    border: '1px solid white', borderRadius: 4, color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                    Sign In
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Right icons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {compareCount > 0 && iconBtn(() => navigate('/compare'), (
-              <>
-                <GitCompare size={22} />
-                <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17, borderRadius: '50%',
-                  background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center' }}>{compareCount}</span>
-              </>
-            ))}
+          {/* Nav bar — desktop */}
+          <div style={{ background: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
+            <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
+              display: 'flex', alignItems: 'center', gap: 0, height: 44 }}>
+              <button onClick={() => navigate('/products')}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FF5A1F', color: 'white',
+                  border: 'none', borderRadius: 4, padding: '0 16px', height: 34, fontWeight: 700, fontSize: 13,
+                  cursor: 'pointer', flexShrink: 0, marginRight: 4 }}>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+                  <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+                  <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
+                </span>
+                All Categories
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', gap: 2 }}>
+                {[
+                  { label: 'Brands', path: '/products?sort=brand' },
+                  { label: 'Events & Offers', path: '/products?sort=events' },
+                  { label: 'Flash Sale', path: '/products?sort=discount' },
+                  { label: 'New Arrivals', path: '/products?sort=newest' },
+                  { label: 'Top Selling', path: '/products?sort=popular' },
+                  ...navCats.slice(0, 4).map(c => ({ label: c.name, path: `/products?category=${encodeURIComponent(c.name)}` })),
+                ].map(item => (
+                  <button key={item.label} onClick={() => navigate(item.path)}
+                    style={{ background: 'none', border: 'none', color: '#d1d5db', fontSize: 13, fontWeight: 500,
+                      cursor: 'pointer', padding: '0 14px', height: 44, whiteSpace: 'nowrap', flexShrink: 0,
+                      borderBottom: '2px solid transparent', transition: 'all .15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.borderBottomColor = '#FF5A1F'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = '#d1d5db'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => {}}
+                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: 'none',
+                  border: '1px solid #3a3a3a', borderRadius: 4, color: '#d1d5db', fontSize: 12, fontWeight: 600,
+                  padding: '0 12px', height: 32, cursor: 'pointer', marginLeft: 8 }}>
+                📱 Get App
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Mobile top bar */}
+          <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', height: 56, gap: 8 }}>
+              {/* Logo */}
+              <div onClick={() => navigate('/')} style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.02em',
+                cursor: 'pointer', color: 'white', flex: 1 }}>
+                Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
+              </div>
 
-            {iconBtn(() => navigate('/wishlist'), (
-              <>
-                <Heart size={22} />
-                {wishCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
-                  borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{wishCount}</span>}
-              </>
-            ))}
-
-            {user && (
-              <div style={{ position: 'relative' }} ref={bellRef}>
-                {iconBtn(() => setShowNotifs(v => !v), (
-                  <>
+              {/* Bell */}
+              {user && (
+                <div style={{ position: 'relative' }} ref={bellRef}>
+                  <button onClick={() => setShowNotifs(v => !v)} style={{ position: 'relative', background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
                     <Bell size={22} />
-                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
-                      borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
+                      background: '#FF5A1F', color: 'white', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>}
-                  </>
-                ))}
-                {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
-              </div>
-            )}
+                  </button>
+                  {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
+                </div>
+              )}
 
-            {iconBtn(() => navigate('/cart'), (
-              <>
+              {/* Cart */}
+              <button onClick={() => navigate('/cart')} style={{ position: 'relative', background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
                 <ShoppingCart size={22} />
-                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 17, height: 17,
-                  borderRadius: '50%', background: '#FF5A1F', color: 'white', fontSize: 10, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{cartCount}</span>}
-              </>
-            ))}
-
-            {user ? (
-              <>
-                {iconBtn(() => navigate('/orders'), <Package size={22} />)}
-                {user.role === 'admin' && iconBtn(() => navigate('/admin'), (
-                  <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
-                    background: '#7c3aed33', color: '#c4b5fd' }}>ADMIN</span>
-                ))}
-                {user.role === 'employee' && iconBtn(() => navigate('/employee'), (
-                  <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4,
-                    background: '#f59e0b22', color: '#fcd34d' }}>EMPLOYEE</span>
-                ))}
-                {iconBtn(() => navigate('/support'), <SupportIcon size={22} color="white" />)}
-                {iconBtn(() => navigate('/profile'), (
-                  <>
-                    <User size={22} />
-                    <span>{user.name.split(' ')[0]}</span>
-                  </>
-                ))}
-              </>
-            ) : (
-              <button onClick={() => navigate('/login')} style={{ padding: '8px 18px', background: 'transparent',
-                border: '1px solid white', borderRadius: 4, color: 'white', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                Sign In
+                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
+                  background: '#FF5A1F', color: 'white', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {cartCount}
+                </span>}
               </button>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* Nav bar */}
-      <div style={{ background: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}>
-        <div style={{ maxWidth: 1500, margin: '0 auto', padding: '0 16px',
-          display: 'flex', alignItems: 'center', gap: 0, height: 44 }}>
-          {/* All Categories */}
-          <button onClick={() => navigate('/products')}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FF5A1F', color: 'white',
-              border: 'none', borderRadius: 4, padding: '0 16px', height: 34, fontWeight: 700, fontSize: 13,
-              cursor: 'pointer', flexShrink: 0, marginRight: 4 }}>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
-              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
-              <span style={{ display: 'block', width: 16, height: 2, background: 'white', borderRadius: 1 }} />
-            </span>
-            All Categories
-          </button>
-          {/* Nav links */}
-          <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', gap: 2 }}>
-            {[
-              { label: 'Brands', path: '/products?sort=brand' },
-              { label: 'Events & Offers', path: '/products?sort=events' },
-              { label: 'Flash Sale', path: '/products?sort=discount' },
-              { label: 'New Arrivals', path: '/products?sort=newest' },
-              { label: 'Top Selling', path: '/products?sort=popular' },
-              ...navCats.slice(0, 4).map(c => ({ label: c.name, path: `/products?category=${encodeURIComponent(c.name)}` })),
-            ].map(item => (
-              <button key={item.label} onClick={() => navigate(item.path)}
-                style={{ background: 'none', border: 'none', color: '#d1d5db', fontSize: 13, fontWeight: 500,
-                  cursor: 'pointer', padding: '0 14px', height: 44, whiteSpace: 'nowrap', flexShrink: 0,
-                  borderBottom: '2px solid transparent', transition: 'all .15s' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.borderBottomColor = '#FF5A1F'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = '#d1d5db'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
-                {item.label}
+              {/* Hamburger */}
+              <button onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
               </button>
-            ))}
+            </div>
+
+            {/* Mobile search row */}
+            <div style={{ padding: '0 12px 10px', position: 'relative' }} ref={searchRef}>
+              <form onSubmit={handleSearchSubmit} style={{ display: 'flex' }}>
+                <input
+                  style={{ flex: 1, height: 40, padding: '0 12px', border: 'none', borderRadius: '4px 0 0 4px',
+                    fontSize: 14, outline: 'none', background: 'white', color: '#0f172a' }}
+                  placeholder="Search products…"
+                  value={query}
+                  onChange={handleSearch}
+                  onFocus={() => query.trim().length > 1 && setShowResults(true)}
+                  autoComplete="off"
+                />
+                <button type="submit" style={{ height: 40, padding: '0 14px', background: '#FF5A1F',
+                  border: 'none', borderRadius: '0 4px 4px 0', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <Search size={18} color="white" />
+                </button>
+              </form>
+              {showResults && (
+                <div style={{ position: 'absolute', left: 12, right: 12, top: 'calc(100% - 0px)', background: 'white',
+                  border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px #00000022', zIndex: 200,
+                  overflow: 'hidden', maxHeight: 260, overflowY: 'auto' }}>
+                  {results.map(p => (
+                    <div key={p._id || p.id} onClick={() => selectResult(p)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+                      <div style={{ width: 36, height: 36, background: '#f4f6f8', borderRadius: 6, flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {p.images?.[0] ? <img src={p.images[0]} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🛍️'}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>{formatPriceShort(p.price)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          {/* Get App */}
-          <button onClick={() => {}}
-            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: 'none',
-              border: '1px solid #3a3a3a', borderRadius: 4, color: '#d1d5db', fontSize: 12, fontWeight: 600,
-              padding: '0 12px', height: 32, cursor: 'pointer', marginLeft: 8 }}>
-            📱 Get App
-          </button>
-        </div>
-      </div>
+
+          {/* Mobile drawer */}
+          {mobileOpen && (
+            <>
+              <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 200 }} />
+              <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 285, background: '#131921', zIndex: 201, overflowY: 'auto', overflowX: 'hidden' }}>
+                {/* Drawer header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: '#1a2a3a', borderBottom: '1px solid #2a2a2a' }}>
+                  {user ? (
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>Hello, {user.name.split(' ')[0]}</div>
+                      {(user.role === 'admin' || user.role === 'employee') && (
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4, marginTop: 4, display: 'inline-block',
+                          background: user.role === 'admin' ? '#7c3aed33' : '#f59e0b22',
+                          color: user.role === 'admin' ? '#c4b5fd' : '#fcd34d', textTransform: 'uppercase' }}>
+                          {user.role}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+                      style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                      Sign In
+                    </button>
+                  )}
+                  <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>✕</button>
+                </div>
+
+                {/* Drawer nav */}
+                <div style={{ padding: '8px 0' }}>
+                  <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Shop</div>
+                  {[
+                    { label: '🏠  Home', path: '/' },
+                    { label: '🛒  All Products', path: '/products' },
+                    { label: '⚡  Flash Sale', path: '/products?sort=discount' },
+                    { label: '🆕  New Arrivals', path: '/products?sort=newest' },
+                    { label: '🔥  Top Selling', path: '/products?sort=popular' },
+                    { label: '🏷️  Brands', path: '/products?sort=brand' },
+                  ].map(item => (
+                    <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+                      style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                        textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                      {item.label}
+                    </button>
+                  ))}
+
+                  {navCats.length > 0 && (
+                    <>
+                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                      <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Categories</div>
+                      {navCats.slice(0, 8).map(c => (
+                        <button key={c.id || c.name} onClick={() => { navigate(`/products?category=${encodeURIComponent(c.name)}`); setMobileOpen(false); }}
+                          style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                            textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                          {c.emo}  {c.name}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {user && (
+                    <>
+                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                      <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Account</div>
+                      {[
+                        { label: '📦  My Orders', path: '/orders' },
+                        { label: '❤️  Wishlist', path: '/wishlist' },
+                        { label: '👤  Profile', path: '/profile' },
+                        { label: '💬  Support', path: '/support' },
+                        ...(user.role === 'admin' ? [{ label: '⚙️  Admin Panel', path: '/admin' }] : []),
+                        ...(user.role === 'employee' ? [{ label: '🖥️  Employee Panel', path: '/employee' }] : []),
+                      ].map(item => (
+                        <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+                          style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                            textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                          {item.label}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {!user && (
+                    <>
+                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                      <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+                        style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                          textAlign: 'left', color: '#FF5A1F', fontSize: 14, cursor: 'pointer', fontWeight: 700, boxSizing: 'border-box' }}>
+                        Sign In / Register →
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
     </nav>
   );
 }
