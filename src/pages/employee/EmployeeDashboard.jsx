@@ -7,6 +7,7 @@ import { returnsApi } from '../../api/returns';
 import { deliveryAreasApi } from '../../api/deliveryAreas';
 import { getErrorMessage } from '../../api/client';
 import { settingsApi } from '../../api/settings';
+import { couponsApi } from '../../api/coupons';
 import { useCatalog } from '../../context/CatalogContext';
 import AdminCatalogTab from '../admin/AdminCatalogTab';
 import {
@@ -96,6 +97,9 @@ const Icon = {
   arrow:   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
   catalog: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
   gear:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.42 1.42M4.93 4.93l1.42 1.42M19.07 19.07l-1.42-1.42M4.93 19.07l1.42-1.42M20 12h2M2 12h2M12 20v2M12 2v2"/></svg>,
+  coupon:  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
+  bell:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+  lock:    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
 };
 
 function SvgAt({ el, size = 17 }) {
@@ -1750,6 +1754,276 @@ function EmployeeSettingsTab() {
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   EMPLOYEE COUPONS TAB
+════════════════════════════════════════════════════════════════ */
+const EMPTY_COUPON_EMP = {
+  code: '', discountType: 'PERCENTAGE', discountValue: '',
+  minimumAmount: '', maximumDiscount: '', expiryDate: '',
+  usageLimit: '', isActive: true,
+};
+
+function EmployeeCouponsTab() {
+  const [coupons, setCoupons]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [form, setForm]         = useState(EMPTY_COUPON_EMP);
+  const [editId, setEditId]     = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+
+  useEffect(() => {
+    if (!editId) {
+      try { sessionStorage.setItem('emp-coupon-draft', JSON.stringify(form)); } catch {}
+    }
+  }, [form, editId]);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    couponsApi.getAll({ limit: 100 })
+      .then(r => setCoupons(r.data?.data?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const openCreate = () => {
+    let draft = EMPTY_COUPON_EMP;
+    try { const s = sessionStorage.getItem('emp-coupon-draft'); if (s) draft = { ...EMPTY_COUPON_EMP, ...JSON.parse(s) }; } catch {}
+    setForm(draft); setEditId(null); setError(''); setShowForm(true);
+  };
+
+  const openEdit = (c) => {
+    setForm({
+      code: c.code, discountType: c.discountType, discountValue: c.discountValue,
+      minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
+      expiryDate: c.expiryDate ? c.expiryDate.slice(0, 10) : '',
+      usageLimit: c.usageLimit || '', isActive: c.isActive,
+    });
+    setEditId(c._id); setError(''); setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.code || !form.discountValue || !form.expiryDate) {
+      setError('Code, discount value and expiry date are required.'); return;
+    }
+    setSaving(true); setError('');
+    try {
+      const payload = {
+        code: form.code.toUpperCase(),
+        discountType: form.discountType,
+        discountValue: Number(form.discountValue),
+        minimumAmount: form.minimumAmount ? Number(form.minimumAmount) : 0,
+        maximumDiscount: form.maximumDiscount ? Number(form.maximumDiscount) : undefined,
+        expiryDate: form.expiryDate,
+        usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+        isActive: form.isActive,
+      };
+      if (editId) await couponsApi.update(editId, payload);
+      else {
+        await couponsApi.create(payload);
+        try { sessionStorage.removeItem('emp-coupon-draft'); } catch {}
+      }
+      setShowForm(false); load();
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to save coupon.');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this coupon?')) return;
+    setDeleting(id);
+    try { await couponsApi.delete(id); load(); }
+    catch (e) { alert(e?.response?.data?.message || 'Delete failed'); }
+    finally { setDeleting(null); }
+  };
+
+  const handleToggle = async (c) => {
+    try { await couponsApi.update(c._id, { isActive: !c.isActive }); load(); }
+    catch { alert('Update failed'); }
+  };
+
+  const now = new Date();
+  const active  = coupons.filter(c => c.isActive && new Date(c.expiryDate) > now).length;
+  const expired = coupons.filter(c => new Date(c.expiryDate) <= now).length;
+  const inactive = coupons.filter(c => !c.isActive).length;
+
+  const LabelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: C.mute, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' };
+  const InpStyle   = { height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.bg, color: C.text, width: '100%', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+        <KpiCard label="Total Coupons" value={coupons.length} colorKey="blue"   iconEl={Icon.coupon} />
+        <KpiCard label="Active"        value={active}         colorKey="green"  iconEl={Icon.shield} />
+        <KpiCard label="Expired"       value={expired}        colorKey="red"    iconEl={Icon.bell}   />
+        <KpiCard label="Inactive"      value={inactive}       colorKey="yellow" iconEl={Icon.lock}   />
+      </div>
+
+      {/* Create button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={openCreate}
+          style={{ padding: '10px 22px', borderRadius: 10, background: C.accent, color: 'white', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          + Create Coupon
+        </button>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <Card title={editId ? '✏️ Edit Coupon' : '🎟️ New Coupon'}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div>
+              <label style={LabelStyle}>Coupon Code *</label>
+              <input value={form.code} onChange={e => set('code', e.target.value.toUpperCase())} placeholder="e.g. SAVE20"
+                style={{ ...InpStyle, fontFamily: 'monospace', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Discount Type *</label>
+              <select value={form.discountType} onChange={e => set('discountType', e.target.value)} style={{ ...InpStyle, cursor: 'pointer' }}>
+                <option value="PERCENTAGE">Percentage (%)</option>
+                <option value="FIXED">Fixed Amount (Rs.)</option>
+              </select>
+            </div>
+            <div>
+              <label style={LabelStyle}>Discount Value * {form.discountType === 'PERCENTAGE' ? '(%)' : '(Rs.)'}</label>
+              <input type="number" min="0" value={form.discountValue} onChange={e => set('discountValue', e.target.value)}
+                placeholder={form.discountType === 'PERCENTAGE' ? 'e.g. 20' : 'e.g. 500'} style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Expiry Date *</label>
+              <input type="date" value={form.expiryDate} onChange={e => set('expiryDate', e.target.value)}
+                min={new Date().toISOString().slice(0, 10)} style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Minimum Order (Rs.)</label>
+              <input type="number" min="0" value={form.minimumAmount} onChange={e => set('minimumAmount', e.target.value)}
+                placeholder="0 = no minimum" style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Max Discount Cap (Rs.) <span style={{ color: C.mute, fontWeight: 400 }}>— for % coupons</span></label>
+              <input type="number" min="0" value={form.maximumDiscount} onChange={e => set('maximumDiscount', e.target.value)}
+                placeholder="Leave blank = no cap" style={InpStyle} />
+            </div>
+            <div>
+              <label style={LabelStyle}>Usage Limit</label>
+              <input type="number" min="1" value={form.usageLimit} onChange={e => set('usageLimit', e.target.value)}
+                placeholder="Leave blank = unlimited" style={InpStyle} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 22 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13, color: C.text }}>
+                <input type="checkbox" checked={form.isActive} onChange={e => set('isActive', e.target.checked)} />
+                Active (users can apply this coupon)
+              </label>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ marginTop: 12, color: C.red, fontSize: 13, fontWeight: 600, background: C.red + '10', padding: '8px 12px', borderRadius: 8 }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+            <button onClick={handleSubmit} disabled={saving}
+              style={{ padding: '10px 24px', borderRadius: 8, background: C.green, color: 'white', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : editId ? 'Save Changes' : 'Create Coupon'}
+            </button>
+            <button onClick={() => setShowForm(false)}
+              style={{ padding: '10px 18px', borderRadius: 8, background: C.card, border: `1px solid ${C.line}`, fontWeight: 600, fontSize: 13, cursor: 'pointer', color: C.mute }}>
+              Cancel
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Coupons table */}
+      <Card title={`All Coupons (${coupons.length})`}>
+        {loading
+          ? <div style={{ padding: 40, textAlign: 'center', color: C.mute }}>Loading…</div>
+          : coupons.length === 0
+            ? <div style={{ padding: 40, textAlign: 'center', color: C.mute }}>No coupons yet. Create one above.</div>
+            : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr>
+                    {['Code', 'Type', 'Value', 'Min Order', 'Cap', 'Usage', 'Expiry', 'Status', 'Actions'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: C.mute, letterSpacing: '.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {coupons.map(c => {
+                      const isExpired  = new Date(c.expiryDate) <= now;
+                      const daysLeft   = Math.ceil((new Date(c.expiryDate) - now) / 86400000);
+                      const statusColor = isExpired ? C.red : !c.isActive ? C.mute : C.green;
+                      const statusLabel = isExpired ? 'Expired' : !c.isActive ? 'Inactive' : 'Active';
+                      return (
+                        <tr key={c._id} style={{ background: isExpired ? C.red + '10' : C.card }}>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}` }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13, background: C.bg, padding: '3px 8px', borderRadius: 6, letterSpacing: '.08em' }}>
+                              {c.code}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.mute }}>
+                            {c.discountType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontWeight: 700, fontSize: 13, color: C.green }}>
+                            {c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : `Rs. ${c.discountValue}`}
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.mute }}>
+                            {c.minimumAmount > 0 ? `Rs. ${c.minimumAmount}` : '—'}
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.mute }}>
+                            {c.maximumDiscount ? `Rs. ${c.maximumDiscount}` : '—'}
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12 }}>
+                            <span style={{ color: c.usageLimit && c.usedCount >= c.usageLimit ? C.red : C.mute }}>
+                              {c.usedCount}{c.usageLimit ? `/${c.usageLimit}` : ' used'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            <div style={{ color: isExpired ? C.red : daysLeft <= 3 ? C.yellow : C.text, fontWeight: isExpired || daysLeft <= 3 ? 700 : 400 }}>
+                              {new Date(c.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                            {!isExpired && <div style={{ fontSize: 11, color: daysLeft <= 3 ? C.red : C.mute }}>{daysLeft}d left</div>}
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}` }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: statusColor + '20', color: statusColor }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />{statusLabel}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}` }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={() => openEdit(c)}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: C.bg, border: `1px solid ${C.line}`, cursor: 'pointer', color: C.text }}>
+                                ✏️ Edit
+                              </button>
+                              <button onClick={() => handleToggle(c)}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: c.isActive ? C.red + '18' : '#22c55e18', border: `1px solid ${c.isActive ? C.red : C.green}40`, cursor: 'pointer', color: c.isActive ? C.red : C.green }}>
+                                {c.isActive ? 'Disable' : 'Enable'}
+                              </button>
+                              <button onClick={() => handleDelete(c._id)} disabled={deleting === c._id}
+                                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: '#fef2f2', border: `1px solid ${C.red}`, cursor: 'pointer', color: C.red, opacity: deleting === c._id ? 0.5 : 1 }}>
+                                🗑
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+      </Card>
+    </div>
+  );
+}
+
 const NAV_TABS = [
   { id:'Overview',        iconEl: Icon.grid    },
   { id:'My Products',     iconEl: Icon.bag     },
@@ -1757,6 +2031,7 @@ const NAV_TABS = [
   { id:'Returns',         iconEl: Icon.refund  },
   { id:'Delivery Areas',  iconEl: Icon.box     },
   { id:'Add Product',     iconEl: Icon.plus    },
+  { id:'Coupons',         iconEl: Icon.coupon  },
   { id:'Catalog',         iconEl: Icon.catalog },
   { id:'Settings',        iconEl: Icon.gear    },
 ];
@@ -1768,6 +2043,7 @@ const TAB_SUBTITLES = {
   Returns:          'Review and respond to return requests from customers',
   'Delivery Areas': 'Manage pincodes and delivery charges',
   'Add Product':    'Create a new product listing',
+  Coupons:          'Create and manage discount coupons for customers',
   Catalog:          'Manage brands, categories, attributes and events',
   Settings:         'Configure COD availability, order amount limits, and booking payments',
 };
@@ -1957,6 +2233,7 @@ export default function SellerDashboard() {
               {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
               {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
               {tab==='Add Product' && !editProduct && <ProductForm onSave={handleAddProduct} />}
+              {tab==='Coupons'     && !editProduct && <EmployeeCouponsTab />}
               {tab==='Catalog'     && !editProduct && <AdminCatalogTab />}
               {tab==='Settings'    && !editProduct && <EmployeeSettingsTab />}
             </>

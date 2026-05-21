@@ -7,7 +7,7 @@ export default function Footer() {
   const link = 'block text-sm text-white/75 py-1 transition-colors cursor-pointer hover:text-accent';
 
   return (
-    <footer className="bg-ink text-white mt-20">
+    <footer className="text-white mt-20" style={{ background: '#131921' }}>
       <div className="wrap">
         <div className="grid grid-cols-[1.6fr_.8fr_.8fr_.8fr_1fr] gap-12 py-18 pb-12 max-lg:grid-cols-[1fr_1fr] max-md:grid-cols-1">
           <div>

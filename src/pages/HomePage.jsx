@@ -6,8 +6,6 @@ import { couponsApi } from '../api/coupons';
 import { normalizeProducts } from '../utils/normalizers';
 import { useCatalog } from '../context/CatalogContext';
 import { useCart } from '../context/CartContext';
-import { useToast } from '../context/ToastContext';
-import { validators } from '../utils/validators';
 
 /* ── palette ── */
 const BG    = '#f4f4f4';
@@ -125,33 +123,20 @@ function VouchersStrip({ coupons }) {
 /* ════════════════════════════════════════════════════════════════
    2. TWO PROMOTIONAL BANNERS (events or top categories)
 ════════════════════════════════════════════════════════════════ */
-function TwoPromoBanners({ events, topCategories }) {
+function TwoPromoBanners({ events }) {
   const navigate = useNavigate();
-  const BG_FALLBACK = ['#dbeafe', '#fef9c3'];
 
-  const banners = events.filter(e => e.image).slice(0, 2);
-  const panels = banners.length >= 2
-    ? banners.map(e => ({
-        key:   e._id,
-        tag:   e.badge || e.name.split(' ').slice(0, 2).join(' ').toUpperCase(),
-        title: e.name,
-        sub:   e.description || '',
-        cta:   e.discountPercent > 0 ? `Shop – Up to ${e.discountPercent}% off` : 'Shop Now',
-        img:   e.image,
-        path:  `/products`,
-        hasImg: true,
-      }))
-    : topCategories.slice(0, 2).map((c, i) => ({
-        key:   c._id,
-        tag:   c.name.toUpperCase(),
-        title: c.description || `Best ${c.name} Deals`,
-        sub:   `Shop the best ${c.name} at unbeatable prices`,
-        cta:   `Shop ${c.name}`,
-        img:   c.image,
-        path:  `/products?category=${encodeURIComponent(c.name)}`,
-        bg:    BG_FALLBACK[i],
-        hasImg: !!c.image,
-      }));
+  /* Only show when admin has created events with banner images */
+  const panels = events.filter(e => e.image).slice(0, 2).map(e => ({
+    key:   e._id,
+    tag:   e.badge || e.name.split(' ').slice(0, 2).join(' ').toUpperCase(),
+    title: e.name,
+    sub:   e.description || '',
+    cta:   e.discountPercent > 0 ? `Shop – Up to ${e.discountPercent}% off` : 'Shop Now',
+    img:   e.image,
+    path:  `/products`,
+    hasImg: true,
+  }));
 
   if (!panels.length) return null;
 
@@ -594,63 +579,6 @@ function TrustBar() {
   );
 }
 
-/* ════════════════════════════════════════════════════════════════
-   10. NEWSLETTER
-════════════════════════════════════════════════════════════════ */
-function NewsletterSection() {
-  const [email, setEmail] = useState('');
-  const toast = useToast();
-
-  const submit = e => {
-    e.preventDefault();
-    const err = validators.email(email);
-    if (err) { toast(err, 'error'); return; }
-    toast('Subscribed! Check your inbox for exclusive deals.');
-    setEmail('');
-  };
-
-  return (
-    <div style={{ background: DARK, marginBottom: 0 }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '28px 20px' }}>
-        <div className="hp-2col" style={{ gap: 40 }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: '#fff', marginBottom: 4 }}>Subscribe to Our Newsletter</div>
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>Get exclusive deals, new arrivals &amp; special offers.</div>
-            <form onSubmit={submit} style={{ display: 'flex' }}>
-              <input type="email" placeholder="Enter your email address" value={email}
-                onChange={e => setEmail(e.target.value)}
-                style={{ flex: 1, height: 40, padding: '0 12px', background: '#243040', border: `1px solid #374151`,
-                  borderRight: 'none', borderRadius: '4px 0 0 4px', color: '#fff', fontSize: 12, outline: 'none' }} />
-              <button type="submit"
-                style={{ height: 40, padding: '0 18px', background: ORG, color: '#fff', border: 'none',
-                  borderRadius: '0 4px 4px 0', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                Subscribe
-              </button>
-            </form>
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: '#fff', marginBottom: 4 }}>Download Our App</div>
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 14 }}>Shop on the go. Get exclusive app offers.</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[{ l: 'GET IT ON', s: 'Google Play', i: '▶' }, { l: 'Download on the', s: 'App Store', i: '🍎' }].map(a => (
-                <div key={a.s} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#243040',
-                  border: `1px solid #374151`, borderRadius: 6, padding: '7px 14px', cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = ORG}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = '#374151'}>
-                  <span style={{ fontSize: 20 }}>{a.i}</span>
-                  <div>
-                    <div style={{ fontSize: 8, color: '#9ca3af' }}>{a.l}</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{a.s}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ════════════════════════════════════════════════════════════════
    MAIN PAGE
@@ -685,10 +613,10 @@ export default function HomePage() {
       {/* Hero slider */}
       <HeroSection />
 
-      {/* Event / category promo banners */}
-      <TwoPromoBanners events={events} topCategories={topCategories} />
+      {/* Event promo banners — only shown when admin uploads event images */}
+      <TwoPromoBanners events={events} />
 
-      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '8px 8px 0' }}>
+      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '0 8px 0' }}>
         {/* Shop by Category (admin categories + subcategories) */}
         <ShopByCategorySection topCategories={topCategories} getSubcats={getSubcats} />
 
@@ -710,8 +638,6 @@ export default function HomePage() {
         {/* Trust bar */}
         <TrustBar />
 
-        {/* Newsletter */}
-        <NewsletterSection />
       </div>
 
       <style>{`
