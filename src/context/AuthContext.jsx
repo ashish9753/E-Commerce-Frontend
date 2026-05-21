@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { authApi } from '../api/auth';
 import { usersApi } from '../api/users';
 import { getErrorMessage } from '../api/client';
+import { clearAll as clearApiCache } from '../utils/apiCache';
 
 const AuthContext = createContext(null);
 
@@ -23,6 +24,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    clearApiCache(); // drop cached catalog/product data so the next user starts clean
     setUser(null);
   }, []);
 

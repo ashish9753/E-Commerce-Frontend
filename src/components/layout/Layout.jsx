@@ -3,18 +3,21 @@ import Header from './Header';
 import Footer from './Footer';
 import { useCatalog } from '../../context/CatalogContext';
 import { couponsApi } from '../../api/coupons';
+import { cached } from '../../utils/apiCache';
 
 function AnnouncementBar() {
   const { events } = useCatalog();
   const [coupons, setCoupons] = useState([]);
 
   useEffect(() => {
-    couponsApi.getAll({ isActive: true })
-      .then(({ data }) => {
-        const all = data.data?.coupons || data.data?.data || [];
-        setCoupons(all.filter(c => c.isActive !== false && (!c.applicableTo || c.applicableTo === 'all')).slice(0, 3));
-      })
-      .catch(() => {});
+    cached(
+      'layout:announcementCoupons',
+      10 * 60 * 1000,
+      () => couponsApi.getAll({ isActive: true })
+        .then(({ data }) => data.data?.coupons || data.data?.data || [])
+    ).then(all => {
+      setCoupons(all.filter(c => c.isActive !== false && (!c.applicableTo || c.applicableTo === 'all')).slice(0, 3));
+    }).catch(() => {});
   }, []);
 
   const items = [

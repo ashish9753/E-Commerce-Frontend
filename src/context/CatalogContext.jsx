@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { brandsApi, categoriesApi, eventsApi } from '../api/catalog';
+import { cached, invalidate } from '../utils/apiCache';
 
 const CAT_EMOJI = {
   'Air Conditioners': '❄️', 'Refrigerators': '🧊', 'Televisions': '📺',
@@ -11,18 +12,34 @@ export const getCatEmoji = (name) => CAT_EMOJI[name] || '🛒';
 
 const CatalogContext = createContext(null);
 
+// Catalog data changes infrequently — cache aggressively
+const TTL_BRANDS     = 30 * 60 * 1000; // 30 min
+const TTL_CATEGORIES = 30 * 60 * 1000; // 30 min
+const TTL_EVENTS     = 10 * 60 * 1000; // 10 min (more time-sensitive)
+
+const fetchBrands     = () => brandsApi.getAll().then(r => r.data?.data?.brands || []);
+const fetchCategories = () => categoriesApi.getAll().then(r => r.data?.data?.categories || []);
+const fetchEvents     = () => eventsApi.getAll().then(r => (r.data?.data?.events || []).filter(e => e.isActive));
+
 export function CatalogProvider({ children }) {
-  const [brands, setBrands]         = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [events, setEvents]         = useState([]);
+  const [brands, setBrands]         = useState(() => []);
+  const [categories, setCategories] = useState(() => []);
+  const [events, setEvents]         = useState(() => []);
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
-      brandsApi.getAll().then(r => setBrands(r.data?.data?.brands || [])).catch(() => {}),
-      categoriesApi.getAll().then(r => setCategories(r.data?.data?.categories || [])).catch(() => {}),
-      eventsApi.getAll().then(r => setEvents((r.data?.data?.events || []).filter(e => e.isActive))).catch(() => {}),
-    ]).finally(() => setLoading(false));
+      cached('brands', TTL_BRANDS, fetchBrands).catch(() => []),
+      cached('categories', TTL_CATEGORIES, fetchCategories).catch(() => []),
+      cached('events', TTL_EVENTS, fetchEvents).catch(() => []),
+    ]).then(([b, c, e]) => {
+      if (cancelled) return;
+      setBrands(b);
+      setCategories(c);
+      setEvents(e);
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const topCategories = categories.filter(c => !c.parent);
@@ -32,9 +49,12 @@ export function CatalogProvider({ children }) {
   );
 
   const refresh = () => {
-    brandsApi.getAll().then(r => setBrands(r.data?.data?.brands || [])).catch(() => {});
-    categoriesApi.getAll().then(r => setCategories(r.data?.data?.categories || [])).catch(() => {});
-    eventsApi.getAll().then(r => setEvents((r.data?.data?.events || []).filter(e => e.isActive))).catch(() => {});
+    invalidate('brands');
+    invalidate('categories');
+    invalidate('events');
+    cached('brands', TTL_BRANDS, fetchBrands).then(setBrands).catch(() => {});
+    cached('categories', TTL_CATEGORIES, fetchCategories).then(setCategories).catch(() => {});
+    cached('events', TTL_EVENTS, fetchEvents).then(setEvents).catch(() => {});
   };
 
   return (

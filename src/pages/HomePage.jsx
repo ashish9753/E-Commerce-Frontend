@@ -6,6 +6,7 @@ import { couponsApi } from '../api/coupons';
 import { normalizeProducts } from '../utils/normalizers';
 import { useCatalog } from '../context/CatalogContext';
 import { useCart } from '../context/CartContext';
+import { cached } from '../utils/apiCache';
 
 /* ── palette ── */
 const BG    = '#f4f4f4';
@@ -353,8 +354,13 @@ function BestSellersPanel({ title, category }) {
 
   useEffect(() => {
     setLoading(true);
-    productsApi.getAll({ category, sort: 'popular', limit: 4 })
-      .then(({ data }) => setProds(normalizeProducts(data.data?.products || data.data?.data || [])))
+    cached(
+      `bestsellers:${category}`,
+      10 * 60 * 1000, // 10 min
+      () => productsApi.getAll({ category, sort: 'popular', limit: 4 })
+        .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || []))
+    )
+      .then((ps) => setProds(ps))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [category]);
@@ -589,20 +595,22 @@ export default function HomePage() {
   const [coupons, setCoupons]     = useState([]);
 
   useEffect(() => {
-    productsApi.getAll({ sort: 'popular', limit: 18 })
-      .then(({ data }) => {
-        const ps = normalizeProducts(data.data?.products || data.data?.data || []);
-        setDealProds(ps);
-      })
-      .catch(() => {});
+    cached(
+      'home:dealProds',
+      10 * 60 * 1000, // 10 min
+      () => productsApi.getAll({ sort: 'popular', limit: 18 })
+        .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || []))
+    ).then(setDealProds).catch(() => {});
 
-    couponsApi.getAll({ isActive: true })
-      .then(({ data }) => {
-        const all = data.data?.coupons || data.data?.data || [];
-        const now = new Date();
-        setCoupons(all.filter(c => c.isActive !== false && new Date(c.expiryDate) > now));
-      })
-      .catch(() => {});
+    cached(
+      'home:coupons',
+      10 * 60 * 1000,
+      () => couponsApi.getAll({ isActive: true })
+        .then(({ data }) => data.data?.coupons || data.data?.data || [])
+    ).then(all => {
+      const now = new Date();
+      setCoupons(all.filter(c => c.isActive !== false && new Date(c.expiryDate) > now));
+    }).catch(() => {});
   }, []);
 
   return (
