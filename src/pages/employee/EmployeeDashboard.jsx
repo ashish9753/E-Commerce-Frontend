@@ -1755,6 +1755,84 @@ function EmployeeSettingsTab() {
 }
 
 /* ════════════════════════════════════════════════════════════════
+   ACCOUNT SETUP FORM (shown when no employee profile exists)
+════════════════════════════════════════════════════════════════ */
+function AccountSetupForm({ onSuccess }) {
+  const [form, setForm] = useState({ shopName: '', businessAddress: '', gstNumber: '', shopDescription: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (!form.shopName.trim()) { setError('Shop name is required.'); return; }
+    setSaving(true); setError('');
+    try {
+      await employeeApi.registerEmployee(form);
+      onSuccess();
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Registration failed. Please try again.');
+    } finally { setSaving(false); }
+  };
+
+  const LS = { display: 'block', fontSize: 11, fontWeight: 700, color: C.mute, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' };
+  const IS = { height: 38, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.bg, color: C.text, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' };
+
+  return (
+    <div style={{ maxWidth: 520, margin: '0 auto', paddingTop: 40 }}>
+      <Card>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ width: 60, height: 60, borderRadius: '50%', background: C.accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', color: C.accent }}>
+            <SvgAt el={Icon.shop} size={28} />
+          </div>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 20, color: C.text, marginBottom: 6 }}>
+            Set Up Your Shop
+          </div>
+          <div style={{ color: C.mute, fontSize: 13, lineHeight: 1.6 }}>
+            Complete your shop profile to start selling. You can update these details later.
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={LS}>Shop Name *</label>
+            <input value={form.shopName} onChange={e => { set('shopName', e.target.value); setError(''); }}
+              placeholder="Your shop / business name" style={IS} />
+          </div>
+          <div>
+            <label style={LS}>Business Address</label>
+            <input value={form.businessAddress} onChange={e => set('businessAddress', e.target.value)}
+              placeholder="Address (optional)" style={IS} />
+          </div>
+          <div>
+            <label style={LS}>GST Number</label>
+            <input value={form.gstNumber} onChange={e => set('gstNumber', e.target.value)}
+              placeholder="GST registration number (optional)" style={IS} />
+          </div>
+          <div>
+            <label style={LS}>Shop Description</label>
+            <textarea value={form.shopDescription} onChange={e => set('shopDescription', e.target.value)}
+              placeholder="Brief description of your shop (optional)" rows={3}
+              style={{ ...IS, height: 'auto', padding: '8px 12px', resize: 'vertical' }} />
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: C.red + '18', border: `1px solid ${C.red}44`, color: '#f87171', fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={saving}
+          style={{ marginTop: 20, width: '100%', padding: '11px 0', borderRadius: 10, background: C.accent, color: 'white', border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>
+          {saving ? 'Setting up…' : 'Complete Setup & Enter Dashboard'}
+        </button>
+      </Card>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
    EMPLOYEE COUPONS TAB
 ════════════════════════════════════════════════════════════════ */
 const EMPTY_COUPON_EMP = {
@@ -2024,11 +2102,138 @@ function EmployeeCouponsTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════
+   CANCELLATIONS TAB (employee — read-only refund view)
+══════════════════════════════════════════════════════ */
+function EmployeeCancellationsTab() {
+  const { isMobile } = useResponsive();
+  const [all, setAll]         = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState('');
+  const [payF, setPayF]       = useState('');
+
+  useEffect(() => {
+    employeeApi.getMyOrders({ limit: 500 }).then(r => {
+      const orders = r.data?.data?.data || [];
+      setAll(orders.filter(o => o.orderStatus === 'CANCELLED'));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const filtered = all.filter(o => {
+    const q = search.toLowerCase();
+    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q);
+    const mP = !payF || o.paymentMethod === payF;
+    return mQ && mP;
+  });
+
+  const onlineOrders   = all.filter(o => o.paymentMethod === 'ONLINE');
+  const refundedCount  = onlineOrders.filter(o => o.refundStatus === 'COMPLETED').length;
+  const pendingCount   = onlineOrders.filter(o => o.refundStatus !== 'COMPLETED').length;
+  const totalRefunded  = all.reduce((s, o) => s + (o.refundAmount || 0), 0);
+
+  if (loading) return <Loader />;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
+        <KpiCard label="Cancelled Orders" value={fmt(all.length)}       sub="Your products" colorKey="red"    iconEl={Icon.orders} />
+        <KpiCard label="Refund Pending"   value={fmt(pendingCount)}     sub="Online orders" colorKey="yellow" iconEl={Icon.refund} />
+        <KpiCard label="Refunds Done"     value={fmt(refundedCount)}    sub="Via Razorpay"  colorKey="green"  iconEl={Icon.refund} />
+        <KpiCard label="Total Refunded"   value={fmtShort(totalRefunded)} sub="Amount returned" colorKey="blue" iconEl={Icon.dollar} />
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: '12px 16px', borderRadius: 10, background: C.blue + '14', border: `1px solid ${C.blue}33`, fontSize: 13, color: C.blue, display: 'flex', gap: 10, alignItems: 'center' }}>
+        <SvgAt el={Icon.refund} size={16} />
+        <span>For UPI / online orders, Razorpay refunds are triggered automatically when an order is cancelled. If a refund shows "PENDING", contact the admin — they can process it manually.</span>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', height: 36, flex: 1, minWidth: 200 }}>
+            <span style={{ color: C.mute, display: 'flex' }}><SvgAt el={Icon.search} size={14} /></span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, customer name…"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: C.text, fontFamily: 'inherit' }} />
+          </div>
+          <Sel value={payF} onChange={e => setPayF(e.target.value)} style={{ width: 160 }}>
+            <option value="">All Payment</option>
+            <option value="ONLINE">Online / UPI</option>
+            <option value="COD">COD</option>
+          </Sel>
+          {(search || payF) && <Btn onClick={() => { setSearch(''); setPayF(''); }}>Clear</Btn>}
+          <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}>
+            <strong style={{ color: C.text }}>{filtered.length}</strong> of <strong style={{ color: C.text }}>{all.length}</strong>
+          </span>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card title={`Cancelled Orders (${filtered.length})`}>
+        {filtered.length === 0
+          ? <Empty text="No cancelled orders for your products" />
+          : <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <Th>Order #</Th>
+                  <Th>Customer</Th>
+                  <Th>Amount</Th>
+                  <Th>Payment</Th>
+                  <Th>Refund Status</Th>
+                  <Th>Refunded Amt</Th>
+                  <Th>Cancelled On</Th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(o => {
+                    const isPaid     = o.paymentMethod === 'ONLINE';
+                    const refundDone = o.refundStatus === 'COMPLETED';
+                    return (
+                      <tr key={o._id}>
+                        <Td>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: C.accent }}>{o.orderNumber}</span>
+                        </Td>
+                        <Td>
+                          <div style={{ fontWeight: 600, color: C.text }}>{o.user?.name || '—'}</div>
+                          <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
+                        </Td>
+                        <Td><span style={{ fontWeight: 700, color: C.text }}>{fmtRs(o.totalPrice)}</span></Td>
+                        <Td><Badge text={o.paymentMethod} color={o.paymentMethod === 'ONLINE' ? C.blue : C.yellow} /></Td>
+                        <Td>
+                          {!isPaid
+                            ? <Badge text="N/A (COD)" color={C.mute} />
+                            : refundDone
+                              ? <Badge text="REFUNDED" color={C.green} />
+                              : <Badge text="PENDING" color={C.yellow} />
+                          }
+                        </Td>
+                        <Td>
+                          {o.refundAmount
+                            ? <span style={{ fontWeight: 700, color: C.green }}>{fmtRs(o.refundAmount)}</span>
+                            : <span style={{ color: C.mute }}>—</span>}
+                        </Td>
+                        <Td style={{ color: C.mute, fontSize: 12 }}>
+                          {new Date(o.updatedAt || o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+        }
+      </Card>
+    </div>
+  );
+}
+
 const NAV_TABS = [
   { id:'Overview',        iconEl: Icon.grid    },
   { id:'My Products',     iconEl: Icon.bag     },
   { id:'Orders',          iconEl: Icon.orders  },
   { id:'Returns',         iconEl: Icon.refund  },
+  { id:'Cancellations',   iconEl: Icon.refund  },
   { id:'Delivery Areas',  iconEl: Icon.box     },
   { id:'Add Product',     iconEl: Icon.plus    },
   { id:'Coupons',         iconEl: Icon.coupon  },
@@ -2041,6 +2246,7 @@ const TAB_SUBTITLES = {
   'My Products':    'Manage your product listings',
   Orders:           'Track and fulfil orders containing your products',
   Returns:          'Review and respond to return requests from customers',
+  Cancellations:    'Cancelled orders and their refund status',
   'Delivery Areas': 'Manage pincodes and delivery charges',
   'Add Product':    'Create a new product listing',
   Coupons:          'Create and manage discount coupons for customers',
@@ -2208,29 +2414,16 @@ export default function SellerDashboard() {
           )}
 
           {loading ? <Loader /> : !profile ? (
-            /* Pending / not set up */
-            <div style={{ maxWidth:480, margin:'0 auto', paddingTop:40 }}>
-              <Card>
-                <div style={{ textAlign:'center', padding:'20px 0 8px' }}>
-                  <div style={{ width:64, height:64, borderRadius:'50%', background:C.yellow+'22', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px', color:C.yellow }}>
-                    <SvgAt el={Icon.shop} size={30} />
-                  </div>
-                  <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:20, color:C.text, marginBottom:8 }}>
-                    Account Not Set Up
-                  </div>
-                  <div style={{ color:C.mute, fontSize:13, lineHeight:1.6 }}>
-                    Your employee account was created by admin but the shop profile isn't configured yet, or you are not registered as an employee. Contact your administrator.
-                  </div>
-                </div>
-              </Card>
-            </div>
+            /* Shop setup / self-registration */
+            <AccountSetupForm onSuccess={loadProfile} />
           ) : (
             <>
               {tab==='Overview'    && !editProduct && <OverviewTab profile={profile} />}
               {tab==='My Products' && !editProduct && <ProductsTab onEdit={p=>setEdit(p)} />}
               {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
               {tab==='Orders'      && !editProduct && <OrdersTab onViewReturns={() => handleTabClick('Returns')} />}
-              {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
+              {tab==='Returns'        && !editProduct && <EmployeeReturnsTab />}
+              {tab==='Cancellations' && !editProduct && <EmployeeCancellationsTab />}
               {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
               {tab==='Add Product' && !editProduct && <ProductForm onSave={handleAddProduct} />}
               {tab==='Coupons'     && !editProduct && <EmployeeCouponsTab />}

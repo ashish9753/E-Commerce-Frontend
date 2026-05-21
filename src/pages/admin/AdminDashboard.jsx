@@ -941,9 +941,15 @@ function EmployeesTab({ globalSearch = '' }) {
   const [search, setSearch]   = useState('');
   const [verFilter, setVer]   = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [addMode, setAddMode] = useState('new'); // 'new' | 'existing'
   const [form, setForm, clearEmpDraft] = useFormDraft('admin-emp-draft', EMPTY_EMP_FORM);
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState('');
+  // existing-user mode
+  const [allUsers, setAllUsers]       = useState([]);
+  const [userSearch, setUserSearch]   = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [existShop, setExistShop]     = useState({ shopName: '', businessAddress: '', gstNumber: '', shopDescription: '' });
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
@@ -969,7 +975,30 @@ function EmployeesTab({ globalSearch = '' }) {
     setBusy(null);
   };
 
+  const openAddModal = () => {
+    setAddMode('new'); setSelectedUser(null); setUserSearch(''); setAllUsers([]); setCreateErr(''); setShowAdd(true);
+  };
+
+  const loadUsers = () => {
+    if (allUsers.length) return;
+    adminApi.getUsers({ limit: 200 }).then(r => setAllUsers(r.data?.data?.data || [])).catch(() => {});
+  };
+
   const handleCreate = async () => {
+    if (addMode === 'existing') {
+      if (!selectedUser) { setCreateErr('Select a user first.'); return; }
+      if (!existShop.shopName.trim()) { setCreateErr('Shop name is required.'); return; }
+      setCreating(true); setCreateErr('');
+      try {
+        const res = await adminApi.registerExistingUserAsEmployee({ userId: selectedUser._id, ...existShop });
+        const emp = res.data?.data?.employee;
+        if (emp) setAll(prev => [emp, ...prev]);
+        setShowAdd(false);
+      } catch (e) {
+        setCreateErr(e?.response?.data?.message || 'Failed to register user as employee.');
+      } finally { setCreating(false); }
+      return;
+    }
     if (!form.name || !form.email || !form.phone || !form.password || !form.shopName) {
       setCreateErr('Name, email, phone, password and shop name are required.'); return;
     }
@@ -999,35 +1028,96 @@ function EmployeesTab({ globalSearch = '' }) {
       {/* ── Add Employee Modal ── */}
       {showAdd && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <div style={{ background: C.card, borderRadius:16, padding:28, width:'100%', maxWidth:500, boxShadow:'0 24px 64px rgba(0,0,0,.35)', maxHeight:'90vh', overflowY:'auto' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+          <div style={{ background: C.card, borderRadius:16, padding:28, width:'100%', maxWidth:520, boxShadow:'0 24px 64px rgba(0,0,0,.35)', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
               <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, color:C.text }}>Add Employee</div>
               <button onClick={() => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); }}
                 style={{ background:'none', border:'none', color:C.mute, fontSize:20, cursor:'pointer', lineHeight:1 }}>✕</button>
             </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {[
-                { label:'Full Name *', key:'name', placeholder:'Employee full name' },
-                { label:'Email *', key:'email', placeholder:'employee@example.com', type:'email' },
-                { label:'Phone *', key:'phone', placeholder:'10-digit mobile number' },
-                { label:'Password *', key:'password', placeholder:'Set a password', type:'password' },
-                { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
-                { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
-                { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
-              ].map(({ label, key, placeholder, type='text' }) => (
-                <div key={key}>
-                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
-                  <input type={type} placeholder={placeholder} {...F(key)}
-                    style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
-                </div>
+            {/* Mode toggle */}
+            <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:10, padding:4, marginBottom:20 }}>
+              {[['new','Create New User'],['existing','Use Existing User']].map(([mode, label]) => (
+                <button key={mode} onClick={() => { setAddMode(mode); setCreateErr(''); if (mode==='existing') loadUsers(); }}
+                  style={{ flex:1, padding:'8px 0', borderRadius:7, border:'none', fontWeight:600, fontSize:12, cursor:'pointer', fontFamily:'inherit',
+                    background: addMode===mode ? C.accent : 'transparent', color: addMode===mode ? '#fff' : C.mute }}>
+                  {label}
+                </button>
               ))}
-              <div>
-                <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
-                <textarea placeholder="Brief description (optional)" {...F('shopDescription')} rows={2}
-                  style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
-              </div>
             </div>
+
+            {addMode === 'new' ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {[
+                  { label:'Full Name *', key:'name', placeholder:'Employee full name' },
+                  { label:'Email *', key:'email', placeholder:'employee@example.com', type:'email' },
+                  { label:'Phone *', key:'phone', placeholder:'10-digit mobile number' },
+                  { label:'Password *', key:'password', placeholder:'Set a password', type:'password' },
+                  { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
+                  { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
+                  { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
+                ].map(({ label, key, placeholder, type='text' }) => (
+                  <div key={key}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
+                    <input type={type} placeholder={placeholder} {...F(key)}
+                      style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
+                  <textarea placeholder="Brief description (optional)" {...F('shopDescription')} rows={2}
+                    style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
+                </div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {/* User search */}
+                <div>
+                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Search Existing User *</label>
+                  <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search by name or email…"
+                    style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
+                  {/* User results */}
+                  {userSearch.length > 1 && (
+                    <div style={{ border:`1px solid ${C.line}`, borderRadius:8, marginTop:6, maxHeight:160, overflowY:'auto', background:C.bg }}>
+                      {allUsers.filter(u => u.role !== 'employee' && (u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))).slice(0,8).map(u => (
+                        <div key={u._id} onClick={() => { setSelectedUser(u); setUserSearch(u.name + ' — ' + u.email); setCreateErr(''); }}
+                          style={{ padding:'10px 14px', cursor:'pointer', borderBottom:`1px solid ${C.line}`, transition:'background .1s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.active}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{u.name}</div>
+                          <div style={{ fontSize:11, color:C.mute }}>{u.email} · {u.phone || 'no phone'}</div>
+                        </div>
+                      ))}
+                      {allUsers.filter(u => u.role !== 'employee' && (u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))).length === 0 && (
+                        <div style={{ padding:'12px 14px', color:C.mute, fontSize:12 }}>No matching users found</div>
+                      )}
+                    </div>
+                  )}
+                  {selectedUser && (
+                    <div style={{ marginTop:8, padding:'8px 12px', borderRadius:8, background:C.green+'15', border:`1px solid ${C.green}44`, fontSize:12, color:C.green, fontWeight:600 }}>
+                      ✓ Selected: {selectedUser.name} ({selectedUser.email})
+                    </div>
+                  )}
+                </div>
+                {/* Shop details */}
+                {[
+                  { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
+                  { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
+                  { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
+                ].map(({ label, key, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
+                    <input value={existShop[key]} onChange={e => { setExistShop(p => ({...p, [key]: e.target.value})); setCreateErr(''); }} placeholder={placeholder}
+                      style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
+                  <textarea value={existShop.shopDescription} onChange={e => setExistShop(p => ({...p, shopDescription: e.target.value}))} placeholder="Brief description (optional)" rows={2}
+                    style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
+                </div>
+              </div>
+            )}
 
             {createErr && (
               <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background: C.red+'18', border:`1px solid ${C.red}44`, color: '#f87171', fontSize:13 }}>{createErr}</div>
@@ -1040,7 +1130,7 @@ function EmployeesTab({ globalSearch = '' }) {
               </button>
               <button onClick={handleCreate} disabled={creating}
                 style={{ padding:'9px 20px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', opacity: creating ? .6 : 1 }}>
-                {creating ? 'Creating…' : 'Create Employee'}
+                {creating ? 'Processing…' : addMode==='existing' ? 'Register as Employee' : 'Create Employee'}
               </button>
             </div>
           </div>
@@ -1086,7 +1176,7 @@ function EmployeesTab({ globalSearch = '' }) {
 
       <Card title={`Employees (${employees.length})`}
         action={
-          <button onClick={() => setShowAdd(true)}
+          <button onClick={openAddModal}
             style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 16px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
             <span style={{ fontSize:17, lineHeight:1 }}>+</span> Add Employee
           </button>
@@ -2072,16 +2162,34 @@ function AdminCouponsTab({ globalSearch = '' }) {
 }
 
 /* ══════════════════ Admin Notifications Tab ══════════════════ */
-const EMPTY_NOTIF = { sendMode:'broadcast', targetRole:'user', userEmail:'', title:'', message:'', type:'SYSTEM', link:'', couponCode:'' };
+const EMPTY_NOTIF = { sendMode:'broadcast', targetRole:'user', userEmail:'', spendFilter:'above', minSpend:'', maxSpend:'', title:'', message:'', type:'SYSTEM', link:'', couponCode:'' };
 
 function AdminNotificationsTab() {
   const [form, setForm, clearNotifDraft] = useFormDraft('admin-notif-draft', EMPTY_NOTIF);
-  const [sending, setSending]   = useState(false);
-  const [result, setResult]     = useState(null);
-  const [history, setHistory]   = useState([]);
-  const [copied, setCopied]     = useState(null);
+  const [sending, setSending]       = useState(false);
+  const [result, setResult]         = useState(null);
+  const [history, setHistory]       = useState([]);
+  const [copied, setCopied]         = useState(null);
+  const [preview, setPreview]       = useState(null);
+  const [previewing, setPreviewing] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSpendPreview = async () => {
+    const min = form.minSpend.trim();
+    const max = form.spendFilter === 'between' ? form.maxSpend.trim() : '';
+    if (!min) { setResult({ ok:false, text:'Enter a minimum spend amount.' }); return; }
+    if (form.spendFilter === 'between' && !max) { setResult({ ok:false, text:'Enter a maximum spend amount for range.' }); return; }
+    setPreviewing(true); setPreview(null); setResult(null);
+    try {
+      const params = { minSpend: min };
+      if (max) params.maxSpend = max;
+      const resp = await notificationsApi.spendPreview(params);
+      setPreview({ count: resp.data?.data?.count ?? 0 });
+    } catch(e) {
+      setResult({ ok:false, text: e?.response?.data?.message || 'Preview failed.' });
+    } finally { setPreviewing(false); }
+  };
 
   const handleSend = async () => {
     if (!form.title.trim() || !form.message.trim()) {
@@ -2089,6 +2197,10 @@ function AdminNotificationsTab() {
     }
     if (form.sendMode === 'personal' && !form.userEmail.trim()) {
       setResult({ ok: false, text: 'User email is required for personal notification.' }); return;
+    }
+    if (form.sendMode === 'spend') {
+      if (!form.minSpend.trim()) { setResult({ ok:false, text:'Enter a minimum spend amount.' }); return; }
+      if (form.spendFilter === 'between' && !form.maxSpend.trim()) { setResult({ ok:false, text:'Enter a maximum spend amount for range.' }); return; }
     }
     setSending(true); setResult(null);
     try {
@@ -2101,13 +2213,17 @@ function AdminNotificationsTab() {
       };
       if (form.sendMode === 'personal') {
         payload.userEmail = form.userEmail.trim();
+      } else if (form.sendMode === 'spend') {
+        payload.minSpend = Number(form.minSpend);
+        if (form.spendFilter === 'between') payload.maxSpend = Number(form.maxSpend);
       } else {
         payload.targetRole = form.targetRole;
       }
       const resp = await notificationsApi.broadcast(payload);
       const count = resp.data?.data?.count || 0;
-      setResult({ ok: true, text: `✅ Sent to ${count} user${count !== 1 ? 's' : ''}!` });
+      setResult({ ok: true, text: `✅ Sent to ${count} customer${count !== 1 ? 's' : ''}!` });
       setHistory(prev => [{ ...form, sentAt: new Date().toISOString(), count }, ...prev.slice(0, 9)]);
+      setPreview(null);
       clearNotifDraft();
     } catch(e) {
       setResult({ ok: false, text: e?.response?.data?.message || e.message || 'Failed to send.' });
@@ -2134,12 +2250,13 @@ function AdminNotificationsTab() {
           {/* Send mode toggle */}
           <div style={{ gridColumn:'1/-1' }}>
             <label style={LabelStyle}>Send to</label>
-            <div style={{ display:'flex', gap:0, border:`1px solid ${C.line}`, borderRadius:10, overflow:'hidden', width:'fit-content' }}>
+            <div style={{ display:'flex', gap:0, border:`1px solid ${C.line}`, borderRadius:10, overflow:'hidden', width:'fit-content', flexWrap:'wrap' }}>
               {[
-                { mode:'broadcast', label:'Broadcast (group)',  iconEl: Icon.bell },
-                { mode:'personal',  label:'Personal (one user)', iconEl: Icon.person },
+                { mode:'broadcast', label:'Broadcast (group)',    iconEl: Icon.bell },
+                { mode:'personal',  label:'Personal (one user)',  iconEl: Icon.person },
+                { mode:'spend',     label:'By Purchase Amount',   iconEl: Icon.coupon },
               ].map(opt => (
-                <button key={opt.mode} onClick={() => set('sendMode', opt.mode)}
+                <button key={opt.mode} onClick={() => { set('sendMode', opt.mode); setPreview(null); setResult(null); }}
                   style={{ padding:'9px 20px', border:'none', cursor:'pointer', fontWeight:600, fontSize:13, transition:'all .15s',
                     background: form.sendMode===opt.mode ? C.accent : C.card2,
                     color:      form.sendMode===opt.mode ? 'white' : C.sub,
@@ -2183,6 +2300,70 @@ function AdminNotificationsTab() {
               <input value={form.userEmail} onChange={e=>set('userEmail',e.target.value)}
                 placeholder="user@example.com" type="email" style={InpStyle} />
               <div style={{ fontSize:11, color:C.mute, marginTop:4 }}>The notification will be sent only to this user.</div>
+            </div>
+          )}
+
+          {/* By Spend: amount filter */}
+          {form.sendMode === 'spend' && (
+            <div style={{ gridColumn:'1/-1' }}>
+              {/* Filter type toggle */}
+              <label style={LabelStyle}>Filter Type</label>
+              <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+                {[
+                  { value:'above',   label:'More than amount',    desc:'Customers who spent above a threshold' },
+                  { value:'between', label:'Between two amounts', desc:'Customers within a spend range' },
+                ].map(opt => {
+                  const active = form.spendFilter === opt.value;
+                  return (
+                    <div key={opt.value} onClick={() => { set('spendFilter', opt.value); setPreview(null); }}
+                      style={{ flex:'1 1 200px', padding:'12px 16px', borderRadius:10, cursor:'pointer', transition:'all .15s',
+                        border:`1.5px solid ${active ? C.green : C.line}`,
+                        background: active ? C.green+'12' : C.card2 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color: active ? C.green : C.sub }}>{opt.label}</div>
+                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{opt.desc}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Amount inputs */}
+              <div style={{ display:'flex', gap:10, alignItems:'flex-end', flexWrap:'wrap' }}>
+                <div style={{ flex:'1 1 140px' }}>
+                  <label style={LabelStyle}>{form.spendFilter==='between' ? 'Min Amount (₹) *' : 'Amount (₹) *'}</label>
+                  <input value={form.minSpend} onChange={e=>{ set('minSpend',e.target.value); setPreview(null); }}
+                    type="number" min="0" placeholder="e.g. 5000" style={InpStyle} />
+                </div>
+                {form.spendFilter === 'between' && (
+                  <div style={{ flex:'1 1 140px' }}>
+                    <label style={LabelStyle}>Max Amount (₹) *</label>
+                    <input value={form.maxSpend} onChange={e=>{ set('maxSpend',e.target.value); setPreview(null); }}
+                      type="number" min="0" placeholder="e.g. 20000" style={InpStyle} />
+                  </div>
+                )}
+                <button onClick={handleSpendPreview} disabled={previewing}
+                  style={{ height:36, padding:'0 18px', borderRadius:8, border:`1px solid ${C.blue}`, background: C.blue+'15',
+                    color:C.blue, fontWeight:700, fontSize:13, cursor:'pointer', whiteSpace:'nowrap', opacity:previewing?0.6:1, flexShrink:0 }}>
+                  {previewing ? 'Checking…' : '👁 Preview Count'}
+                </button>
+              </div>
+
+              {/* Preview result */}
+              {preview && (
+                <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:8, padding:'8px 14px', borderRadius:8,
+                  background: preview.count > 0 ? C.green+'15' : C.yellow+'20',
+                  border:`1px solid ${preview.count > 0 ? C.green+'40' : C.yellow+'50'}` }}>
+                  <span style={{ fontSize:18 }}>{preview.count > 0 ? '🎯' : '😕'}</span>
+                  <span style={{ fontWeight:700, fontSize:13, color: preview.count > 0 ? C.green : C.yellow }}>
+                    {preview.count > 0
+                      ? `${preview.count} customer${preview.count !== 1 ? 's' : ''} match this filter`
+                      : 'No customers found for this filter'}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ fontSize:11, color:C.mute, marginTop:8 }}>
+                Only customers (buyers) are included. Cancelled & returned orders are excluded from total spend.
+              </div>
             </div>
           )}
 
@@ -2295,8 +2476,8 @@ function TicketStatusBadge({ status }) {
 }
 
 function AdminSupportTab({ globalSearch = '' }) {
-  const { user }            = useAuth();
-  const { lastSupportMsg }  = useNotifications();
+  const { user }                              = useAuth();
+  const { lastSupportMsg, sseReconnectCount } = useNotifications();
   const [tickets, setTickets]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [filterStatus, setFilterSt] = useState('');
@@ -2307,13 +2488,21 @@ function AdminSupportTab({ globalSearch = '' }) {
   const [search, setSearch]         = useState('');
   const bottomRef = useRef(null);
 
+  /* ── Always-fresh ref to avoid stale SSE closures ── */
+  const activeRef = useRef(null);
+  useEffect(() => { activeRef.current = activeTicket; }, [activeTicket]);
+
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
   useEffect(() => { fetchAll(); }, [filterStatus]);
 
-  // Append incoming message directly from SSE payload — zero extra API calls
+  /* ── SSE: append incoming message without stale closure ── */
   useEffect(() => {
-    if (!lastSupportMsg || !activeTicket) return;
-    if (lastSupportMsg.ticketId !== activeTicket._id) return;
+    if (!lastSupportMsg || !activeRef.current) return;
+    if (lastSupportMsg.ticketId !== activeRef.current._id) return;
+    const alreadyExists = (activeRef.current.messages || []).some(
+      m => m._id && m._id === lastSupportMsg.message?._id
+    );
+    if (alreadyExists) return;
     setActive(prev => ({
       ...prev,
       status:   lastSupportMsg.status,
@@ -2321,9 +2510,35 @@ function AdminSupportTab({ globalSearch = '' }) {
     }));
   }, [lastSupportMsg]);
 
+  /* ── Re-fetch on SSE reconnect to catch messages missed during gap ── */
+  useEffect(() => {
+    if (sseReconnectCount === 0 || !activeRef.current) return;
+    supportApi.getTicket(activeRef.current._id)
+      .then(r => { const t = r.data?.data?.ticket; if (t) setActive(t); })
+      .catch(() => {});
+  }, [sseReconnectCount]);
+
+  /* ── 25s polling fallback when a ticket is open ── */
+  useEffect(() => {
+    if (!activeTicket) return;
+    const id = setInterval(() => {
+      if (!activeRef.current) return;
+      supportApi.getTicket(activeRef.current._id).then(r => {
+        const fresh = r.data?.data?.ticket;
+        if (!fresh) return;
+        const curLen   = activeRef.current?.messages?.length ?? 0;
+        const freshLen = fresh.messages?.length ?? 0;
+        if (freshLen !== curLen || fresh.status !== activeRef.current?.status) {
+          setActive(fresh);
+        }
+      }).catch(() => {});
+    }, 25_000);
+    return () => clearInterval(id);
+  }, [activeTicket?._id]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeTicket?.messages]);
+  }, [activeTicket?.messages?.length]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -2696,7 +2911,8 @@ const NAV_SECTIONS = [
       { id: 'Users',         iconEl: Icon.users },
       { id: 'Employees',     iconEl: Icon.person },
       { id: 'Orders',        iconEl: Icon.orders },
-      { id: 'Returns',       iconEl: Icon.refund },
+      { id: 'Returns',        iconEl: Icon.refund },
+      { id: 'Cancellations', iconEl: Icon.refund },
       { id: 'Inventory',     iconEl: Icon.box },
       { id: 'Coupons',       iconEl: Icon.coupon },
       { id: 'Notifications', iconEl: Icon.bell },
@@ -2766,8 +2982,9 @@ export default function AdminDashboard() {
     Users:         'Manage all registered accounts',
     Employees:     'Manage and verify employee accounts',
     Orders:        'View and manage all customer orders',
-    Returns:       'Monitor and take action on all return & refund requests',
-    Coupons:       'Create and manage discount coupons for customers',
+    Returns:         'Monitor and take action on all return & refund requests',
+    Cancellations:   'View cancelled orders and manage Razorpay refunds',
+    Coupons:         'Create and manage discount coupons for customers',
     Notifications: 'Broadcast notifications to customers, employees, or everyone',
     Support:       'View and respond to customer support tickets',
     Inventory:     'Stock levels, top-sellers, category breakdown, and order analytics',
@@ -2981,8 +3198,9 @@ export default function AdminDashboard() {
           {tab === 'Users'         && <UsersTab         globalSearch={globalSearch} />}
           {tab === 'Employees'     && <EmployeesTab     globalSearch={globalSearch} />}
           {tab === 'Orders'        && <OrdersTab        globalSearch={globalSearch} />}
-          {tab === 'Returns'       && <AdminReturnsTab  globalSearch={globalSearch} />}
-          {tab === 'Coupons'       && <AdminCouponsTab  globalSearch={globalSearch} />}
+          {tab === 'Returns'        && <AdminReturnsTab     globalSearch={globalSearch} />}
+          {tab === 'Cancellations' && <CancellationsTab  globalSearch={globalSearch} />}
+          {tab === 'Coupons'       && <AdminCouponsTab   globalSearch={globalSearch} />}
           {tab === 'Notifications' && <AdminNotificationsTab />}
           {tab === 'Support'       && <AdminSupportTab  globalSearch={globalSearch} />}
           {tab === 'Inventory'     && <InventoryTab     globalSearch={globalSearch} />}
@@ -2990,6 +3208,177 @@ export default function AdminDashboard() {
           {tab === 'Settings'      && <AdminSettingsTab />}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   CANCELLATIONS & REFUNDS TAB
+══════════════════════════════════════════════════════ */
+function CancellationsTab({ globalSearch = '' }) {
+  const { isMobile } = useResponsive();
+  const [all, setAll]           = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [refundF, setRefundF]   = useState('');
+  const [payF, setPayF]         = useState('');
+  const [processing, setProcessing] = useState(null);
+
+  useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminApi.getOrders({ status: 'CANCELLED', limit: 500 })
+      .then(r => setAll(r.data?.data?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleForceRefund = async (orderId) => {
+    if (!window.confirm('Trigger a Razorpay refund for this order?')) return;
+    setProcessing(orderId);
+    try {
+      await adminApi.forceRefund(orderId, {});
+      setAll(prev => prev.map(o =>
+        o._id === orderId ? { ...o, refundStatus: 'COMPLETED', paymentStatus: 'REFUNDED' } : o
+      ));
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Refund failed. Please try again.');
+    } finally { setProcessing(null); }
+  };
+
+  const filtered = all.filter(o => {
+    const q = search.toLowerCase();
+    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q) || o.user?.email?.toLowerCase().includes(q);
+    const mR = !refundF || (
+      refundF === 'COMPLETED' ? o.refundStatus === 'COMPLETED' :
+      refundF === 'PENDING'   ? (o.paymentMethod === 'ONLINE' && o.refundStatus !== 'COMPLETED') :
+      refundF === 'NA'        ? o.paymentMethod !== 'ONLINE' : true
+    );
+    const mP = !payF || o.paymentMethod === payF;
+    return mQ && mR && mP;
+  });
+
+  const onlineOrders    = all.filter(o => o.paymentMethod === 'ONLINE');
+  const completedCount  = all.filter(o => o.refundStatus === 'COMPLETED').length;
+  const pendingCount    = onlineOrders.filter(o => o.refundStatus !== 'COMPLETED').length;
+  const totalRefunded   = all.reduce((s, o) => s + (o.refundAmount || 0), 0);
+
+  if (loading) return <Loader />;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
+        <KpiCard label="Total Cancelled"  value={fmt(all.length)}       sub="All time"              colorKey="red"    iconEl={Icon.orders} />
+        <KpiCard label="Refund Pending"   value={fmt(pendingCount)}     sub="Online — action needed" colorKey="yellow" iconEl={Icon.refund} />
+        <KpiCard label="Refunds Done"     value={fmt(completedCount)}   sub="Via Razorpay"          colorKey="green"  iconEl={Icon.refund} />
+        <KpiCard label="Total Refunded"   value={fmtShort(totalRefunded)} sub="Amount returned"     colorKey="blue"   iconEl={Icon.dollar} rawValue={totalRefunded} />
+      </div>
+
+      {/* Info banner if there are pending online refunds */}
+      {pendingCount > 0 && (
+        <div style={{ padding: '12px 16px', borderRadius: 10, background: C.yellow + '14', border: `1px solid ${C.yellow}33`, fontSize: 13, color: C.yellow, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <SvgAt el={Icon.refund} size={16} />
+          <span><strong>{pendingCount} online order{pendingCount > 1 ? 's' : ''}</strong> cancelled without a confirmed Razorpay refund. Use "Process Refund" to trigger manually.</span>
+        </div>
+      )}
+
+      {/* Filters */}
+      <Card>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, customer name or email…" style={{ flex: 1, minWidth: 220 }} />
+          <Select value={payF} onChange={e => setPayF(e.target.value)}>
+            <option value="">All Payment Methods</option>
+            <option value="ONLINE">Online / UPI</option>
+            <option value="COD">COD</option>
+          </Select>
+          <Select value={refundF} onChange={e => setRefundF(e.target.value)}>
+            <option value="">All Refund Status</option>
+            <option value="PENDING">Refund Pending</option>
+            <option value="COMPLETED">Refunded</option>
+            <option value="NA">N/A (COD)</option>
+          </Select>
+          {(search || refundF || payF) && <Btn onClick={() => { setSearch(''); setRefundF(''); setPayF(''); }}>Clear</Btn>}
+          <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}>
+            <strong style={{ color: C.text }}>{filtered.length}</strong> of <strong style={{ color: C.text }}>{all.length}</strong>
+          </span>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card title={`Cancelled Orders (${filtered.length})`}>
+        {filtered.length === 0
+          ? <Empty text="No cancelled orders match your filters" />
+          : <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <Th>Order #</Th>
+                  <Th>Customer</Th>
+                  <Th>Amount</Th>
+                  <Th>Payment</Th>
+                  <Th>Refund Status</Th>
+                  <Th>Refunded Amt</Th>
+                  <Th>Cancelled On</Th>
+                  <Th>Action</Th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(o => {
+                    const isPaid     = o.paymentMethod === 'ONLINE';
+                    const refundDone = o.refundStatus === 'COMPLETED';
+                    const needsRefund = isPaid && !refundDone;
+                    return (
+                      <tr key={o._id}>
+                        <Td>
+                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: C.accent }}>{o.orderNumber}</span>
+                        </Td>
+                        <Td>
+                          <div style={{ fontWeight: 600, color: C.text }}>{o.user?.name || '—'}</div>
+                          <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
+                          <div style={{ fontSize: 11, color: C.mute }}>{o.user?.phone}</div>
+                        </Td>
+                        <Td><span style={{ fontWeight: 700, color: C.text }}>{fmtRs(o.totalPrice)}</span></Td>
+                        <Td><Badge text={o.paymentMethod} color={o.paymentMethod === 'ONLINE' ? C.blue : C.yellow} /></Td>
+                        <Td>
+                          {!isPaid
+                            ? <Badge text="N/A (COD)" color={C.mute} />
+                            : refundDone
+                              ? <Badge text="REFUNDED" color={C.green} />
+                              : <Badge text="PENDING" color={C.yellow} />
+                          }
+                        </Td>
+                        <Td>
+                          {o.refundAmount
+                            ? <span style={{ fontWeight: 700, color: C.green }}>{fmtRs(o.refundAmount)}</span>
+                            : <span style={{ color: C.mute }}>—</span>}
+                        </Td>
+                        <Td style={{ color: C.mute, fontSize: 12 }}>
+                          {new Date(o.updatedAt || o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </Td>
+                        <Td>
+                          {needsRefund ? (
+                            <Btn variant="warn" disabled={processing === o._id} onClick={() => handleForceRefund(o._id)}>
+                              {processing === o._id ? 'Processing…' : '↩ Process Refund'}
+                            </Btn>
+                          ) : isPaid && refundDone ? (
+                            <span style={{ fontSize: 12, color: C.green, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <SvgAt el={Icon.refund} size={13} /> Done
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 12, color: C.mute }}>No refund</span>
+                          )}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+        }
+      </Card>
     </div>
   );
 }

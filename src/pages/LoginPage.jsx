@@ -1,15 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Truck, RefreshCw, Star } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validators } from '../utils/validators';
+
+const BENEFITS = [
+  { icon: <Truck size={16} />,       text: 'Free delivery on orders above ₹499' },
+  { icon: <RefreshCw size={16} />,   text: 'Hassle-free 7-day easy returns' },
+  { icon: <ShieldCheck size={16} />, text: '100% genuine & warranty-backed products' },
+  { icon: <Star size={16} />,        text: 'Exclusive member-only deals & offers' },
+];
+
+const STATS = [
+  { val: '50K+',  label: 'Happy Customers' },
+  { val: '10K+',  label: 'Products' },
+  { val: '99%',   label: 'Satisfaction' },
+  { val: '24/7',  label: 'Support' },
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const toast = useToast();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm]     = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,7 +39,7 @@ export default function LoginPage() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
@@ -44,78 +58,205 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="grid grid-cols-2 min-h-screen max-md:grid-cols-1">
-      <div className="bg-ink text-white px-15 py-15 flex flex-col justify-between relative overflow-hidden max-md:hidden">
-        <div className="absolute -right-50 -bottom-50 w-125 h-125 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle,rgba(255,90,31,.2) 0%,transparent 60%)' }} />
-        <div className="flex items-center gap-2.5 font-extrabold tracking-[-0.02em] text-[19px] cursor-pointer text-white" onClick={() => navigate('/')}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '100vh' }} className="auth-grid">
+      {/* ── Left panel ── */}
+      <div style={{
+        background: 'linear-gradient(145deg, #0d1117 0%, #131921 50%, #1a2332 100%)',
+        padding: '40px 52px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        {/* Glow orbs */}
+        <div style={{ position: 'absolute', top: -80, right: -80, width: 360, height: 360, borderRadius: '50%', background: 'radial-gradient(circle,rgba(255,90,31,.18) 0%,transparent 65%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -60, left: -60, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle,rgba(1,102,178,.15) 0%,transparent 65%)', pointerEvents: 'none' }} />
+
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
           <div className="logo-mark" />
-          Trade<span className="text-accent">Engine</span>
+          <span style={{ fontWeight: 900, fontSize: 20, color: '#fff', letterSpacing: -.4 }}>
+            Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
+          </span>
         </div>
+
+        {/* Main content */}
         <div>
-          <div className="font-serif text-[80px] leading-[0.5] text-accent">"</div>
-          <p className="font-serif text-[32px] leading-[1.2] mt-5 mb-5 tracking-[-0.01em]">
-            The best place to shop for electronics in Nepal. Quality guaranteed.
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#FF5A1F', letterSpacing: 3, marginBottom: 16, textTransform: 'uppercase' }}>
+            Nepal's #1 Electronics Store
+          </div>
+          <h1 style={{ fontSize: 40, fontWeight: 900, color: '#fff', lineHeight: 1.15, marginBottom: 14, letterSpacing: -.5 }}>
+            Welcome<br />Back! 👋
+          </h1>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,.5)', marginBottom: 36, lineHeight: 1.6, maxWidth: 340 }}>
+            Sign in to access your orders, wishlist and exclusive member deals.
           </p>
-          <div className="text-[13px] text-white/50">— 50,000+ happy customers</div>
+
+          {/* Benefits list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 40 }}>
+            {BENEFITS.map(b => (
+              <div key={b.text} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: 'rgba(255,90,31,.15)', border: '1px solid rgba(255,90,31,.25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#FF5A1F', flexShrink: 0,
+                }}>
+                  {b.icon}
+                </div>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,.7)', lineHeight: 1.4 }}>{b.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+            {STATS.map(s => (
+              <div key={s.val} style={{
+                background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)',
+                borderRadius: 10, padding: '12px 8px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: '#FF5A1F', lineHeight: 1 }}>{s.val}</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,.45)', marginTop: 3, lineHeight: 1.3 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="text-[13px] text-white/40">© 2024 Trade Engine Pvt. Ltd.</div>
+
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,.3)' }}>
+          © {new Date().getFullYear()} Trade Engine Pvt. Ltd.
+        </div>
       </div>
 
-      <div className="flex flex-col justify-center px-15 max-md:px-6">
-        <div className="max-w-105">
-          <h2 className="font-serif text-[40px] tracking-[-0.02em] mb-2 font-normal">Welcome back</h2>
-          <p className="text-mute mb-8">Sign in to your Trade Engine account</p>
+      {/* ── Right panel ── */}
+      <div style={{
+        background: '#f5f7fa',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '40px 24px',
+      }}>
+        <div style={{
+          width: '100%', maxWidth: 420,
+          background: '#fff',
+          borderRadius: 16,
+          boxShadow: '0 4px 24px rgba(0,0,0,.08)',
+          padding: '36px 36px 32px',
+        }}>
+          {/* Card header */}
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg,#131921,#1a2332)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <div className="logo-mark" style={{ width: 22, height: 22 }} />
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1a1a1a', marginBottom: 4, letterSpacing: -.3 }}>Sign in to your account</h2>
+            <p style={{ fontSize: 13, color: '#888' }}>Enter your credentials to continue</p>
+          </div>
+
           <form onSubmit={handleSubmit} noValidate>
-            <div className="field mb-4">
-              <label>Email address</label>
+            {/* Email */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>
+                Email address
+              </label>
               <input
-                className={`input ${errors.email ? 'error' : ''}`}
                 type="email"
                 placeholder="you@example.com"
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
                 autoComplete="email"
+                style={{
+                  width: '100%', height: 44, padding: '0 14px',
+                  border: `1.5px solid ${errors.email ? '#e53935' : '#e0e0e0'}`,
+                  borderRadius: 8, fontSize: 14, color: '#1a1a1a',
+                  outline: 'none', background: '#fff', boxSizing: 'border-box',
+                  transition: 'border-color .15s',
+                }}
+                onFocus={e => { if (!errors.email) e.target.style.borderColor = '#0166b2'; }}
+                onBlur={e => { if (!errors.email) e.target.style.borderColor = '#e0e0e0'; }}
               />
-              {errors.email && <div className="field-error">{errors.email}</div>}
+              {errors.email && <div style={{ fontSize: 11, color: '#e53935', marginTop: 4 }}>{errors.email}</div>}
             </div>
 
-            <div className="field mb-6">
-              <label className="flex justify-between">
-                Password
-                <a onClick={() => navigate('/forgot-password')} className="text-accent font-semibold text-xs cursor-pointer">Forgot password?</a>
-              </label>
-              <div className="relative">
+            {/* Password */}
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>Password</label>
+                <a onClick={() => navigate('/forgot-password')}
+                  style={{ fontSize: 12, color: '#FF5A1F', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}>
+                  Forgot password?
+                </a>
+              </div>
+              <div style={{ position: 'relative' }}>
                 <input
-                  className={`input pr-11 ${errors.password ? 'error' : ''}`}
                   type={showPw ? 'text' : 'password'}
                   placeholder="Enter your password"
                   value={form.password}
                   onChange={e => set('password', e.target.value)}
                   autoComplete="current-password"
+                  style={{
+                    width: '100%', height: 44, padding: '0 42px 0 14px',
+                    border: `1.5px solid ${errors.password ? '#e53935' : '#e0e0e0'}`,
+                    borderRadius: 8, fontSize: 14, color: '#1a1a1a',
+                    outline: 'none', background: '#fff', boxSizing: 'border-box',
+                    transition: 'border-color .15s',
+                  }}
+                  onFocus={e => { if (!errors.password) e.target.style.borderColor = '#0166b2'; }}
+                  onBlur={e => { if (!errors.password) e.target.style.borderColor = '#e0e0e0'; }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(s => !s)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-mute"
-                >
+                <button type="button" onClick={() => setShowPw(s => !s)}
+                  style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex' }}>
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              {errors.password && <div className="field-error">{errors.password}</div>}
+              {errors.password && <div style={{ fontSize: 11, color: '#e53935', marginTop: 4 }}>{errors.password}</div>}
             </div>
 
-            <button type="submit" className="btn btn-primary w-full h-12" disabled={loading}>
-              {loading ? <span className="spinner" /> : 'Sign In'}
+            {/* Submit */}
+            <button type="submit" disabled={loading}
+              style={{
+                width: '100%', height: 46, borderRadius: 8, border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                background: loading ? '#ccc' : 'linear-gradient(135deg, #FF5A1F, #e04a0f)',
+                color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: .3,
+                boxShadow: loading ? 'none' : '0 4px 14px rgba(255,90,31,.35)',
+                transition: 'opacity .15s',
+              }}>
+              {loading
+                ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' }} />
+                    Signing in…
+                  </span>
+                : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-mute">
-            Don't have an account?{' '}
-            <a onClick={() => navigate('/register')} className="text-ink font-semibold cursor-pointer hover:text-accent">Create one</a>
+          {/* Divider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0' }}>
+            <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
+            <span style={{ fontSize: 12, color: '#bbb', fontWeight: 500 }}>OR</span>
+            <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
+          </div>
+
+          {/* Register link */}
+          <div style={{ textAlign: 'center', fontSize: 13, color: '#666' }}>
+            New to Trade Engine?{' '}
+            <a onClick={() => navigate('/register')}
+              style={{ color: '#0166b2', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
+              Create a free account
+            </a>
           </div>
         </div>
+
+        {/* Trust badges */}
+        <div style={{ display: 'flex', gap: 20, marginTop: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {['🔒 Secure Login', '✅ Verified Store', '🛡️ Data Protected'].map(t => (
+            <span key={t} style={{ fontSize: 11, color: '#999', display: 'flex', alignItems: 'center', gap: 3 }}>{t}</span>
+          ))}
+        </div>
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+          .auth-grid { grid-template-columns: 1fr !important; }
+          .auth-grid > div:first-child { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

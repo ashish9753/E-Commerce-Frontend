@@ -9,6 +9,7 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications]   = useState([]);
   const [unreadCount, setUnreadCount]       = useState(0);
   const [lastSupportMsg, setLastSupportMsg] = useState(null); // { ticketId, status, message }
+  const [sseReconnectCount, setSseReconnect] = useState(0);   // increments on every reconnect
   const esRef = useRef(null);
 
   const fetchNotifications = useCallback(async () => {
@@ -49,9 +50,11 @@ export function NotificationProvider({ children }) {
 
       es.onerror = () => {
         es.close();
-        // Reconnect after 5s if user still logged in
         setTimeout(() => {
-          if (localStorage.getItem('accessToken')) connect();
+          if (localStorage.getItem('accessToken')) {
+            setSseReconnect(c => c + 1); // signal consumers to re-sync
+            connect();
+          }
         }, 5_000);
       };
     };
@@ -86,7 +89,7 @@ export function NotificationProvider({ children }) {
   };
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, fetchNotifications, markRead, markAllRead, remove, lastSupportMsg }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, fetchNotifications, markRead, markAllRead, remove, lastSupportMsg, sseReconnectCount }}>
       {children}
     </NotificationContext.Provider>
   );

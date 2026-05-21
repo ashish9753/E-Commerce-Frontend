@@ -117,7 +117,7 @@ const STATUS_META = {
   RETURNED:         { label: 'Returned',            color: '#6b7280', bg: '#f3f4f6' },
 };
 
-const FILTERS = ['All Orders', 'Active', 'Delivered', 'Cancelled'];
+const FILTERS = ['All Orders', 'Active', 'Delivered', 'Cancelled', 'Returns'];
 
 function StatusBadge({ status }) {
   const m = STATUS_META[status] || STATUS_META.PLACED;
@@ -159,7 +159,8 @@ export default function OrdersPage() {
       filter === 'All Orders' ? true :
       filter === 'Active'     ? ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY'].includes(s) :
       filter === 'Delivered'  ? s === 'DELIVERED' :
-      filter === 'Cancelled'  ? s === 'CANCELLED' : true;
+      filter === 'Cancelled'  ? s === 'CANCELLED' :
+      filter === 'Returns'    ? s === 'RETURNED'  : true;
     return matchQ && matchF;
   });
 

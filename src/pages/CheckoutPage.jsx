@@ -372,14 +372,14 @@ export default function CheckoutPage() {
         await openRazorpayModal(rzpOrderData, orderId);
         await clearCart();
         toast('Payment successful! Order confirmed.');
-        navigate(`/track?id=${orderId}`);
+        navigate('/orders');
       } catch (err) {
         if (err.message === 'Payment cancelled') {
           toast('Payment was cancelled. Your order is pending — you can pay from My Orders.', 'warn');
-          navigate(`/track?id=${orderId}`);
+          navigate('/orders');
         } else {
           toast(err.message || 'Payment failed. Try again from My Orders.', 'error');
-          navigate(`/track?id=${orderId}`);
+          navigate('/orders');
         }
       }
       setLoading(false);
@@ -396,7 +396,7 @@ export default function CheckoutPage() {
     if (result.success) {
       await clearCart();
       toast('Order placed successfully!');
-      navigate(`/track?id=${result.order._id}`);
+      navigate('/orders');
     } else {
       toast(result.error, 'error');
     }
@@ -720,10 +720,27 @@ export default function CheckoutPage() {
                               name: 'TradeEngine',
                               description: `COD Booking — ${formatPriceShort(codBookingAmount)}`,
                               theme: { color: '#f59e0b' },
-                              handler: (response) => {
-                                setBookingPaymentId(response.razorpay_payment_id);
+                              handler: async (response) => {
+                                const payId = response.razorpay_payment_id;
+                                setBookingPaymentId(payId);
                                 setBookingConfirmed(true);
-                                toast('Booking payment successful!');
+                                setBookingLoading(false);
+                                toast('Booking payment successful! Placing your order…');
+                                // Auto-place the COD order immediately
+                                setLoading(true);
+                                const result = await placeOrder({
+                                  shippingAddressId: selectedAddressId,
+                                  paymentMethod: 'COD',
+                                  codBookingUtr: payId,
+                                });
+                                setLoading(false);
+                                if (result.success) {
+                                  await clearCart();
+                                  toast('Order placed successfully!');
+                                  navigate('/orders');
+                                } else {
+                                  toast(result.error || 'Failed to place order. Please try from Review step.', 'error');
+                                }
                               },
                               modal: { ondismiss: () => setBookingLoading(false) },
                             });

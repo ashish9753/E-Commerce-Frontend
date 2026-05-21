@@ -13,6 +13,7 @@ export const adminApi = {
   verifyEmployee: (id) => client.patch(`/employees/${id}/verify`),
   getEmployeeById: (id) => client.get(`/employees/${id}`),
   createEmployee: (data) => client.post('/employees/admin/create', data),
+  registerExistingUserAsEmployee: (data) => client.post('/employees/admin/register-existing', data),
 
   // Orders
   getOrders: (params) => client.get('/orders', { params }),
