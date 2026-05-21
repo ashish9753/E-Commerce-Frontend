@@ -46,6 +46,15 @@ const STATUS_COLORS = {
   CANCELLED: C.red, RETURNED: C.mute,
 };
 
+const REASON_LABEL = {
+  defective:       'Defective / Not Working',
+  wrong_item:      'Wrong Item Received',
+  damaged:         'Damaged in Transit',
+  not_as_described:'Not as Described',
+  changed_mind:    'Changed My Mind',
+  missing_parts:   'Missing Parts / Accessories',
+};
+
 const ROLE_COLORS = { admin: C.purple, employee: C.yellow, user: C.blue };
 
 /* ── Responsive hook ── */
@@ -123,7 +132,7 @@ function Badge({ text, color }) {
 const ICON_COLOR_MAP = { blue: C.blue, purple: C.purple, yellow: C.yellow, green: C.green, orange: C.accent, red: C.red };
 const ICON_BG_MAP   = { blue: 'rgba(59,130,246,.15)', purple: 'rgba(139,92,246,.15)', yellow: 'rgba(234,179,8,.15)', green: 'rgba(34,197,94,.15)', orange: 'rgba(249,115,22,.15)', red: 'rgba(239,68,68,.15)' };
 
-function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
+function KpiCard({ label, value, sub, colorKey = 'blue', iconEl, rawValue }) {
   const col = ICON_COLOR_MAP[colorKey] || C.blue;
   const bg  = ICON_BG_MAP[colorKey]   || 'rgba(59,130,246,.15)';
   const nowrap = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
@@ -131,7 +140,8 @@ function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: C.mute, fontWeight: 500, marginBottom: 3, ...nowrap }}>{label}</div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}
+          title={rawValue !== undefined ? fmtRs(rawValue) : undefined}>{value}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.mute, ...nowrap }}>{sub}</div>}
       </div>
       <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, color: col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -317,8 +327,8 @@ function OverviewTab() {
       {/* ── KPI row ── */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : isTablet ? 'repeat(3,1fr)' : 'repeat(5,1fr)', gap: 12 }}>
         <KpiCard label="Total Orders"  value={fmt(total)}         sub={`${delivered} delivered`}      colorKey="blue"   iconEl={Icon.orders} />
-        <KpiCard label="Net Revenue"   value={fmtShort(netRevenue)}  sub="Paid minus refunded"           colorKey="green"  iconEl={Icon.dollar} />
-        <KpiCard label="Refunded"      value={fmtShort(refundedAmt)} sub={`${returned} returned`}        colorKey="red"    iconEl={Icon.refund} />
+        <KpiCard label="Net Revenue"   value={fmtShort(netRevenue)}  sub="Paid minus refunded"           colorKey="green"  iconEl={Icon.dollar} rawValue={netRevenue} />
+        <KpiCard label="Refunded"      value={fmtShort(refundedAmt)} sub={`${returned} returned`}        colorKey="red"    iconEl={Icon.refund} rawValue={refundedAmt} />
         <KpiCard label="In Progress"   value={fmt(inProgress)}    sub="Active orders"                 colorKey="yellow" iconEl={Icon.truck} />
         <KpiCard label="Active Users"  value={fmt(userCount)}     sub="Registered accounts"           colorKey="purple" iconEl={Icon.users} />
       </div>
@@ -406,7 +416,7 @@ function OverviewTab() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 12, color: C.mute }}>All-time Net</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.green }}>{fmtShort(totalSales)}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.green }} title={fmtRs(totalSales)}>{fmtShort(totalSales)}</div>
             </div>
           </div>
         </Card>
@@ -1046,8 +1056,6 @@ function OrdersTab({ globalSearch = '' }) {
           });
         } catch (rzpErr) {
           const msg = rzpErr?.response?.data?.message || 'Razorpay refund could not be initiated';
-          // eslint-disable-next-line no-console
-          console.warn('Razorpay refund skipped:', msg);
           // Inform admin but continue — manual refund may still be needed
           if (!window.confirm(`Razorpay refund failed: "${msg}"\n\nContinue marking the order as RETURNED anyway?`)) {
             setRefunding(false);
@@ -1354,7 +1362,7 @@ function AdminReturnsTab({ globalSearch = '' }) {
         <KpiCard label="Awaiting Employee" value={stats.employeePending}  colorKey="yellow" iconEl={Icon.bag}    sub="Pending response" />
         <KpiCard label="Employee Rejected" value={stats.employeeRejected} colorKey="red"    iconEl={Icon.bell}   sub="Override needed" />
         <KpiCard label="Awaiting You"      value={stats.adminPending}     colorKey="orange" iconEl={Icon.shield} sub="Needs your approval" />
-        <KpiCard label="Refund Value"      value={fmtShort(stats.value)}  colorKey="green"  iconEl={Icon.dollar} />
+        <KpiCard label="Refund Value"      value={fmtShort(stats.value)}  colorKey="green"  iconEl={Icon.dollar} rawValue={stats.value} />
       </div>
 
       {/* Employee-rejected alert banner */}
@@ -1446,10 +1454,10 @@ function AdminReturnsTab({ globalSearch = '' }) {
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
                       <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
-                        Reason: <strong>{req.reason?.replace(/_/g,' ')}</strong>
+                        Reason: <strong style={{ color:C.text }}>{REASON_LABEL[req.reason] || req.reason?.replace(/_/g,' ')}</strong>
                         {' · '}Resolution: <strong>{req.resolution || 'refund'}</strong>
                       </div>
-                      {req.description && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>"{req.description}"</div>}
+                      {req.description && <div style={{ fontSize:12, color:C.sub, marginTop:3, fontStyle:'italic' }}>"{req.description}"</div>}
                     </div>
                     <div style={{ textAlign:'right', fontSize:12, color:C.mute }}>
                       <div>Order: {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}</div>
@@ -1470,6 +1478,63 @@ function AdminReturnsTab({ globalSearch = '' }) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Customer evidence — photos & video */}
+                  {req.evidence?.length > 0 && (
+                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.accent, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:10 }}>
+                        📸 Return Evidence ({req.evidence.filter(e=>e.type==='image').length} photo{req.evidence.filter(e=>e.type==='image').length!==1?'s':''}
+                        {req.evidence.some(e=>e.type==='video') ? ', 1 video' : ''})
+                      </div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-start' }}>
+                        {req.evidence.filter(e=>e.type==='image').map((ev, i) => (
+                          <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
+                            <img src={ev.url} alt={`Evidence ${i+1}`}
+                              style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:`2px solid ${C.line}`, cursor:'zoom-in', display:'block', transition:'all .15s' }}
+                              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform='scale(1.06)';}}
+                              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.line;e.currentTarget.style.transform='scale(1)';}}
+                            />
+                          </a>
+                        ))}
+                        {req.evidence.filter(e=>e.type==='video').map((ev, i) => (
+                          <a key={`v${i}`} href={ev.url} target="_blank" rel="noopener noreferrer"
+                            style={{ width:80, height:80, borderRadius:8, border:`2px solid ${C.blue}55`, background:C.blue+'12', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, textDecoration:'none', cursor:'pointer', transition:'all .15s' }}
+                            onMouseEnter={e=>e.currentTarget.style.borderColor=C.blue}
+                            onMouseLeave={e=>e.currentTarget.style.borderColor=C.blue+'55'}>
+                            <span style={{ fontSize:28 }}>🎬</span>
+                            <span style={{ fontSize:9, fontWeight:700, color:C.blue, letterSpacing:'.04em' }}>VIEW VIDEO</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bank / UPI details — always visible for refund returns */}
+                  {req.resolution === 'refund' && (
+                    <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background: C.card2+'99', fontSize:12 }}>
+                      <div style={{ fontWeight:700, color:C.blue, marginBottom:5, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em' }}>💳 Refund Details</div>
+                      {req.refundMethod === 'bank_transfer' && req.bankDetails?.accountNumber ? (
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 18px', color:C.text }}>
+                          <span><span style={{ color:C.mute }}>Bank: </span><strong>{req.bankDetails.bankName}</strong></span>
+                          <span><span style={{ color:C.mute }}>A/C: </span>···{req.bankDetails.accountNumber.slice(-4)}</span>
+                          <span><span style={{ color:C.mute }}>Name: </span>{req.bankDetails.accountName}</span>
+                          <span><span style={{ color:C.mute }}>IFSC: </span>{req.bankDetails.ifscCode}</span>
+                        </div>
+                      ) : req.refundMethod === 'upi' && req.bankDetails?.upiId ? (
+                        <div style={{ color:C.text }}>
+                          <span style={{ color:C.mute }}>UPI ID: </span><strong>{req.bankDetails.upiId}</strong>
+                        </div>
+                      ) : req.refundMethod === 'original_payment' ? (
+                        <div style={{ color:C.mute }}>Back to original payment method (Razorpay)</div>
+                      ) : (
+                        <div style={{ color: C.yellow, fontWeight:600 }}>
+                          ⚠ {req.order?.paymentMethod === 'COD'
+                            ? 'COD order — customer has not provided bank/UPI details yet'
+                            : 'Customer has not selected a refund method yet'}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Notes from employee */}
                   {(req.employeeNote || req.adminNote) && (
@@ -2927,10 +2992,11 @@ function InventoryTab({ globalSearch = '' }) {
     return rows;
   })();
 
-  const Stat = ({ label, value, color = C.text, sub, accent }) => (
+  const Stat = ({ label, value, color = C.text, sub, accent, rawValue }) => (
     <div style={{ background: C.card, border: `1px solid ${accent ? accent + '44' : C.line}`, borderRadius: 12, padding: '16px 18px', borderLeft: accent ? `3px solid ${accent}` : undefined }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}
+        title={rawValue !== undefined ? fmtRs(rawValue) : undefined}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.mute, marginTop: 4 }}>{sub}</div>}
     </div>
   );
@@ -3053,20 +3119,21 @@ function InventoryTab({ globalSearch = '' }) {
           <Stat label="Active Orders"  value={fmt(orderSummary.totalSold)}      color={C.green}  accent={C.green}  sub="Placed → Delivered" />
           <Stat label="Cancelled"      value={fmt(orderSummary.totalCancelled)} color={C.red}    accent={C.red}    />
           <Stat label="Returned"       value={fmt(orderSummary.totalReturned)}  color={C.yellow} accent={C.yellow} />
-          <Stat label="Total Sales"    value={fmtShort(orderSummary.totalRevenue)}  color={C.accent} accent={C.accent} sub={totalDepositCollected > 0 ? `+ ${fmtShort(totalDepositCollected)} COD deposit` : undefined} />
-          <Stat label="Total Refunded" value={fmtShort(orderSummary.totalRefunded)} color={C.red}    accent={C.red}    />
+          <Stat label="Total Sales"    value={fmtShort(orderSummary.totalRevenue)}  color={C.accent} accent={C.accent} rawValue={orderSummary.totalRevenue} sub={totalDepositCollected > 0 ? `+ ${fmtShort(totalDepositCollected)} COD deposit` : undefined} />
+          <Stat label="Total Refunded" value={fmtShort(orderSummary.totalRefunded)} color={C.red}    accent={C.red}    rawValue={orderSummary.totalRefunded} />
           {(orderSummary.totalShipping > 0) && (
-            <Stat label="Delivery Collected" value={fmtShort(orderSummary.totalShipping)} color={C.blue} accent={C.blue} sub="Shipping charged to buyers" />
+            <Stat label="Delivery Collected" value={fmtShort(orderSummary.totalShipping)} color={C.blue} accent={C.blue} sub="Shipping charged to buyers" rawValue={orderSummary.totalShipping} />
           )}
           <Stat label="Net Revenue"
             value={fmtShort(Math.max(0, orderSummary.totalRevenue - orderSummary.totalRefunded - (orderSummary.totalShipping || 0)))}
             color={C.green} accent={C.green}
+            rawValue={Math.max(0, orderSummary.totalRevenue - orderSummary.totalRefunded - (orderSummary.totalShipping || 0))}
             sub="After refunds & delivery" />
           {/* Clickable tax card */}
           <div onClick={() => setShowTax(v => !v)}
             style={{ background: C.card, border: `1px solid ${showTax ? C.purple : C.purple + '44'}`, borderLeft: `3px solid ${C.purple}`, borderRadius: 12, padding: '16px 18px', cursor: 'pointer', transition: 'all .15s', position: 'relative' }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>Total Tax Collected</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, lineHeight: 1 }}>{fmtShort(orderSummary.totalTax || 0)}</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, lineHeight: 1 }} title={fmtRs(orderSummary.totalTax || 0)}>{fmtShort(orderSummary.totalTax || 0)}</div>
             <div style={{ fontSize: 11, color: C.purple, marginTop: 4, fontWeight: 600 }}>{showTax ? '▴ Hide breakdown' : '▾ See per-product'}</div>
           </div>
         </div>
@@ -3178,15 +3245,15 @@ function InventoryTab({ globalSearch = '' }) {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Total Sales</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }}>{fmtShort(cod.revenue)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.yellow }} title={fmtRs(cod.revenue)}>{fmtShort(cod.revenue)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Refunded</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }}>{fmtShort(cod.refunded || 0)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }} title={fmtRs(cod.refunded || 0)}>{fmtShort(cod.refunded || 0)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Net COD</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }}>{fmtShort(Math.max(0, (cod.revenue || 0) - (cod.refunded || 0)))}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }} title={fmtRs(Math.max(0, (cod.revenue || 0) - (cod.refunded || 0)))}>{fmtShort(Math.max(0, (cod.revenue || 0) - (cod.refunded || 0)))}</div>
               </div>
             </div>
             {/* Deposit section */}
@@ -3229,15 +3296,15 @@ function InventoryTab({ globalSearch = '' }) {
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Total Sales</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{fmtShort(online.revenue)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.blue }} title={fmtRs(online.revenue)}>{fmtShort(online.revenue)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Refunded</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }}>{fmtShort(online.refunded)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.red }} title={fmtRs(online.refunded)}>{fmtShort(online.refunded)}</div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: C.mute, marginBottom: 2 }}>Net</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }}>{fmtShort(Math.max(0, online.revenue - online.refunded))}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green }} title={fmtRs(Math.max(0, online.revenue - online.refunded))}>{fmtShort(Math.max(0, online.revenue - online.refunded))}</div>
               </div>
             </div>
           </div>
@@ -3439,7 +3506,7 @@ function InventoryTab({ globalSearch = '' }) {
                     <td style={{ padding: '10px 12px', textAlign: 'right', color: C.text, whiteSpace: 'nowrap' }}>{fmtRs(p.price)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.green }}>{fmt(p.sold)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: st.color }}>{fmt(p.stock)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.accent, whiteSpace: 'nowrap' }}>{fmtShort(revenue)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.accent, whiteSpace: 'nowrap' }} title={fmtRs(revenue)}>{fmtShort(revenue)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                       <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: st.color + '22', color: st.color, whiteSpace: 'nowrap' }}>
                         {st.label}

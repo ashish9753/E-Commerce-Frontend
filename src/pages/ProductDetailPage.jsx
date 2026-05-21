@@ -34,6 +34,13 @@ export default function ProductDetailPage() {
   const [pinResult, setPinResult]     = useState(null); // { available, city, deliveryCharge } | null
   const [pinChecking, setPinChecking] = useState(false);
 
+  const [reviewRating, setReviewRating]       = useState(0);
+  const [reviewHover, setReviewHover]         = useState(0);
+  const [reviewComment, setReviewComment]     = useState('');
+  const [reviewImages, setReviewImages]       = useState([]);
+  const [reviewLoading, setReviewLoading]     = useState(false);
+  const [alreadyReviewed, setAlreadyReviewed] = useState(false);
+
   const checkPincode = async (pin) => {
     const p = (pin || pincode).trim();
     if (p.length !== 6) return;
@@ -69,7 +76,13 @@ export default function ProductDetailPage() {
             }).catch(() => {});
         }
         reviewsApi.getForProduct(p._id)
-          .then(({ data: rData }) => setReviews(rData.data?.data || rData.data?.reviews || []))
+          .then(({ data: rData }) => {
+            const list = rData.data?.data || rData.data?.reviews || [];
+            setReviews(list);
+            if (user) {
+              setAlreadyReviewed(list.some(r => r.user?._id === user._id || r.user === user._id));
+            }
+          })
           .catch(() => {});
       })
       .catch(() => setProduct(null))
@@ -116,6 +129,43 @@ export default function ProductDetailPage() {
     if (!user) { toast('Please sign in to save items', 'error'); navigate('/login'); return; }
     await toggle(product);
     toast(wished ? 'Removed from wishlist' : 'Added to wishlist');
+  };
+
+  const handleReviewImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    setReviewImages(prev => {
+      const remaining = 2 - prev.length;
+      return [...prev, ...files.slice(0, remaining)];
+    });
+    e.target.value = '';
+  };
+
+  const removeReviewImage = (i) => setReviewImages(prev => prev.filter((_, idx) => idx !== i));
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewRating) { toast('Please select a rating', 'error'); return; }
+    setReviewLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append('productId', product._id);
+      fd.append('rating', reviewRating);
+      if (reviewComment.trim()) fd.append('comment', reviewComment.trim());
+      reviewImages.forEach(f => fd.append('images', f));
+      const { data } = await reviewsApi.create(fd);
+      const newReview = data.data?.review;
+      if (newReview) setReviews(prev => [newReview, ...prev]);
+      setReviewRating(0);
+      setReviewHover(0);
+      setReviewComment('');
+      setReviewImages([]);
+      setAlreadyReviewed(true);
+      toast('Review submitted successfully!');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Failed to submit review', 'error');
+    } finally {
+      setReviewLoading(false);
+    }
   };
 
   return (
@@ -441,13 +491,122 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* ── Customer Reviews (full width) ── */}
+        {/* ── Related Products (before reviews, like Amazon) ── */}
+        {related.length > 0 && (
+          <section style={{ paddingBottom:32 }}>
+            <div style={{ height:1, background:'#e7e7e7', marginBottom:24 }} />
+            <div style={{ fontSize:22, fontWeight:700, color:'#0F1111', marginBottom:16 }}>Related Products</div>
+            <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2">
+              {related.map(p => <ProductCard key={p._id} product={p} />)}
+            </div>
+          </section>
+        )}
+
+        {/* ── Customer Reviews ── */}
         <div style={{ borderTop:'1px solid #e7e7e7', paddingTop:32, marginBottom:40 }}>
           <div style={{ fontSize:22, fontWeight:700, color:'#0F1111', marginBottom:20 }}>
             Customer Reviews
             {reviews.length > 0 && <span style={{ fontSize:14, fontWeight:400, color:'#666', marginLeft:10 }}>({reviews.length} ratings)</span>}
           </div>
 
+          {/* Write a Review */}
+          {user ? (
+            alreadyReviewed ? (
+              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8,
+                padding:'12px 16px', marginBottom:24, fontSize:13, color:'#166534' }}>
+                ✓ You have already submitted a review for this product.
+              </div>
+            ) : (
+              <form onSubmit={handleReviewSubmit}
+                style={{ background:'#fafafa', border:'1px solid #e7e7e7', borderRadius:8, padding:20, marginBottom:32 }}>
+                <div style={{ fontSize:16, fontWeight:700, color:'#0F1111', marginBottom:16 }}>Write a Review</div>
+
+                {/* Star picker */}
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:8 }}>
+                    Overall Rating <span style={{ color:'#CC0C39' }}>*</span>
+                  </label>
+                  <div style={{ display:'flex', gap:4 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <span key={n}
+                        onClick={() => setReviewRating(n)}
+                        onMouseEnter={() => setReviewHover(n)}
+                        onMouseLeave={() => setReviewHover(0)}
+                        style={{ fontSize:36, cursor:'pointer', lineHeight:1, userSelect:'none',
+                          color:(reviewHover||reviewRating) >= n ? '#FF5A1F' : '#d1d5db' }}>
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  {reviewRating > 0 && (
+                    <div style={{ fontSize:12, color:'#666', marginTop:4 }}>
+                      {['','Poor','Fair','Good','Very Good','Excellent'][reviewRating]}
+                    </div>
+                  )}
+                </div>
+
+                {/* Comment */}
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+                    Your Review
+                  </label>
+                  <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)}
+                    placeholder="Share your experience with this product..."
+                    rows={4}
+                    style={{ width:'100%', border:'1px solid #ddd', borderRadius:6, padding:'10px 12px',
+                      fontSize:13, resize:'vertical', fontFamily:'inherit', outline:'none', boxSizing:'border-box' }} />
+                </div>
+
+                {/* Image upload (max 2) */}
+                <div style={{ marginBottom:20 }}>
+                  <label style={{ fontSize:13, fontWeight:600, color:'#333', display:'block', marginBottom:6 }}>
+                    Add Photos <span style={{ fontWeight:400, color:'#888' }}>(optional, max 2)</span>
+                  </label>
+                  {reviewImages.length > 0 && (
+                    <div style={{ display:'flex', gap:10, marginBottom:10, flexWrap:'wrap' }}>
+                      {reviewImages.map((f, i) => (
+                        <div key={i} style={{ position:'relative', width:72, height:72 }}>
+                          <img src={URL.createObjectURL(f)} alt=""
+                            style={{ width:72, height:72, objectFit:'cover', borderRadius:6, border:'1px solid #ddd' }} />
+                          <button type="button" onClick={() => removeReviewImage(i)}
+                            style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%',
+                              background:'#CC0C39', color:'white', border:'none', cursor:'pointer',
+                              fontSize:14, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {reviewImages.length < 2 && (
+                    <label style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'7px 14px',
+                      border:'1px dashed #aaa', borderRadius:6, cursor:'pointer', fontSize:13, color:'#555' }}>
+                      <span>+ Add Photo</span>
+                      <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp"
+                        onChange={handleReviewImageChange} style={{ display:'none' }} multiple />
+                    </label>
+                  )}
+                </div>
+
+                <button type="submit" disabled={reviewLoading || !reviewRating}
+                  style={{ padding:'10px 28px', borderRadius:6, border:'none',
+                    background: reviewRating ? '#FF5A1F' : '#e5e5e5',
+                    color: reviewRating ? 'white' : '#999',
+                    fontWeight:700, fontSize:14, cursor: reviewRating ? 'pointer' : 'not-allowed' }}>
+                  {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                </button>
+              </form>
+            )
+          ) : (
+            <div style={{ background:'#fff8f1', border:'1px solid #fed7aa', borderRadius:8,
+              padding:'12px 16px', marginBottom:24, fontSize:13, color:'#9a3412' }}>
+              <span style={{ cursor:'pointer', fontWeight:700, color:'#FF5A1F' }} onClick={() => navigate('/login')}>
+                Sign in
+              </span>{' '}to write a review
+            </div>
+          )}
+
+          {/* Ratings summary + list */}
           {reviews.length === 0 ? (
             <div style={{ textAlign:'center', padding:'40px 0', color:'#999' }}>
               <div style={{ fontSize:56 }}>★</div>
@@ -501,7 +660,9 @@ export default function ProductDetailPage() {
                     {r.images?.length > 0 && (
                       <div style={{ display:'flex', gap:8, marginTop:10 }}>
                         {r.images.map((img, j) => (
-                          <img key={j} src={img} alt="" style={{ width:70, height:70, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }} />
+                          <img key={j} src={img} alt=""
+                            style={{ width:70, height:70, objectFit:'cover', borderRadius:6, border:'1px solid #eee', cursor:'pointer' }}
+                            onClick={() => window.open(img, '_blank')} />
                         ))}
                       </div>
                     )}
@@ -511,17 +672,6 @@ export default function ProductDetailPage() {
             </div>
           )}
         </div>
-
-        {/* Related products */}
-        {related.length > 0 && (
-          <section style={{ paddingBottom:60 }}>
-            <div style={{ height:1, background:'#e7e7e7', marginBottom:24 }} />
-            <div style={{ fontSize:22, fontWeight:700, color:'#0F1111', marginBottom:16 }}>Related Products</div>
-            <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2">
-              {related.map(p => <ProductCard key={p._id} product={p} />)}
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );

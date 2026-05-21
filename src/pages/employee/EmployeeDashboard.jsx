@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { employeeApi } from '../../api/employee';
-import { categoriesApi } from '../../api/categories';
 import { returnsApi } from '../../api/returns';
 import { deliveryAreasApi } from '../../api/deliveryAreas';
 import { getErrorMessage } from '../../api/client';
@@ -36,6 +35,15 @@ const STATUS_COLORS = {
   PLACED: C.yellow, CONFIRMED: C.blue, PACKED: C.purple,
   SHIPPED: C.cyan, OUT_FOR_DELIVERY: C.accent,
   DELIVERED: C.green, CANCELLED: C.red, RETURNED: C.mute,
+};
+
+const REASON_LABEL = {
+  defective:       'Defective / Not Working',
+  wrong_item:      'Wrong Item Received',
+  damaged:         'Damaged in Transit',
+  not_as_described:'Not as Described',
+  changed_mind:    'Changed My Mind',
+  missing_parts:   'Missing Parts / Accessories',
 };
 
 const fmt    = (n) => Number(n || 0).toLocaleString('en-IN');
@@ -688,7 +696,7 @@ function SectionHead({ title, sub }) {
   );
 }
 
-function ProductForm({ initial, categories, onSave, onCancel }) {
+function ProductForm({ initial, onSave, onCancel }) {
   const { brands: catalogBrands, topCategories, getSubcats } = useCatalog();
   const fileInputRef = useRef(null);
 
@@ -1252,15 +1260,72 @@ function EmployeeReturnsTab() {
                     <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
                       <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
-                        Reason: <strong style={{color:C.sub}}>{req.reason?.replace(/_/g,' ')}</strong>
+                        Reason: <strong style={{color:C.text}}>{REASON_LABEL[req.reason] || req.reason?.replace(/_/g,' ')}</strong>
                         {' · '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
                       </div>
-                      {req.description && <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>"{req.description}"</div>}
+                      {req.description && <div style={{ fontSize:12, color:C.sub, marginTop:3, fontStyle:'italic' }}>"{req.description}"</div>}
                     </div>
                     <div style={{ textAlign:'right', flexShrink:0, fontSize:12, color:C.mute }}>
                       {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}
                     </div>
                   </div>
+
+                  {/* Customer evidence — photos & video */}
+                  {req.evidence?.length > 0 && (
+                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.accent, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:10 }}>
+                        📸 Return Evidence ({req.evidence.filter(e=>e.type==='image').length} photo{req.evidence.filter(e=>e.type==='image').length!==1?'s':''}
+                        {req.evidence.some(e=>e.type==='video') ? ', 1 video' : ''})
+                      </div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-start' }}>
+                        {req.evidence.filter(e=>e.type==='image').map((ev, i) => (
+                          <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
+                            <img src={ev.url} alt={`Evidence ${i+1}`}
+                              style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:`2px solid ${C.line}`, cursor:'zoom-in', display:'block', transition:'all .15s' }}
+                              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform='scale(1.06)';}}
+                              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.line;e.currentTarget.style.transform='scale(1)';}}
+                            />
+                          </a>
+                        ))}
+                        {req.evidence.filter(e=>e.type==='video').map((ev, i) => (
+                          <a key={`v${i}`} href={ev.url} target="_blank" rel="noopener noreferrer"
+                            style={{ width:80, height:80, borderRadius:8, border:`2px solid ${C.blue}55`, background:C.blue+'12', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, textDecoration:'none', cursor:'pointer', transition:'all .15s' }}
+                            onMouseEnter={e=>e.currentTarget.style.borderColor=C.blue}
+                            onMouseLeave={e=>e.currentTarget.style.borderColor=C.blue+'55'}>
+                            <span style={{ fontSize:28 }}>🎬</span>
+                            <span style={{ fontSize:9, fontWeight:700, color:C.blue, letterSpacing:'.04em' }}>VIEW VIDEO</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bank / UPI details — always visible for refund returns */}
+                  {req.resolution === 'refund' && (
+                    <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.card2+'99', fontSize:12 }}>
+                      <div style={{ fontWeight:700, color:C.blue, marginBottom:5, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em' }}>💳 Refund Details</div>
+                      {req.refundMethod === 'bank_transfer' && req.bankDetails?.accountNumber ? (
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 18px', color:C.text }}>
+                          <span><span style={{ color:C.mute }}>Bank: </span><strong>{req.bankDetails.bankName}</strong></span>
+                          <span><span style={{ color:C.mute }}>A/C: </span>···{req.bankDetails.accountNumber.slice(-4)}</span>
+                          <span><span style={{ color:C.mute }}>Name: </span>{req.bankDetails.accountName}</span>
+                          <span><span style={{ color:C.mute }}>IFSC: </span>{req.bankDetails.ifscCode}</span>
+                        </div>
+                      ) : req.refundMethod === 'upi' && req.bankDetails?.upiId ? (
+                        <div style={{ color:C.text }}>
+                          <span style={{ color:C.mute }}>UPI ID: </span><strong>{req.bankDetails.upiId}</strong>
+                        </div>
+                      ) : req.refundMethod === 'original_payment' ? (
+                        <div style={{ color:C.mute }}>Back to original payment method</div>
+                      ) : (
+                        <div style={{ color:C.yellow, fontWeight:600 }}>
+                          ⚠ {req.order?.paymentMethod === 'COD'
+                            ? 'COD order — customer has not provided bank/UPI details yet'
+                            : 'Customer has not selected a refund method yet'}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Pipeline tracker */}
                   {pipelineIdx >= 0 && (
@@ -1381,14 +1446,15 @@ function DeliveryAreasTab() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!form.pincode || form.deliveryCharge === '') { setError('Pincode and delivery charge are required'); return; }
+    if (!form.pincode) { setError('Pincode is required'); return; }
     if (!/^\d{6}$/.test(form.pincode)) { setError('Pincode must be exactly 6 digits'); return; }
+    const charge = form.deliveryCharge === '' ? 0 : Number(form.deliveryCharge);
     setSaving(true); setError('');
     try {
       if (editId) {
-        await deliveryAreasApi.update(editId, { ...form, deliveryCharge: Number(form.deliveryCharge) });
+        await deliveryAreasApi.update(editId, { ...form, deliveryCharge: charge });
       } else {
-        await deliveryAreasApi.create({ ...form, deliveryCharge: Number(form.deliveryCharge) });
+        await deliveryAreasApi.create({ ...form, deliveryCharge: charge });
       }
       setForm(empty); setEditId(null); setShowForm(false); load();
     } catch (e) { setError(e?.response?.data?.message || 'Failed to save'); }
@@ -1443,9 +1509,9 @@ function DeliveryAreasTab() {
                 <input value={form.state} onChange={e=>set('state',e.target.value)} placeholder="State" style={inpStyle} />
               </div>
               <div>
-                <label style={LS}>Delivery Charge (Rs.) *</label>
+                <label style={LS}>Delivery Charge (Rs.) — blank = Free</label>
                 <input type="number" min="0" value={form.deliveryCharge} onChange={e=>set('deliveryCharge',e.target.value)}
-                  placeholder="0 = Free" style={inpStyle} />
+                  placeholder="0 = Free delivery" style={inpStyle} />
               </div>
             </div>
             {error && <div style={{ marginTop:12, color:C.red, fontSize:13, fontWeight:600 }}>{error}</div>}
@@ -1543,7 +1609,6 @@ export default function SellerDashboard() {
   const [tab, setTab]           = useState('Overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profile, setProfile]   = useState(null);
-  const [categories, setCats]   = useState([]);
   const [editProduct, setEdit]  = useState(null);
   const [loading, setLoading]   = useState(true);
   const navigate                = useNavigate();
@@ -1557,10 +1622,7 @@ export default function SellerDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    loadProfile();
-    categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(()=>{});
-  }, [loadProfile]);
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
   const handleTabClick = (id) => {
     setTab(id);
@@ -1722,11 +1784,11 @@ export default function SellerDashboard() {
             <>
               {tab==='Overview'    && !editProduct && <OverviewTab profile={profile} />}
               {tab==='My Products' && !editProduct && <ProductsTab onEdit={p=>setEdit(p)} />}
-              {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} categories={categories} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
+              {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
               {tab==='Orders'      && !editProduct && <OrdersTab onViewReturns={() => handleTabClick('Returns')} />}
               {tab==='Returns'     && !editProduct && <EmployeeReturnsTab />}
               {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
-              {tab==='Add Product' && !editProduct && <ProductForm categories={categories} onSave={handleAddProduct} />}
+              {tab==='Add Product' && !editProduct && <ProductForm onSave={handleAddProduct} />}
             </>
           )}
         </div>

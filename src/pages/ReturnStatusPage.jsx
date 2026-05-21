@@ -7,8 +7,7 @@ import { formatPriceShort, formatDate } from '../utils/formatters';
 /* ── status pipeline — employee-first flow ── */
 const REFUND_PIPELINE = [
   { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
-  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
-  { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
+  { key: 'APPROVED',         label: 'Approved',           icon: '✅', desc: 'Your return has been approved' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
   { key: 'REFUND_INITIATED', label: 'Refund Initiated',   icon: '💳', desc: 'Refund has been processed' },
@@ -17,8 +16,7 @@ const REFUND_PIPELINE = [
 
 const REPLACEMENT_PIPELINE = [
   { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
-  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
-  { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
+  { key: 'APPROVED',         label: 'Approved',           icon: '✅', desc: 'Your return has been approved' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
   { key: 'REPLACEMENT_SENT', label: 'Replacement Sent',   icon: '🔄', desc: 'New item dispatched to you' },
@@ -27,8 +25,7 @@ const REPLACEMENT_PIPELINE = [
 
 const STORE_CREDIT_PIPELINE = [
   { key: 'REQUESTED',        label: 'Return Requested',   icon: '📤', desc: 'Your request has been received' },
-  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Reviewed',  icon: '🏪', desc: 'Employee approved your return request' },
-  { key: 'APPROVED',         label: 'Admin Confirmed',    icon: '✅', desc: 'Our team has confirmed the return' },
+  { key: 'APPROVED',         label: 'Approved',           icon: '✅', desc: 'Your return has been approved' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',   icon: '🚚', desc: 'A pickup agent will collect the item' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',      icon: '📦', desc: 'Item reached our warehouse' },
   { key: 'REFUND_COMPLETED', label: 'Credit Added',       icon: '🎁', desc: 'Store credit added to your account' },
@@ -36,8 +33,8 @@ const STORE_CREDIT_PIPELINE = [
 
 const STATUS_META = {
   REQUESTED:        { label: 'Requested',        color: '#f59e0b', bg: '#fef3c7' },
-  EMPLOYEE_APPROVED:  { label: 'Employee Approved', color: '#3b82f6', bg: '#dbeafe' },
-  EMPLOYEE_REJECTED:  { label: 'Employee Rejected', color: '#ef4444', bg: '#fee2e2' },
+  EMPLOYEE_APPROVED:  { label: 'Approved',          color: '#22c55e', bg: '#dcfce7' },
+  EMPLOYEE_REJECTED:  { label: 'Under Review',      color: '#f59e0b', bg: '#fef3c7' },
   APPROVED:         { label: 'Approved',         color: '#22c55e', bg: '#dcfce7' },
   REJECTED:         { label: 'Rejected',         color: '#dc2626', bg: '#fee2e2' },
   PICKUP_SCHEDULED: { label: 'Pickup Scheduled', color: '#8b5cf6', bg: '#ede9fe' },
@@ -127,7 +124,7 @@ function RefundMethodCard({ ret, onUpdate }) {
     <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '16px 20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 14 }}>💳 Refund Method</div>
-        {!blocked && <button onClick={() => setEdit(true)} style={{ fontSize: 12, color: '#007185', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Change</button>}
+        <span style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>Locked after submission</span>
       </div>
       <div style={{ fontSize: 13, color: '#333' }}>
         {mode === 'original_payment' && !isCOD && <span>✅ Back to <strong>original payment method</strong></span>}
@@ -205,8 +202,7 @@ function Tracker({ status, resolution }) {
     resolution === 'replacement' ? REPLACEMENT_PIPELINE :
     resolution === 'store_credit' ? STORE_CREDIT_PIPELINE : REFUND_PIPELINE;
 
-  // Map employee-approved → approved stage visually
-  const mappedStatus = status === 'EMPLOYEE_APPROVED' ? 'REQUESTED' : status;
+  const mappedStatus = status === 'EMPLOYEE_APPROVED' ? 'APPROVED' : status;
   const activeIdx = pipeline.findIndex(p => p.key === mappedStatus);
   const isRejected = ['REJECTED', 'EMPLOYEE_REJECTED'].includes(status);
 
@@ -497,7 +493,7 @@ export default function ReturnStatusPage() {
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>📝 Notes</div>
                 {ret.employeeNote && (
                   <div style={{ fontSize: 13, marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 3 }}>From Employee</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', marginBottom: 3 }}>From Our Team</div>
                     <div style={{ color: '#333' }}>{ret.employeeNote}</div>
                   </div>
                 )}

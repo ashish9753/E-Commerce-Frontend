@@ -28,8 +28,7 @@ const STEPS = ['Select Order', 'Choose Item', 'Reason', 'Resolution'];
 /* Status pipeline — ordered for the tracker */
 const STATUS_PIPELINE = [
   { key: 'REQUESTED',        label: 'Return Requested',    icon: '📤' },
-  { key: 'EMPLOYEE_APPROVED',  label: 'Employee Approved',   icon: '🏪' },
-  { key: 'APPROVED',         label: 'Admin Approved',      icon: '✅' },
+  { key: 'APPROVED',         label: 'Approved',            icon: '✅' },
   { key: 'PICKUP_SCHEDULED', label: 'Pickup Scheduled',    icon: '🚚' },
   { key: 'ITEM_RECEIVED',    label: 'Item Received',       icon: '📦' },
   { key: 'REFUND_INITIATED', label: 'Refund Initiated',    icon: '💳' },
@@ -38,8 +37,7 @@ const STATUS_PIPELINE = [
 
 const REPL_PIPELINE = [
   { key: 'REQUESTED',          label: 'Return Requested',   icon: '📤' },
-  { key: 'EMPLOYEE_APPROVED',    label: 'Employee Approved',  icon: '🏪' },
-  { key: 'APPROVED',           label: 'Admin Approved',     icon: '✅' },
+  { key: 'APPROVED',           label: 'Approved',           icon: '✅' },
   { key: 'PICKUP_SCHEDULED',   label: 'Pickup Scheduled',   icon: '🚚' },
   { key: 'ITEM_RECEIVED',      label: 'Item Received',      icon: '📦' },
   { key: 'REPLACEMENT_SENT',   label: 'Replacement Sent',   icon: '🔄' },
@@ -48,8 +46,8 @@ const REPL_PIPELINE = [
 
 const STATUS_META = {
   REQUESTED:        { label: 'Requested',        color: '#f59e0b', bg: '#fef3c7' },
-  EMPLOYEE_APPROVED:  { label: 'Employee Approved', color: '#3b82f6', bg: '#dbeafe' },
-  EMPLOYEE_REJECTED:  { label: 'Employee Rejected', color: '#ef4444', bg: '#fee2e2' },
+  EMPLOYEE_APPROVED:  { label: 'Approved',          color: '#22c55e', bg: '#dcfce7' },
+  EMPLOYEE_REJECTED:  { label: 'Under Review',      color: '#f59e0b', bg: '#fef9c3' },
   APPROVED:         { label: 'Approved',         color: '#22c55e', bg: '#dcfce7' },
   REJECTED:         { label: 'Rejected',         color: '#dc2626', bg: '#fee2e2' },
   PICKUP_SCHEDULED: { label: 'Pickup Scheduled', color: '#8b5cf6', bg: '#ede9fe' },
@@ -77,7 +75,8 @@ function ReturnTracker({ status, resolution }) {
   const terminal = ['REJECTED', 'EMPLOYEE_REJECTED'];
   const isTerminal = terminal.includes(status);
 
-  const activeIdx = pipeline.findIndex(p => p.key === status);
+  const mappedStatus = status === 'EMPLOYEE_APPROVED' ? 'APPROVED' : status;
+  const activeIdx = pipeline.findIndex(p => p.key === mappedStatus);
   const effectiveIdx = activeIdx === -1 ? (isTerminal ? -1 : 0) : activeIdx;
 
   return (
@@ -265,6 +264,8 @@ export default function ReturnsPage() {
   const [reason, setReason]         = useState('');
   const [resolution, setResolution] = useState('refund');
   const [description, setDesc]      = useState('');
+  const [photos, setPhotos]         = useState([]);
+  const [video, setVideo]           = useState(null);
   const [step, setStep]             = useState(searchParams.get('orderId') ? 2 : 1);
   const [loading, setLoading]       = useState(false);
   const [submitted, setSubmitted]   = useState(false);
@@ -287,13 +288,16 @@ export default function ReturnsPage() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const res = await returnsApi.submit({
-        orderId,
-        productId: selectedItem?.product?._id || selectedItem?.product,
-        reason,
-        resolution,
-        description,
-      });
+      const fd = new FormData();
+      fd.append('orderId', orderId);
+      const pid = selectedItem?.product?._id || selectedItem?.product;
+      if (pid) fd.append('productId', typeof pid === 'object' ? pid.toString() : pid);
+      fd.append('reason', reason);
+      fd.append('resolution', resolution);
+      if (description) fd.append('description', description);
+      photos.forEach(file => fd.append('photos', file));
+      if (video) fd.append('video', video);
+      const res = await returnsApi.submit(fd);
       const returnId = res.data?.data?.returnRequest?._id;
       if (returnId) {
         navigate(`/return-status/${returnId}`);
@@ -332,7 +336,7 @@ export default function ReturnsPage() {
           </div>
         </div>
         <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
-          <button onClick={() => { setSubmitted(false); setView('my'); setStep(1); setOrderId(''); setSelItem(null); setReason(''); }}
+          <button onClick={() => { setSubmitted(false); setView('my'); setStep(1); setOrderId(''); setSelItem(null); setReason(''); setPhotos([]); setVideo(null); }}
             style={{ padding:'10px 24px', borderRadius:20, border:'1px solid #D5D9D9', background:'linear-gradient(to bottom,#f7f8fa,#e7e9ec)', fontWeight:600, fontSize:13, cursor:'pointer' }}>
             View My Returns
           </button>
@@ -371,7 +375,7 @@ export default function ReturnsPage() {
                   fontWeight:700, fontSize:13, cursor:'pointer' }}>
                 My Returns
               </button>
-              <button onClick={() => { setView('new'); setStep(1); setOrderId(''); setSelItem(null); setReason(''); }}
+              <button onClick={() => { setView('new'); setStep(1); setOrderId(''); setSelItem(null); setReason(''); setPhotos([]); setVideo(null); }}
                 style={{ padding:'8px 20px', borderRadius:20, border:'1px solid #D5D9D9',
                   background: view === 'new' ? '#FF5A1F' : 'linear-gradient(to bottom,#f7f8fa,#e7e9ec)',
                   color: view === 'new' ? 'white' : '#333',
@@ -582,7 +586,72 @@ export default function ReturnsPage() {
                           placeholder="Describe the issue in detail…"
                           style={{ width:'100%', border:'1px solid #ddd', borderRadius:8, padding:'10px 14px', fontSize:13, resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }} />
                       </div>
-                      {reason && (
+
+                      {/* Photos — required */}
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontSize:13, fontWeight:600, marginBottom:8, color:'#333' }}>
+                          Photos <span style={{ color:'#dc2626' }}>*</span>{' '}
+                          <span style={{ color:'#888', fontWeight:400 }}>(at least 1, up to 5)</span>
+                        </div>
+                        {photos.length > 0 && (
+                          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+                            {photos.map((file, i) => (
+                              <div key={i} style={{ position:'relative', width:72, height:72 }}>
+                                <img src={URL.createObjectURL(file)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:6, border:'1px solid #ddd' }} />
+                                <button onClick={() => setPhotos(p => p.filter((_,j)=>j!==i))}
+                                  style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:'50%', background:'#dc2626', border:'none', color:'white', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', padding:0 }}>
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {photos.length < 5 && (
+                          <label style={{ display:'flex', alignItems:'center', gap:12, border:`2px dashed ${photos.length===0?'#FF5A1F':'#d1d5db'}`, borderRadius:8, padding:'14px 16px', cursor:'pointer', background:'#fafafa' }}>
+                            <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" multiple style={{ display:'none' }}
+                              onChange={e => { const f=Array.from(e.target.files); setPhotos(p=>[...p,...f].slice(0,5)); e.target.value=''; }} />
+                            <span style={{ fontSize:26 }}>📷</span>
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:600, color:'#333' }}>{photos.length===0?'Upload photos of the issue':'Add more photos'}</div>
+                              <div style={{ fontSize:11, color:'#888' }}>JPEG, PNG or WebP · max 10 MB each</div>
+                            </div>
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Video — optional */}
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:13, fontWeight:600, marginBottom:8, color:'#333' }}>
+                          Video <span style={{ color:'#888', fontWeight:400 }}>(optional · max 50 MB)</span>
+                        </div>
+                        {video ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:'1px solid #ddd', borderRadius:8, background:'#f9f9f9' }}>
+                            <span style={{ fontSize:22 }}>🎬</span>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:600, color:'#333' }}>{video.name}</div>
+                              <div style={{ fontSize:11, color:'#888' }}>{(video.size/1024/1024).toFixed(1)} MB</div>
+                            </div>
+                            <button onClick={()=>setVideo(null)} style={{ border:'none', background:'none', color:'#dc2626', cursor:'pointer', fontWeight:700, fontSize:20, lineHeight:1, padding:'2px 6px' }}>×</button>
+                          </div>
+                        ) : (
+                          <label style={{ display:'flex', alignItems:'center', gap:12, border:'2px dashed #d1d5db', borderRadius:8, padding:'14px 16px', cursor:'pointer', background:'#fafafa' }}>
+                            <input type="file" accept="video/mp4,video/quicktime,video/webm" style={{ display:'none' }}
+                              onChange={e => { if(e.target.files[0]) setVideo(e.target.files[0]); e.target.value=''; }} />
+                            <span style={{ fontSize:26 }}>🎬</span>
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:600, color:'#333' }}>Upload a video</div>
+                              <div style={{ fontSize:11, color:'#888' }}>MP4, MOV or WebM · max 50 MB</div>
+                            </div>
+                          </label>
+                        )}
+                      </div>
+
+                      {reason && photos.length === 0 && (
+                        <div style={{ fontSize:12, color:'#dc2626', textAlign:'center', padding:'9px 12px', border:'1px solid #fecaca', borderRadius:8, background:'#fef2f2', marginBottom:10 }}>
+                          ⚠ Please upload at least 1 photo to continue
+                        </div>
+                      )}
+                      {reason && photos.length > 0 && (
                         <button onClick={()=>setStep(4)} style={{ width:'100%', padding:'11px', borderRadius:8, background:'#FFD814', border:'1px solid #FBA131', fontWeight:700, fontSize:14, cursor:'pointer' }}>
                           Continue →
                         </button>
@@ -592,6 +661,7 @@ export default function ReturnsPage() {
                     <div style={{ padding:'14px 20px', background:'#f9f9f9', fontSize:13 }}>
                       <span style={{ fontWeight:600 }}>{REASONS.find(r=>r.id===reason)?.icon} {REASONS.find(r=>r.id===reason)?.label}</span>
                       {description && <span style={{ color:'#888', marginLeft:8 }}>· "{description.slice(0,40)}{description.length>40?'…':''}"</span>}
+                      <span style={{ color:'#888', marginLeft:8 }}>· {photos.length} photo{photos.length!==1?'s':''}{video?', 1 video':''}</span>
                     </div>
                   )}
                 </div>
