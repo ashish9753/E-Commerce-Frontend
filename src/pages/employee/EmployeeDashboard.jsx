@@ -544,8 +544,10 @@ function OrdersTab({ onViewReturns }) {
   const [breakdown, setBD]  = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusF, setStatF] = useState('');
-  const [payF, setPayF]     = useState('');
+  const [statusF, setStatF]   = useState('');
+  const [payF, setPayF]       = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
 
   useEffect(() => {
     employeeApi.getMyOrders({ limit: 200 }).then(r => {
@@ -565,10 +567,21 @@ function OrdersTab({ onViewReturns }) {
 
   const orders = all.filter(o => {
     const q = search.toLowerCase();
-    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q) || o.user?.email?.toLowerCase().includes(q);
+    const mQ = !q ||
+      o.orderNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.user?.name?.toLowerCase().includes(q) ||
+      o.user?.email?.toLowerCase().includes(q) ||
+      o.user?.phone?.includes(q) ||
+      o.shippingAddress?.phone?.includes(q) ||
+      o.shippingAddress?.name?.toLowerCase().includes(q) ||
+      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
     const mS = !statusF || o.orderStatus === statusF;
     const mP = !payF || o.paymentStatus === payF;
-    return mQ && mS && mP;
+    const d = o.createdAt ? new Date(o.createdAt) : null;
+    const mD = (!dateFrom || (d && d >= new Date(dateFrom))) &&
+               (!dateTo   || (d && d <= new Date(dateTo + 'T23:59:59')));
+    return mQ && mS && mP && mD;
   });
 
   const delivered = all.filter(o=>o.orderStatus==='DELIVERED').length;
@@ -605,7 +618,7 @@ function OrdersTab({ onViewReturns }) {
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
             <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, customer name…"
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…"
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
           </div>
           <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:170 }}>
@@ -618,7 +631,13 @@ function OrdersTab({ onViewReturns }) {
             <option value="PAID">Paid</option>
             <option value="FAILED">Failed</option>
           </Sel>
-          {(search||statusF||payF) && <Btn onClick={()=>{setSearch('');setStatF('');setPayF('');}}>Clear</Btn>}
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            title="From date"
+            style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            title="To date"
+            style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
+          {(search||statusF||payF||dateFrom||dateTo) && <Btn onClick={()=>{setSearch('');setStatF('');setPayF('');setDateFrom('');setDateTo('');}}>Clear</Btn>}
           <span style={{ fontSize:13, color:C.mute, marginLeft:'auto' }}><strong style={{color:C.text}}>{orders.length}</strong> of <strong style={{color:C.text}}>{all.length}</strong></span>
         </div>
       </Card>
@@ -710,7 +729,7 @@ function ProductForm({ initial, onSave, onCancel }) {
   const fileInputRef = useRef(null);
   const isEditMode = !!initial;
 
-  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'No Tax',taxRate:0 };
+  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'VAT',taxRate:0 };
 
   // Derive initial parentCat from the initial category's parent field
   const initCatId = initial ? (typeof initial.category==='object' ? initial.category?._id : initial.category)||'' : '';
@@ -730,7 +749,7 @@ function ProductForm({ initial, onSave, onCancel }) {
     category: initCatId, sku: initial.sku||'', tags: Array.isArray(initial.tags) ? initial.tags.join(', ') : (initial.tags||''),
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
-    taxLabel: initial.taxLabel || 'No Tax', taxRate: initial.taxRate ?? 0,
+    taxLabel: initial.taxLabel || 'VAT', taxRate: initial.taxRate ?? 0,
   } : empty;
 
   const [form, setForm, clearFormDraft] = useFormDraft('emp-product-draft', editInitialForm, !isEditMode);
@@ -1088,7 +1107,7 @@ function ProductForm({ initial, onSave, onCancel }) {
           <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end' }}>
             <div style={{ flex:'1 1 160px' }}>
               <label style={LS}>Tax Type</label>
-              <select value={form.taxLabel} onChange={e=>{ const v=e.target.value; setForm(f=>({...f,taxLabel:v,taxRate:v==='No Tax'?0:f.taxRate===0?18:f.taxRate})); }} style={{ ...inpStyle, cursor:'pointer' }}>
+              <select value={form.taxLabel} onChange={e=>{ const v=e.target.value; setForm(f=>({...f,taxLabel:v,taxRate:v==='No Tax'?0:f.taxRate})); }} style={{ ...inpStyle, cursor:'pointer' }}>
                 {['GST','IGST','VAT','No Tax'].map(v=><option key={v} value={v}>{v}</option>)}
               </select>
             </div>
@@ -1735,8 +1754,8 @@ function EmployeeSettingsTab() {
                 </div>
                 <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>Razorpay (UPI) · Non-refundable</div>
               </div>
-              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center' }}>
-                ⚠ This booking is <strong>&nbsp;non-refundable&nbsp;</strong> and collected before the order is confirmed.
+              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', lineHeight: 1.5 }}>
+                ⚠ This booking is <span style={{ fontWeight: 700 }}>non-refundable</span> and collected before the order is confirmed.
               </div>
             </div>
           </div>
@@ -1839,9 +1858,11 @@ const EMPTY_COUPON_EMP = {
   code: '', discountType: 'PERCENTAGE', discountValue: '',
   minimumAmount: '', maximumDiscount: '', expiryDate: '',
   usageLimit: '', isActive: true,
+  applicableBrands: [], applicableCategories: [], applicableSubcategories: [],
 };
 
 function EmployeeCouponsTab() {
+  const { brands, topCategories, subCategories } = useCatalog();
   const [coupons, setCoupons]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [form, setForm]         = useState(EMPTY_COUPON_EMP);
@@ -1881,6 +1902,9 @@ function EmployeeCouponsTab() {
       minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
       expiryDate: c.expiryDate ? c.expiryDate.slice(0, 10) : '',
       usageLimit: c.usageLimit || '', isActive: c.isActive,
+      applicableBrands:        (c.applicableBrands        || []).map(x => x?._id || x),
+      applicableCategories:    (c.applicableCategories    || []).map(x => x?._id || x),
+      applicableSubcategories: (c.applicableSubcategories || []).map(x => x?._id || x),
     });
     setEditId(c._id); setError(''); setShowForm(true);
   };
@@ -1900,6 +1924,9 @@ function EmployeeCouponsTab() {
         expiryDate: form.expiryDate,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
         isActive: form.isActive,
+        applicableBrands:        form.applicableBrands.length        ? form.applicableBrands        : [],
+        applicableCategories:    form.applicableCategories.length    ? form.applicableCategories    : [],
+        applicableSubcategories: form.applicableSubcategories.length ? form.applicableSubcategories : [],
       };
       if (editId) await couponsApi.update(editId, payload);
       else {
@@ -1958,6 +1985,7 @@ function EmployeeCouponsTab() {
             <div>
               <label style={LabelStyle}>Coupon Code *</label>
               <input value={form.code} onChange={e => set('code', e.target.value.toUpperCase())} placeholder="e.g. SAVE20"
+                className="inp-dark"
                 style={{ ...InpStyle, fontFamily: 'monospace', fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase' }} />
             </div>
             <div>
@@ -1997,6 +2025,42 @@ function EmployeeCouponsTab() {
                 <input type="checkbox" checked={form.isActive} onChange={e => set('isActive', e.target.checked)} />
                 Active (users can apply this coupon)
               </label>
+            </div>
+          </div>
+
+          {/* Applicable To */}
+          <div style={{ marginTop: 14, padding: '14px 16px', borderRadius: 10, border: `1px solid ${C.line}`, background: C.card2 }}>
+            <div style={{ fontWeight: 700, fontSize: 12, color: C.text, marginBottom: 2 }}>Applicable To</div>
+            <div style={{ fontSize: 12, color: C.mute, marginBottom: 12 }}>Leave all empty → coupon applies to all products</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              {[
+                { label: '🏷️ Brands', key: 'applicableBrands', list: brands },
+                { label: '📂 Categories', key: 'applicableCategories', list: topCategories },
+                { label: '📁 Sub-categories', key: 'applicableSubcategories', list: subCategories },
+              ].map(({ label, key, list }) => (
+                <div key={key}>
+                  <label style={LabelStyle}>{label}</label>
+                  <select onChange={e => { const v = e.target.value; if (v && !form[key].includes(v)) set(key, [...form[key], v]); e.target.value = ''; }}
+                    style={{ ...InpStyle, cursor: 'pointer' }}>
+                    <option value="">Add…</option>
+                    {list.filter(x => !form[key].includes(x._id)).map(x => <option key={x._id} value={x._id}>{x.name}</option>)}
+                  </select>
+                  {form[key].length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {form[key].map(id => {
+                        const item = list.find(x => x._id === id);
+                        return item ? (
+                          <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.accent + '22', color: C.accent, fontSize: 11, fontWeight: 700, padding: '2px 8px 2px 10px', borderRadius: 99, border: `1px solid ${C.accent}44` }}>
+                            {item.name}
+                            <button type="button" onClick={() => set(key, form[key].filter(x => x !== id))}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: '0 0 0 2px', lineHeight: 1, fontSize: 14 }}>×</button>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -2042,7 +2106,7 @@ function EmployeeCouponsTab() {
                       return (
                         <tr key={c._id} style={{ background: isExpired ? C.red + '10' : C.card }}>
                           <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}` }}>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13, background: C.bg, padding: '3px 8px', borderRadius: 6, letterSpacing: '.08em' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 13, background: C.bg, color: C.text, padding: '3px 8px', borderRadius: 6, letterSpacing: '.08em' }}>
                               {c.code}
                             </span>
                           </td>
@@ -2121,7 +2185,15 @@ function EmployeeCancellationsTab() {
 
   const filtered = all.filter(o => {
     const q = search.toLowerCase();
-    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q);
+    const mQ = !q ||
+      o.orderNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.user?.name?.toLowerCase().includes(q) ||
+      o.user?.email?.toLowerCase().includes(q) ||
+      o.user?.phone?.includes(q) ||
+      o.shippingAddress?.phone?.includes(q) ||
+      o.shippingAddress?.name?.toLowerCase().includes(q) ||
+      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
     const mP = !payF || o.paymentMethod === payF;
     return mQ && mP;
   });
@@ -2155,7 +2227,7 @@ function EmployeeCancellationsTab() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', height: 36, flex: 1, minWidth: 200 }}>
             <span style={{ color: C.mute, display: 'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, customer name…"
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…"
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: C.text, fontFamily: 'inherit' }} />
           </div>
           <Sel value={payF} onChange={e => setPayF(e.target.value)} style={{ width: 160 }}>

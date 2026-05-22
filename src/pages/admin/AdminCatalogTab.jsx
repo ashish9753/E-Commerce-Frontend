@@ -335,7 +335,8 @@ function AttributesSection({ onMutate }) {
               <input value={optInput} onChange={e => setOptInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOption(); } }}
                 placeholder="Type option and press Enter or Add…"
-                style={{ flex: 1, height: 36, padding: '0 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 13, outline: 'none' }} />
+                className="inp-dark"
+                style={{ flex: 1, height: 36, padding: '0 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 13, outline: 'none', background: C.bg, color: C.text }} />
               <Btn type="button" variant="ghost" onClick={addOption}>Add</Btn>
             </div>
             {draft.options.length > 0 && (
@@ -443,8 +444,9 @@ function EventsSection({ onMutate }) {
             <label style={{ fontSize: 12, fontWeight: 600, color: C.mute, display: 'block', marginBottom: 5 }}>Description</label>
             <textarea value={draft.desc} onChange={e => set('desc', e.target.value)} rows={2}
               placeholder="Short description of the event…"
+              className="inp-dark"
               style={{ width: '100%', padding: '8px 12px', border: `1px solid ${C.border}`, borderRadius: 6,
-                fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                fontSize: 13, outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', background: C.bg, color: C.text }} />
           </div>
           <Btn type="submit" disabled={saving}>{saving ? 'Saving…' : '🎉 Create Event'}</Btn>
         </form>

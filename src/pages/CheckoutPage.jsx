@@ -213,6 +213,7 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod]       = useState('COD');
   const [deliveryCheck, setDeliveryCheck]       = useState(null); // { available, city, deliveryCharge } | null
   const [deliveryChecking, setDeliveryChecking] = useState(false);
+  const [orderSubmitted, setOrderSubmitted]     = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -258,7 +259,7 @@ export default function CheckoutPage() {
         : codCfg.bookingValue)
     : 0;
 
-  if (items.length === 0) { navigate('/cart'); return null; }
+  if (items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
 
   const checkDelivery = async (pin) => {
     if (!pin || pin.length !== 6) { setDeliveryCheck(null); return; }
@@ -370,6 +371,7 @@ export default function CheckoutPage() {
       // Step 3: Open Razorpay modal
       try {
         await openRazorpayModal(rzpOrderData, orderId);
+        setOrderSubmitted(true);
         await clearCart();
         toast('Payment successful! Order confirmed.');
         navigate('/orders');
@@ -394,6 +396,7 @@ export default function CheckoutPage() {
     });
     setLoading(false);
     if (result.success) {
+      setOrderSubmitted(true);
       await clearCart();
       toast('Order placed successfully!');
       navigate('/orders');
@@ -735,6 +738,7 @@ export default function CheckoutPage() {
                                 });
                                 setLoading(false);
                                 if (result.success) {
+                                  setOrderSubmitted(true);
                                   await clearCart();
                                   toast('Order placed successfully!');
                                   navigate('/orders');

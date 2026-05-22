@@ -9,12 +9,14 @@ import { formatPriceShort } from '../utils/formatters';
 
 export default function CartPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeFromCart, subtotal, discountAmount, deliveryCharge, total, finalPrice, applyCoupon, removeCoupon, cart, loading } = useCart();
+  const { items, updateQty, removeFromCart, removeFromCartNow, subtotal, discountAmount, deliveryCharge, total, finalPrice, applyCoupon, removeCoupon, cart, loading, syncCart } = useCart();
   const { toggle } = useWishlist();
   const { user } = useAuth();
   const toast = useToast();
   const [couponCode, setCouponCode] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [stockIssues, setStockIssues] = useState([]);
 
   if (!user) {
     return (
@@ -49,18 +51,31 @@ export default function CartPage() {
   const handleSaveForLater = async (item) => {
     const product = item.product;
     await toggle(product);
-    await removeFromCart(product._id);
+    await removeFromCartNow(product._id); // must persist immediately
     toast('Moved to wishlist');
   };
 
-  const hasCoupon = discountAmount > 0;
+  const handleProceedToCheckout = async () => {
+    setSyncing(true);
+    setStockIssues([]);
+    const freshItems = await syncCart();
+    setSyncing(false);
 
-  // Items where cart quantity exceeds actual stock
-  const stockIssues = items.filter(item => {
-    const stock = item.product?.stock ?? Infinity;
-    return item.quantity > stock;
-  });
-  const hasStockIssues = stockIssues.length > 0;
+    const issues = freshItems.filter(i => {
+      const stock = i.product?.stock ?? Infinity;
+      return i.quantity > stock;
+    });
+
+    if (issues.length > 0) {
+      setStockIssues(issues.map(i => i.product?._id || i.product));
+      toast(`Some items exceed available stock — quantities adjusted.`, 'warn');
+      return;
+    }
+
+    navigate('/checkout');
+  };
+
+  const hasCoupon = discountAmount > 0;
 
   if (items.length === 0) return (
     <div className="wrap py-20 text-center">
@@ -83,9 +98,10 @@ export default function CartPage() {
             const title = product.title || product.name || 'Product';
             const brand = product.brand || '';
             const itemPrice = item.price || product.discountPrice || product.price || 0;
+            const hasIssue = stockIssues.includes(product._id);
 
             return (
-              <div key={item._id || product._id} className="grid grid-cols-[120px_1fr_auto] gap-5 p-5 border border-line rounded-[14px] mb-3 items-center bg-white">
+              <div key={item._id || product._id} className={`grid grid-cols-[120px_1fr_auto] gap-5 p-5 border rounded-[14px] mb-3 items-center bg-white ${hasIssue ? 'border-red-300' : 'border-line'}`}>
                 <div className="w-30 h-30 bg-surface rounded-[10px] flex items-center justify-center overflow-hidden">
                   {image ? (
                     <img src={image} alt={title} className="w-full h-full object-contain p-2" />
@@ -98,11 +114,11 @@ export default function CartPage() {
                   <div className="text-base font-bold tracking-tight mt-1">{title}</div>
                   <div className="flex gap-3.5 mt-3.5 text-xs items-center">
                     <div className="flex items-center border-[1.5px] border-line-2 rounded-full h-9">
-                      <button className="w-10.5 h-9 text-lg text-mute bg-transparent border-0 cursor-pointer hover:text-ink" onClick={() => updateQty(product._id, item.quantity - 1)}>−</button>
+                      <button className="w-10.5 h-9 text-lg bg-transparent border-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-mute hover:enabled:text-ink cursor-pointer" disabled={item.quantity <= 1} onClick={() => { updateQty(product._id, item.quantity - 1); setStockIssues([]); }}>−</button>
                       <span className="w-8 text-center font-bold">{item.quantity}</span>
                       <button
                         className="w-10.5 h-9 text-lg bg-transparent border-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-mute hover:enabled:text-ink cursor-pointer"
-                        onClick={() => updateQty(product._id, item.quantity + 1)}
+                        onClick={() => { updateQty(product._id, item.quantity + 1); setStockIssues([]); }}
                         disabled={item.quantity >= (product.stock ?? Infinity)}
                         title={item.quantity >= (product.stock ?? Infinity) ? `Only ${product.stock} available` : ''}
                       >+</button>
@@ -110,23 +126,22 @@ export default function CartPage() {
                     <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => handleSaveForLater(item)}>
                       <Heart size={13} /> Save for later
                     </button>
-                    <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={async () => { await removeFromCart(product._id); toast('Item removed'); }}>
+                    <button className="text-mute font-semibold flex items-center gap-1.25 bg-transparent border-0 cursor-pointer hover:text-accent" onClick={() => { removeFromCart(product._id); setStockIssues([]); toast('Item removed'); }}>
                       <Trash2 size={13} /> Remove
                     </button>
                   </div>
-                  {(() => {
-                    const stock = product.stock ?? Infinity;
-                    if (item.quantity > stock) return (
+                  {hasIssue && (() => {
+                    const stock = product.stock ?? 0;
+                    return (
                       <div className="mt-2.5 flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                         <span className="font-bold">Only {stock} available.</span>
                         <span>Please reduce quantity.</span>
                         <button
                           className="ml-auto font-bold underline bg-transparent border-0 cursor-pointer text-red-600"
-                          onClick={() => updateQty(product._id, stock)}
+                          onClick={() => { updateQty(product._id, stock); setStockIssues(p => p.filter(id => id !== product._id)); }}
                         >Fix</button>
                       </div>
                     );
-                    return null;
                   })()}
                 </div>
                 <div className="text-right">
@@ -175,17 +190,18 @@ export default function CartPage() {
             </div>
           )}
 
-          {hasStockIssues && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-4 text-center font-semibold">
-              Some items exceed available stock. Please fix quantities above.
+          {stockIssues.length > 0 && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3 text-center font-semibold">
+              Some items exceed available stock — please fix quantities above.
             </div>
           )}
+
           <button
             className="btn btn-accent w-full h-13 mt-2.5 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => navigate('/checkout')}
-            disabled={hasStockIssues}
+            onClick={handleProceedToCheckout}
+            disabled={syncing || stockIssues.length > 0}
           >
-            Proceed to Checkout →
+            {syncing ? 'Checking availability…' : 'Proceed to Checkout →'}
           </button>
           <div className="flex items-center justify-center gap-1.5 mt-3.5 text-xs text-mute">🔒 Secure checkout · SSL encrypted</div>
         </div>

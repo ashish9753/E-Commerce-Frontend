@@ -17,6 +17,7 @@ import AdminCatalogTab from './AdminCatalogTab';
 import { settingsApi } from '../../api/settings';
 import { paymentsApi } from '../../api/payments';
 import { useFormDraft } from '../../hooks/useFormDraft';
+import { useCatalog } from '../../context/CatalogContext';
 
 /* ── Palette — matches HTML mockup exactly ── */
 const C = {
@@ -1242,6 +1243,8 @@ function OrdersTab({ globalSearch = '' }) {
   const [search, setSearch]   = useState('');
   const [statusF, setStatusF] = useState('');
   const [paymentF, setPayF]   = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
   const [refundModal, setRefundModal] = useState(null); // order object
   const [refundForm, setRefundForm]   = useState({ reason: '', adminNote: '', refundAmount: '' });
   const [refunding, setRefunding]     = useState(false);
@@ -1256,10 +1259,21 @@ function OrdersTab({ globalSearch = '' }) {
 
   const orders = all.filter(o => {
     const q = search.toLowerCase();
-    const matchQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q) || o.user?.email?.toLowerCase().includes(q);
+    const matchQ = !q ||
+      o.orderNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.user?.name?.toLowerCase().includes(q) ||
+      o.user?.email?.toLowerCase().includes(q) ||
+      o.user?.phone?.includes(q) ||
+      o.shippingAddress?.phone?.includes(q) ||
+      o.shippingAddress?.name?.toLowerCase().includes(q) ||
+      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
     const matchS = !statusF || o.orderStatus === statusF;
     const matchP = !paymentF || o.paymentStatus === paymentF;
-    return matchQ && matchS && matchP;
+    const d = o.createdAt ? new Date(o.createdAt) : null;
+    const matchD = (!dateFrom || (d && d >= new Date(dateFrom))) &&
+                   (!dateTo   || (d && d <= new Date(dateTo + 'T23:59:59')));
+    return matchQ && matchS && matchP && matchD;
   });
 
   const handleStatusChange = async (orderId, status) => {
@@ -1373,7 +1387,7 @@ function OrdersTab({ globalSearch = '' }) {
       {/* Filter bar */}
       <Card>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, customer name or email…" style={{ flex: 1, minWidth: 240 }} />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…" style={{ flex: 1, minWidth: 240 }} />
           <Select value={statusF} onChange={e => setStatusF(e.target.value)}>
             <option value="">All Status</option>
             {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1384,7 +1398,13 @@ function OrdersTab({ globalSearch = '' }) {
             <option value="PAID">Paid</option>
             <option value="FAILED">Failed</option>
           </Select>
-          {(search || statusF || paymentF) && <Btn onClick={() => { setSearch(''); setStatusF(''); setPayF(''); }}>Clear</Btn>}
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            title="From date"
+            style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            title="To date"
+            style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
+          {(search || statusF || paymentF || dateFrom || dateTo) && <Btn onClick={() => { setSearch(''); setStatusF(''); setPayF(''); setDateFrom(''); setDateTo(''); }}>Clear</Btn>}
           <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}>
             <strong>{orders.length}</strong> of <strong>{all.length}</strong> orders
           </span>
@@ -1900,9 +1920,10 @@ function AdminReturnsTab({ globalSearch = '' }) {
 /* ══════════════════════════════════════════════════════
    COUPONS TAB
 ══════════════════════════════════════════════════════ */
-const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true };
+const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true, applicableBrands:[], applicableCategories:[], applicableSubcategories:[] };
 
 function AdminCouponsTab({ globalSearch = '' }) {
+  const { brands, topCategories, subCategories } = useCatalog();
   const [coupons, setCoupons]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [form, setForm]         = useState(EMPTY_COUPON);
@@ -1945,6 +1966,9 @@ function AdminCouponsTab({ globalSearch = '' }) {
       minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
       expiryDate: c.expiryDate ? c.expiryDate.slice(0,10) : '',
       usageLimit: c.usageLimit || '', isActive: c.isActive,
+      applicableBrands:       (c.applicableBrands       || []).map(x => x?._id || x),
+      applicableCategories:   (c.applicableCategories   || []).map(x => x?._id || x),
+      applicableSubcategories:(c.applicableSubcategories|| []).map(x => x?._id || x),
     });
     setEditId(c._id); setError(''); setShowForm(true);
   };
@@ -1964,6 +1988,9 @@ function AdminCouponsTab({ globalSearch = '' }) {
         expiryDate: form.expiryDate,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
         isActive: form.isActive,
+        applicableBrands:        form.applicableBrands.length       ? form.applicableBrands       : [],
+        applicableCategories:    form.applicableCategories.length   ? form.applicableCategories   : [],
+        applicableSubcategories: form.applicableSubcategories.length? form.applicableSubcategories: [],
       };
       if (editId) await couponsApi.update(editId, payload);
       else {
@@ -2023,6 +2050,7 @@ function AdminCouponsTab({ globalSearch = '' }) {
             <div>
               <label style={LabelStyle}>Coupon Code *</label>
               <input value={form.code} onChange={e=>set('code',e.target.value.toUpperCase())} placeholder="e.g. SAVE20"
+                className="inp-dark"
                 style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase' }} />
             </div>
             <div>
@@ -2066,6 +2094,42 @@ function AdminCouponsTab({ globalSearch = '' }) {
             </div>
           </div>
 
+          {/* Applicable To */}
+          <div style={{ marginTop:14, padding:'14px 16px', borderRadius:10, border:`1px solid ${C.line}`, background:C.card2 }}>
+            <div style={{ fontWeight:700, fontSize:12, color:C.text, marginBottom:2 }}>Applicable To</div>
+            <div style={{ fontSize:12, color:C.mute, marginBottom:12 }}>Leave all empty → coupon applies to all products</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+              {[
+                { label:'🏷️ Brands', key:'applicableBrands', list: brands },
+                { label:'📂 Categories', key:'applicableCategories', list: topCategories },
+                { label:'📁 Sub-categories', key:'applicableSubcategories', list: subCategories },
+              ].map(({ label, key, list }) => (
+                <div key={key}>
+                  <label style={LabelStyle}>{label}</label>
+                  <select onChange={e => { const v=e.target.value; if(v && !form[key].includes(v)) set(key,[...form[key],v]); e.target.value=''; }}
+                    style={{ ...InpStyle, cursor:'pointer' }}>
+                    <option value="">Add…</option>
+                    {list.filter(x => !form[key].includes(x._id)).map(x => <option key={x._id} value={x._id}>{x.name}</option>)}
+                  </select>
+                  {form[key].length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:6 }}>
+                      {form[key].map(id => {
+                        const item = list.find(x => x._id === id);
+                        return item ? (
+                          <span key={id} style={{ display:'inline-flex', alignItems:'center', gap:4, background:C.accent+'22', color:C.accent, fontSize:11, fontWeight:700, padding:'2px 8px 2px 10px', borderRadius:99, border:`1px solid ${C.accent}44` }}>
+                            {item.name}
+                            <button type="button" onClick={() => set(key, form[key].filter(x => x !== id))}
+                              style={{ background:'none', border:'none', cursor:'pointer', color:'inherit', padding:'0 0 0 2px', lineHeight:1, fontSize:14 }}>×</button>
+                          </span>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {error && <div style={{ marginTop:12, color:C.red, fontSize:13, fontWeight:600, background:C.red+'10', padding:'8px 12px', borderRadius:8 }}>{error}</div>}
 
           <div style={{ display:'flex', gap:10, marginTop:18 }}>
@@ -2101,7 +2165,7 @@ function AdminCouponsTab({ globalSearch = '' }) {
                   return (
                     <tr key={c._id} style={{ background: isExpired ? C.red+'10' : C.card }}>
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}` }}>
-                        <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:13, background: C.bg, padding:'3px 8px', borderRadius:6, letterSpacing:'.08em' }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:13, background: C.bg, color: C.text, padding:'3px 8px', borderRadius:6, letterSpacing:'.08em' }}>
                           {c.code}
                         </span>
                       </td>
@@ -2386,7 +2450,8 @@ function AdminNotificationsTab() {
             <label style={LabelStyle}>Coupon Code <span style={{ fontWeight:400, textTransform:'none', color:C.mute }}>— optional, user gets a Copy button in the notification</span></label>
             <div style={{ display:'flex', gap:8 }}>
               <input value={form.couponCode} onChange={e=>set('couponCode',e.target.value.toUpperCase())}
-                placeholder="e.g. SAVE20" style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', flex:1 }} />
+                placeholder="e.g. SAVE20" className="inp-dark"
+                style={{ ...InpStyle, fontFamily:'monospace', fontWeight:700, letterSpacing:'.1em', flex:1 }} />
               {form.couponCode && (
                 <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 14px', borderRadius:8,
                   background: C.green+'18', border:`1px solid ${C.green}40`, fontSize:13, fontWeight:700, color:C.green, whiteSpace:'nowrap' }}>
@@ -2882,8 +2947,8 @@ function AdminSettingsTab() {
                 </div>
                 <div style={{ fontSize: 11, color: C.mute, marginTop: 2 }}>Razorpay (UPI) · Non-refundable</div>
               </div>
-              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center' }}>
-                ⚠ This booking is <strong>&nbsp;non-refundable&nbsp;</strong> and collected before the order is confirmed.
+              <div style={{ background: 'rgba(239,68,68,.08)', border: `1px solid rgba(239,68,68,.2)`, borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#f87171', lineHeight: 1.5 }}>
+                ⚠ This booking is <span style={{ fontWeight: 700 }}>non-refundable</span> and collected before the order is confirmed.
               </div>
             </div>
           </div>
@@ -3251,7 +3316,15 @@ function CancellationsTab({ globalSearch = '' }) {
 
   const filtered = all.filter(o => {
     const q = search.toLowerCase();
-    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q) || o.user?.email?.toLowerCase().includes(q);
+    const mQ = !q ||
+      o.orderNumber?.toLowerCase().includes(q) ||
+      o._id?.toLowerCase().includes(q) ||
+      o.user?.name?.toLowerCase().includes(q) ||
+      o.user?.email?.toLowerCase().includes(q) ||
+      o.user?.phone?.includes(q) ||
+      o.shippingAddress?.phone?.includes(q) ||
+      o.shippingAddress?.name?.toLowerCase().includes(q) ||
+      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
     const mR = !refundF || (
       refundF === 'COMPLETED' ? o.refundStatus === 'COMPLETED' :
       refundF === 'PENDING'   ? (o.paymentMethod === 'ONLINE' && o.refundStatus !== 'COMPLETED') :
@@ -3290,7 +3363,7 @@ function CancellationsTab({ globalSearch = '' }) {
       {/* Filters */}
       <Card>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, customer name or email…" style={{ flex: 1, minWidth: 220 }} />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…" style={{ flex: 1, minWidth: 220 }} />
           <Select value={payF} onChange={e => setPayF(e.target.value)}>
             <option value="">All Payment Methods</option>
             <option value="ONLINE">Online / UPI</option>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { cartApi } from '../api/cart';
 import { getErrorMessage } from '../api/client';
 import { useAuth } from './AuthContext';
@@ -9,6 +9,8 @@ export function CartProvider({ children }) {
   const { user } = useAuth();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(false);
+  // pending[productId] = new qty (0 = remove) — never sent to server until syncCart()
+  const pendingRef = useRef({});
 
   const fetchCart = useCallback(async () => {
     if (!user) { setCart(null); return; }
@@ -16,6 +18,7 @@ export function CartProvider({ children }) {
     try {
       const { data } = await cartApi.get();
       setCart(data.data.cart);
+      pendingRef.current = {}; // server is now the source of truth
     } catch {
       setCart(null);
     } finally {
@@ -29,35 +32,17 @@ export function CartProvider({ children }) {
     try {
       const { data } = await cartApi.addItem(productId, quantity);
       setCart(data.data.cart);
+      // server has canonical state for this item now
+      delete pendingRef.current[productId];
       return { success: true };
     } catch (err) {
       return { success: false, error: getErrorMessage(err) };
     }
   };
 
-  const removeFromCart = async (productId) => {
-    // Optimistic: remove immediately from local state
-    setCart(prev => {
-      if (!prev) return prev;
-      const items = prev.items.filter(i => {
-        const id = i.product?._id || i.product;
-        return id?.toString() !== productId?.toString();
-      });
-      return { ...prev, items };
-    });
-    try {
-      const { data } = await cartApi.removeItem(productId);
-      setCart(data.data.cart);
-      return { success: true };
-    } catch (err) {
-      fetchCart(); // restore on error
-      return { success: false, error: getErrorMessage(err) };
-    }
-  };
-
-  const updateQty = async (productId, quantity) => {
-    if (quantity < 1) return removeFromCart(productId);
-    // Optimistic: update quantity immediately
+  // Local-only — no API call. Pending is flushed when user clicks Proceed to Checkout.
+  const updateQty = (productId, quantity) => {
+    if (quantity < 1) return; // minimum is 1 — use Remove button to delete
     setCart(prev => {
       if (!prev) return prev;
       const items = prev.items.map(i => {
@@ -66,13 +51,65 @@ export function CartProvider({ children }) {
       });
       return { ...prev, items };
     });
+    pendingRef.current[productId] = quantity;
+  };
+
+  // Local-only remove — flushed on Proceed to Checkout.
+  const removeFromCart = (productId) => {
+    setCart(prev => {
+      if (!prev) return prev;
+      const items = prev.items.filter(i => {
+        const id = i.product?._id || i.product;
+        return id?.toString() !== productId?.toString();
+      });
+      return { ...prev, items };
+    });
+    pendingRef.current[productId] = 0;
+  };
+
+  // Immediate API remove — used for "Save for later" which must persist right away.
+  const removeFromCartNow = async (productId) => {
+    setCart(prev => {
+      if (!prev) return prev;
+      const items = prev.items.filter(i => {
+        const id = i.product?._id || i.product;
+        return id?.toString() !== productId?.toString();
+      });
+      return { ...prev, items };
+    });
+    delete pendingRef.current[productId];
     try {
-      const { data } = await cartApi.updateItem(productId, quantity);
+      const { data } = await cartApi.removeItem(productId);
       setCart(data.data.cart);
       return { success: true };
     } catch (err) {
-      fetchCart(); // restore on error
+      fetchCart();
       return { success: false, error: getErrorMessage(err) };
+    }
+  };
+
+  // Flush all pending local changes to the server, then return the fresh server cart items.
+  // Called by CartPage when user clicks "Proceed to Checkout".
+  const syncCart = async () => {
+    const entries = Object.entries(pendingRef.current);
+    if (entries.length > 0) {
+      await Promise.all(
+        entries.map(([pid, qty]) =>
+          qty === 0
+            ? cartApi.removeItem(pid).catch(() => {})
+            : cartApi.updateItem(pid, qty).catch(() => {})
+        )
+      );
+      pendingRef.current = {};
+    }
+    // Always fetch fresh so we get server-validated quantities and stock info
+    try {
+      const { data } = await cartApi.get();
+      const freshCart = data.data.cart;
+      setCart(freshCart);
+      return freshCart?.items || [];
+    } catch {
+      return cart?.items || [];
     }
   };
 
@@ -80,6 +117,7 @@ export function CartProvider({ children }) {
     try {
       await cartApi.clear();
       setCart(null);
+      pendingRef.current = {};
     } catch { /* ignore */ }
   };
 
@@ -114,7 +152,8 @@ export function CartProvider({ children }) {
   return (
     <CartContext.Provider value={{
       cart, items, count, subtotal, discountAmount, finalPrice, deliveryCharge, total, loading,
-      addToCart, removeFromCart, updateQty, clearCart, applyCoupon, removeCoupon, fetchCart,
+      addToCart, removeFromCart, removeFromCartNow, updateQty, clearCart,
+      applyCoupon, removeCoupon, fetchCart, syncCart,
     }}>
       {children}
     </CartContext.Provider>
