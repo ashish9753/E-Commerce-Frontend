@@ -218,7 +218,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Content */}
-        <div className="card p-8">
+        <div className="card p-8 max-md:p-4">
 
           {/* ── My Profile ─────────────────────────────────── */}
           {activeTab === 'profile' && (

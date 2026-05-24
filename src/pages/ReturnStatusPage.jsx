@@ -297,14 +297,44 @@ function Timeline({ events }) {
 }
 
 /* ══════════════════ Main Page ══════════════════ */
+/* ── Refund Proof Lightbox ── */
+function ProofModal({ proof, onClose }) {
+  const [idx, setIdx] = useState(0);
+  if (!proof?.length) return null;
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'#000c', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'white', borderRadius:12, padding:24, maxWidth:520, width:'90vw' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15 }}>🧾 Refund Proof ({proof.length} image{proof.length!==1?'s':''})</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#888', lineHeight:1 }}>×</button>
+        </div>
+        <img src={proof[idx].url} alt={`Proof ${idx+1}`}
+          style={{ width:'100%', maxHeight:360, objectFit:'contain', borderRadius:8, border:'1px solid #ddd', display:'block' }} />
+        {proof.length > 1 && (
+          <div style={{ display:'flex', gap:8, marginTop:12, justifyContent:'center', flexWrap:'wrap' }}>
+            {proof.map((p, i) => (
+              <img key={i} src={p.url} alt="" onClick={() => setIdx(i)}
+                style={{ width:56, height:56, objectFit:'cover', borderRadius:6, border: i===idx ? '2px solid #FF5A1F' : '2px solid #ddd', cursor:'pointer' }} />
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize:11, color:'#aaa', marginTop:10, textAlign:'center' }}>
+          Uploaded by {proof[idx].uploadedBy} · {proof[idx].uploadedAt ? new Date(proof[idx].uploadedAt).toLocaleDateString('en-IN') : ''}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReturnStatusPage() {
   const { returnId } = useParams();
   const navigate     = useNavigate();
   const { user }     = useAuth();
 
-  const [ret, setRet]     = useState(null);
+  const [ret, setRet]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [proofOpen, setProofOpen] = useState(false);
 
   const load = useCallback(() => {
     if (!returnId) return;
@@ -505,6 +535,29 @@ export default function ReturnStatusPage() {
                 )}
               </div>
             )}
+
+            {/* Refund proof */}
+            {ret.refundProof?.length > 0 && (
+              <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '18px 20px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>🧾 Refund Proof</div>
+                  <button onClick={() => setProofOpen(true)}
+                    style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:20, background:'#f0f9ff', border:'1px solid #0ea5e933', fontSize:12, fontWeight:700, color:'#0369a1', cursor:'pointer' }}>
+                    <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M1 12C1 12 5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    View {ret.refundProof.length} screenshot{ret.refundProof.length!==1?'s':''}
+                  </button>
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {ret.refundProof.map((p, i) => (
+                    <img key={i} src={p.url} alt={`proof ${i+1}`} onClick={() => setProofOpen(true)}
+                      style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border:'1px solid #ddd', cursor:'pointer' }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            {proofOpen && <ProofModal proof={ret.refundProof} onClose={() => setProofOpen(false)} />}
 
             {/* Help */}
             <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '18px 20px' }}>

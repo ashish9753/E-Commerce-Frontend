@@ -88,7 +88,7 @@ export default function CartPage() {
 
   return (
     <div className="wrap pt-6">
-      <h1 className="font-serif text-[44px] leading-[1.05] tracking-tight font-normal mb-8">Shopping Cart ({items.length})</h1>
+      <h1 className="font-serif text-[44px] leading-[1.05] tracking-tight font-normal mb-8 max-sm:text-[26px] max-sm:mb-5">Shopping Cart ({items.length})</h1>
       <div className="grid grid-cols-[1fr_380px] gap-9 pb-20 max-md:grid-cols-1">
         {/* Items */}
         <div>
@@ -101,18 +101,25 @@ export default function CartPage() {
             const hasIssue = stockIssues.includes(product._id);
 
             return (
-              <div key={item._id || product._id} className={`grid grid-cols-[120px_1fr_auto] gap-5 p-5 border rounded-[14px] mb-3 items-center bg-white ${hasIssue ? 'border-red-300' : 'border-line'}`}>
-                <div className="w-30 h-30 bg-surface rounded-[10px] flex items-center justify-center overflow-hidden">
+              <div key={item._id || product._id} className={`grid grid-cols-[120px_1fr_auto] gap-5 p-5 border rounded-[14px] mb-3 items-start bg-white max-sm:grid-cols-[80px_1fr] max-sm:gap-3 max-sm:p-3 ${hasIssue ? 'border-red-300' : 'border-line'}`}>
+                <div className="w-30 h-30 bg-surface rounded-[10px] flex items-center justify-center overflow-hidden max-sm:w-20 max-sm:h-20 cursor-pointer"
+                  onClick={() => product._id && navigate(`/product/${product._id}`)}>
                   {image ? (
                     <img src={image} alt={title} className="w-full h-full object-contain p-2" />
                   ) : (
-                    <span className="text-[54px]">🛍️</span>
+                    <span className="text-[54px] max-sm:text-[36px]">🛍️</span>
                   )}
                 </div>
                 <div>
-                  <div className="text-[11px] text-soft font-semibold tracking-wider uppercase">{brand}</div>
-                  <div className="text-base font-bold tracking-tight mt-1">{title}</div>
-                  <div className="flex gap-3.5 mt-3.5 text-xs items-center">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-soft font-semibold tracking-wider uppercase">{brand}</div>
+                      <div className="text-base font-bold tracking-tight mt-1 leading-snug cursor-pointer hover:text-accent hover:underline transition-colors"
+                        onClick={() => product._id && navigate(`/product/${product._id}`)}>{title}</div>
+                    </div>
+                    <div className="sm:hidden text-base font-bold tracking-tight shrink-0 mt-0.5">{formatPriceShort(itemPrice * item.quantity)}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-2 mt-3 text-xs items-center">
                     <div className="flex items-center border-[1.5px] border-line-2 rounded-full h-9">
                       <button className="w-10.5 h-9 text-lg bg-transparent border-0 transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-mute hover:enabled:text-ink cursor-pointer" disabled={item.quantity <= 1} onClick={() => { updateQty(product._id, item.quantity - 1); setStockIssues([]); }}>−</button>
                       <span className="w-8 text-center font-bold">{item.quantity}</span>
@@ -144,7 +151,7 @@ export default function CartPage() {
                     );
                   })()}
                 </div>
-                <div className="text-right">
+                <div className="text-right max-sm:hidden">
                   <div className="text-xl font-bold tracking-tight">{formatPriceShort(itemPrice * item.quantity)}</div>
                 </div>
               </div>
@@ -153,7 +160,7 @@ export default function CartPage() {
         </div>
 
         {/* Summary */}
-        <div className="sticky top-32.5 self-start border border-line rounded-2xl p-6 bg-white">
+        <div className="sticky top-32.5 self-start border border-line rounded-2xl p-6 bg-white max-sm:p-4 max-md:static">
           <div className="text-[11px] font-bold tracking-widest uppercase text-mute mb-4.5">Order Summary</div>
           {[
             { label: `Subtotal (${items.reduce((s, i) => s + i.quantity, 0)} items)`, val: formatPriceShort(subtotal) },
@@ -167,7 +174,7 @@ export default function CartPage() {
           ))}
           <div className="flex justify-between items-baseline pt-4 mt-1.5">
             <span className="font-bold">Total</span>
-            <span className="font-serif text-[36px] leading-none">{formatPriceShort(total)}</span>
+            <span className="font-serif text-[36px] leading-none max-sm:text-[28px]">{formatPriceShort(total)}</span>
           </div>
 
           {!hasCoupon ? (

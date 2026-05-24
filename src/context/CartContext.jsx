@@ -141,12 +141,13 @@ export function CartProvider({ children }) {
     }
   };
 
-  const items          = cart?.items         || [];
-  const count          = cart?.totalItems    || 0;
-  const subtotal       = cart?.totalPrice    || 0;
+  const items          = cart?.items || [];
+  const count          = items.length;
+  // Recompute subtotal live from items so +/- changes reflect instantly (no API call needed)
+  const subtotal       = items.reduce((sum, i) => sum + (i.price ?? 0) * (i.quantity ?? 0), 0);
   const discountAmount = cart?.discountAmount || 0;
-  const finalPrice     = cart?.finalPrice    || subtotal;
-  const deliveryCharge = subtotal >= 5000    ? 0 : 120;
+  const finalPrice     = Math.max(0, subtotal - discountAmount);
+  const deliveryCharge = subtotal >= 5000 ? 0 : 120;
   const total          = finalPrice + deliveryCharge;
 
   return (

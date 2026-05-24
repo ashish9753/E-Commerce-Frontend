@@ -14,6 +14,13 @@ export const adminApi = {
   getEmployeeById: (id) => client.get(`/employees/${id}`),
   createEmployee: (data) => client.post('/employees/admin/create', data),
   registerExistingUserAsEmployee: (data) => client.post('/employees/admin/register-existing', data),
+  updateEmployee: (id, data) => client.patch(`/employees/${id}`, data),
+  blockEmployee: (id) => client.patch(`/employees/${id}/block`),
+  deleteEmployee: (id) => client.delete(`/employees/${id}`),
+  getEmployeeSalary: (id) => client.get(`/employees/${id}/salary`),
+  addSalaryRecord: (id, data) => client.post(`/employees/${id}/salary`, data),
+  updateSalaryRecord: (recordId, data) => client.patch(`/employees/salary/${recordId}`, data),
+  deleteSalaryRecord: (recordId) => client.delete(`/employees/salary/${recordId}`),
 
   // Orders
   getOrders: (params) => client.get('/orders', { params }),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormDraft } from '../../hooks/useFormDraft';
 import { useAuth } from '../../context/AuthContext';
@@ -182,6 +182,28 @@ function Loader() {
 function Empty({ text }) {
   return <div style={{ padding: '40px 0', textAlign: 'center', color: C.mute, fontSize: 14 }}>{text}</div>;
 }
+function PagBar({ page, pagination, loading, setPage, label = '', borderBottom = false }) {
+  if (pagination.totalPages <= 1) return null;
+  const lineStyle = borderBottom ? { borderBottom:`1px solid ${C.line}`, marginBottom:8, paddingBottom:8 } : { borderTop:`1px solid ${C.line}`, marginTop:8, paddingTop:8 };
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', ...lineStyle }}>
+      <span style={{ fontSize:13, color:C.mute }}>
+        Page <strong style={{color:C.text}}>{page}</strong> of <strong style={{color:C.text}}>{pagination.totalPages}</strong>
+        {label && <span style={{ marginLeft:8 }}>· {label}</span>}
+      </span>
+      <div style={{ display:'flex', gap:6 }}>
+        <Btn onClick={() => setPage(p => p - 1)} disabled={!pagination.hasPrevPage || loading}>← Prev</Btn>
+        {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).filter(p => Math.abs(p - page) <= 2).map(p => (
+          <button key={p} onClick={() => setPage(p)}
+            style={{ minWidth:34, height:34, borderRadius:8, border:`1px solid ${p===page?C.accent:C.line}`, background:p===page?C.accent:'transparent', color:p===page?'white':C.text, fontWeight:p===page?700:400, fontSize:13, cursor:'pointer' }}>
+            {p}
+          </button>
+        ))}
+        <Btn onClick={() => setPage(p => p + 1)} disabled={!pagination.hasNextPage || loading}>Next →</Btn>
+      </div>
+    </div>
+  );
+}
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OVERVIEW TAB
@@ -297,30 +319,6 @@ function OverviewTab({ profile }) {
         </Card>
       )}
 
-      {/* Shop profile */}
-      <Card title="Shop Profile">
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3,1fr)', gap: 20 }}>
-          {[
-            ['Shop Name',       profile?.shopName],
-            ['GST Number',      profile?.gstNumber || '—'],
-            ['Business Address',profile?.businessAddress || '—'],
-            ['Rating',          `${(profile?.rating||0).toFixed(1)} / 5`],
-            ['Total Sales',     fmtRs(profile?.totalSales)],
-            ['Status',          profile?.isVerified ? 'Verified' : 'Pending'],
-          ].map(([l,v]) => (
-            <div key={l}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.mute, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>{l}</div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: l === 'Status' ? (profile?.isVerified ? C.green : C.yellow) : C.text }}>{v}</div>
-            </div>
-          ))}
-        </div>
-        {!profile?.isVerified && (
-          <div style={{ marginTop: 16, padding: '12px 16px', background: C.yellow+'14', border:`1px solid ${C.yellow}44`, borderRadius: 8, fontSize: 12, color: C.yellow, display:'flex', alignItems:'center', gap:10 }}>
-            <SvgAt el={Icon.warn} size={14} />
-            Your shop is pending admin verification. Products won't be publicly visible until approved.
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
@@ -548,49 +546,52 @@ function OrdersTab({ onViewReturns }) {
   const [payF, setPayF]       = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
+  const [page, setPage]         = useState(1);
+  const [pagination, setPag]    = useState({ total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
 
-  useEffect(() => {
-    employeeApi.getMyOrders({ limit: 200 }).then(r => {
+
+  // appliedSearch only updates on Enter / Search button — no API calls while typing
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const applySearch = () => { setPage(1); setAppliedSearch(search); };
+
+  useEffect(() => { setPage(1); }, [statusF, payF]);
+
+  const hasLoadedRef = useRef(false);
+
+  const fetchOrders = useCallback(() => {
+    setLoading(true);
+    const params = { limit: 100, page };
+    if (statusF)       params.status        = statusF;
+    if (payF)          params.paymentStatus = payF;
+    if (appliedSearch) params.search        = appliedSearch;
+    employeeApi.getMyOrders(params).then(r => {
       const d = r.data?.data || {};
       setAll(d.data || []);
       setRev(d.employeeRevenue || 0);
       setBD(d.statusBreakdown || []);
-    }).catch(()=>{}).finally(()=>setLoading(false));
-  }, []);
+      setPag(d.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+    }).catch(()=>{}).finally(()=>{ setLoading(false); hasLoadedRef.current = true; });
+  }, [page, statusF, payF, appliedSearch]);
 
-  const handleStatusUpdated = (orderId, newStatus, newTracking) => {
-    setAll(prev => prev.map(o => o._id === orderId
-      ? { ...o, orderStatus: newStatus, trackingId: newTracking || o.trackingId,
-          paymentStatus: newStatus === 'DELIVERED' ? 'PAID' : o.paymentStatus }
-      : o));
-  };
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  const handleStatusUpdated = useCallback(() => { fetchOrders(); }, [fetchOrders]);
+
+  // date filter is client-side (no backend support); text/status/payment are server-side
   const orders = all.filter(o => {
-    const q = search.toLowerCase();
-    const mQ = !q ||
-      o.orderNumber?.toLowerCase().includes(q) ||
-      o._id?.toLowerCase().includes(q) ||
-      o.user?.name?.toLowerCase().includes(q) ||
-      o.user?.email?.toLowerCase().includes(q) ||
-      o.user?.phone?.includes(q) ||
-      o.shippingAddress?.phone?.includes(q) ||
-      o.shippingAddress?.name?.toLowerCase().includes(q) ||
-      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
-    const mS = !statusF || o.orderStatus === statusF;
-    const mP = !payF || o.paymentStatus === payF;
     const d = o.createdAt ? new Date(o.createdAt) : null;
     const mD = (!dateFrom || (d && d >= new Date(dateFrom))) &&
                (!dateTo   || (d && d <= new Date(dateTo + 'T23:59:59')));
-    return mQ && mS && mP && mD;
+    return mD;
   });
 
   const delivered = all.filter(o=>o.orderStatus==='DELIVERED').length;
   const pending   = all.filter(o=>['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY'].includes(o.orderStatus)).length;
 
-  if (loading) return <Loader />;
+  if (loading && !hasLoadedRef.current) return <Loader />;
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:20, opacity: loading ? 0.55 : 1, transition: 'opacity .2s', pointerEvents: loading ? 'none' : 'auto' }}>
       <div style={{ display:'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12 }}>
         <KpiCard label="Total Orders"   value={fmt(all.length)}  sub={`${delivered} delivered`}   colorKey="blue"   iconEl={Icon.orders} />
         <KpiCard label="Revenue Earned" value={fmtShort(revenue)} sub="From paid orders"           colorKey="green"  iconEl={Icon.dollar} />
@@ -616,10 +617,17 @@ function OrdersTab({ onViewReturns }) {
 
       <Card>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1, minWidth:200 }}>
-            <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…"
-              style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
+          <div style={{ display:'flex', gap:6, flex:1, minWidth:200 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1 }}>
+              <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={14} /></span>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&applySearch()}
+                placeholder="Order #, name, email, phone…"
+                style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:'inherit' }} />
+            </div>
+            <Btn variant="primary" onClick={applySearch} style={{ flexShrink:0 }}>
+              <SvgAt el={Icon.search} size={14} /> Search
+            </Btn>
           </div>
           <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:170 }}>
             <option value="">All Status</option>
@@ -637,12 +645,16 @@ function OrdersTab({ onViewReturns }) {
           <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
             title="To date"
             style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
-          {(search||statusF||payF||dateFrom||dateTo) && <Btn onClick={()=>{setSearch('');setStatF('');setPayF('');setDateFrom('');setDateTo('');}}>Clear</Btn>}
-          <span style={{ fontSize:13, color:C.mute, marginLeft:'auto' }}><strong style={{color:C.text}}>{orders.length}</strong> of <strong style={{color:C.text}}>{all.length}</strong></span>
+          {(appliedSearch||statusF||payF||dateFrom||dateTo) && <Btn onClick={()=>{setSearch('');setAppliedSearch('');setStatF('');setPayF('');setDateFrom('');setDateTo('');setPage(1);}}>Clear</Btn>}
+          <span style={{ fontSize:13, color:C.mute, marginLeft:'auto' }}>
+            {(dateFrom||dateTo) ? <><strong style={{color:C.text}}>{orders.length}</strong> match &middot; </> : null}
+            <strong style={{color:C.text}}>{pagination.total}</strong> {appliedSearch ? 'found' : 'total'}
+          </span>
         </div>
       </Card>
 
-      <Card title={`Orders (${orders.length})`}>
+      <Card title={`Orders (${pagination.total})`}>
+        <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total`} borderBottom />
         {orders.length === 0 ? <Empty text="No orders match your filters" /> :
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
@@ -707,6 +719,7 @@ function OrdersTab({ onViewReturns }) {
             </table>
           </div>
         }
+        <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total`} />
       </Card>
     </div>
   );
@@ -1165,12 +1178,15 @@ function ReturnBadge({ status }) {
 
 function EmployeeReturnsTab() {
   const { isMobile } = useResponsive();
-  const [returns, setReturns]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [filter, setFilter]     = useState('ALL');
-  const [actionId, setActionId] = useState(null);
-  const [note, setNote]         = useState('');
-  const [saving, setSaving]     = useState(false);
+  const [returns, setReturns]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filter, setFilter]         = useState('ALL');
+  const [actionId, setActionId]     = useState(null);
+  const [note, setNote]             = useState('');
+  const [saving, setSaving]         = useState(false);
+  const [advanceId, setAdvanceId]   = useState(null); // id of return showing proof upload panel
+  const [advanceNote, setAdvanceNote] = useState('');
+  const [proofFiles, setProofFiles] = useState([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1192,9 +1208,16 @@ function EmployeeReturnsTab() {
     finally { setSaving(false); }
   };
 
-  const doAdvance = async (id) => {
+  const doAdvance = async (id, withProof = false) => {
     setSaving(true);
-    try { await returnsApi.employeeAdvance(id, {}); load(); }
+    try {
+      await returnsApi.employeeAdvance(id, {
+        note: withProof ? advanceNote : undefined,
+        files: withProof && proofFiles.length ? proofFiles : undefined,
+      });
+      setAdvanceId(null); setAdvanceNote(''); setProofFiles([]);
+      load();
+    }
     catch(e) { alert(e?.response?.data?.message || 'Failed to update'); }
     finally { setSaving(false); }
   };
@@ -1410,18 +1433,85 @@ function EmployeeReturnsTab() {
                     </div>
                   )}
 
+                  {/* Refund proof photos */}
+                  {req.refundProof?.length > 0 && (
+                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.green, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
+                        🧾 Refund Proof ({req.refundProof.length})
+                      </div>
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                        {req.refundProof.map((p,i) => (
+                          <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
+                            <img src={p.url} alt={`proof ${i+1}`}
+                              style={{ width:72, height:72, objectFit:'cover', borderRadius:8, border:`2px solid ${C.green}55`, cursor:'zoom-in', display:'block' }} />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Advance button */}
-                  {canAdvance && adv && (
+                  {canAdvance && adv && advanceId !== req._id && (
                     <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:C.bg }}>
                       <div style={{ fontSize:12, color:C.mute }}>
                         Next step: <strong style={{color:C.text}}>{adv.next.replace(/_/g,' ')}</strong>
                       </div>
-                      <button onClick={() => doAdvance(req._id)} disabled={saving}
+                      <button
+                        onClick={() => {
+                          if (['ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status)) {
+                            setAdvanceId(req._id); setAdvanceNote(''); setProofFiles([]);
+                          } else {
+                            doAdvance(req._id, false);
+                          }
+                        }}
+                        disabled={saving}
                         style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none',
                           fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, whiteSpace:'nowrap', fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
                         <SvgAt el={adv.iconEl} size={14} />
                         {saving ? '…' : adv.label}
                       </button>
+                    </div>
+                  )}
+
+                  {/* Proof upload panel for refund steps */}
+                  {canAdvance && adv && advanceId === req._id && (
+                    <div style={{ padding:'14px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                      <div style={{ fontWeight:700, fontSize:13, marginBottom:10, color:C.text }}>
+                        {adv.label} — Add Refund Proof
+                      </div>
+                      <div style={{ marginBottom:10 }}>
+                        <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>
+                          Upload Screenshot / Photo <span style={{ fontWeight:400, textTransform:'none' }}>(optional, up to 5)</span>
+                        </label>
+                        <input type="file" accept="image/*" multiple
+                          onChange={e => setProofFiles(Array.from(e.target.files || []))}
+                          style={{ fontSize:12, color:C.text }} />
+                        {proofFiles.length > 0 && (
+                          <div style={{ display:'flex', gap:6, marginTop:6, flexWrap:'wrap' }}>
+                            {proofFiles.map((f,i) => (
+                              <span key={i} style={{ fontSize:11, background:C.card2, borderRadius:6, padding:'2px 8px', color:C.sub }}>
+                                🖼 {f.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ marginBottom:10 }}>
+                        <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>Note to Customer</label>
+                        <textarea rows={2} value={advanceNote} onChange={e=>setAdvanceNote(e.target.value)}
+                          placeholder="Optional message about refund…"
+                          style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', background:C.card2, color:C.text }} />
+                      </div>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button onClick={() => doAdvance(req._id, true)} disabled={saving}
+                          style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
+                          <SvgAt el={adv.iconEl} size={14} /> {saving ? 'Saving…' : 'Confirm & ' + adv.label}
+                        </button>
+                        <button onClick={() => { setAdvanceId(null); setProofFiles([]); setAdvanceNote(''); }}
+                          style={{ padding:'8px 16px', borderRadius:8, background:C.card2, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1774,79 +1864,126 @@ function EmployeeSettingsTab() {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   ACCOUNT SETUP FORM (shown when no employee profile exists)
+   MY SALARY TAB
 ════════════════════════════════════════════════════════════════ */
-function AccountSetupForm({ onSuccess }) {
-  const [form, setForm] = useState({ shopName: '', businessAddress: '', gstNumber: '', shopDescription: '' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+const SAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+function MySalaryTab() {
+  const [records, setRecords]         = useState([]);
+  const [monthlySalary, setMonthlySal] = useState(0);
+  const [designation, setDesignation]  = useState('');
+  const [joiningDate, setJoiningDate]  = useState(null);
+  const [loading, setLoading]          = useState(true);
 
-  const handleSubmit = async () => {
-    if (!form.shopName.trim()) { setError('Shop name is required.'); return; }
-    setSaving(true); setError('');
-    try {
-      await employeeApi.registerEmployee(form);
-      onSuccess();
-    } catch (e) {
-      setError(e?.response?.data?.message || 'Registration failed. Please try again.');
-    } finally { setSaving(false); }
-  };
+  useEffect(() => {
+    employeeApi.getMySalary()
+      .then(r => {
+        setRecords(r.data?.data?.records || []);
+        setMonthlySal(r.data?.data?.monthlySalary || 0);
+        setDesignation(r.data?.data?.designation || '');
+        setJoiningDate(r.data?.data?.joiningDate || null);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  const LS = { display: 'block', fontSize: 11, fontWeight: 700, color: C.mute, marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.06em' };
-  const IS = { height: 38, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.bg, color: C.text, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' };
+  const totalPaid    = records.filter(r=>r.status==='PAID').reduce((s,r)=>s+r.netSalary,0);
+  const totalPending = records.filter(r=>r.status==='PENDING').reduce((s,r)=>s+r.netSalary,0);
+
+  if (loading) return <div style={{ padding:40, textAlign:'center', color:C.mute }}>Loading salary information…</div>;
 
   return (
-    <div style={{ maxWidth: 520, margin: '0 auto', paddingTop: 40 }}>
-      <Card>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div style={{ width: 60, height: 60, borderRadius: '50%', background: C.accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', color: C.accent }}>
-            <SvgAt el={Icon.shop} size={28} />
-          </div>
-          <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 20, color: C.text, marginBottom: 6 }}>
-            Set Up Your Shop
-          </div>
-          <div style={{ color: C.mute, fontSize: 13, lineHeight: 1.6 }}>
-            Complete your shop profile to start selling. You can update these details later.
-          </div>
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      {/* Info strip */}
+      {(designation || joiningDate) && (
+        <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+          {designation && (
+            <div style={{ padding:'10px 18px', background:C.card, border:`1px solid ${C.line}`, borderRadius:10, fontSize:13 }}>
+              <span style={{ color:C.mute, fontSize:11, textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:2 }}>Designation</span>
+              <strong>{designation}</strong>
+            </div>
+          )}
+          {joiningDate && (
+            <div style={{ padding:'10px 18px', background:C.card, border:`1px solid ${C.line}`, borderRadius:10, fontSize:13 }}>
+              <span style={{ color:C.mute, fontSize:11, textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:2 }}>Joined</span>
+              <strong>{new Date(joiningDate).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</strong>
+            </div>
+          )}
         </div>
+      )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={LS}>Shop Name *</label>
-            <input value={form.shopName} onChange={e => { set('shopName', e.target.value); setError(''); }}
-              placeholder="Your shop / business name" style={IS} />
-          </div>
-          <div>
-            <label style={LS}>Business Address</label>
-            <input value={form.businessAddress} onChange={e => set('businessAddress', e.target.value)}
-              placeholder="Address (optional)" style={IS} />
-          </div>
-          <div>
-            <label style={LS}>GST Number</label>
-            <input value={form.gstNumber} onChange={e => set('gstNumber', e.target.value)}
-              placeholder="GST registration number (optional)" style={IS} />
-          </div>
-          <div>
-            <label style={LS}>Shop Description</label>
-            <textarea value={form.shopDescription} onChange={e => set('shopDescription', e.target.value)}
-              placeholder="Brief description of your shop (optional)" rows={3}
-              style={{ ...IS, height: 'auto', padding: '8px 12px', resize: 'vertical' }} />
-          </div>
+      {/* KPI cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+        <KpiCard label="Monthly Salary"  value={`₹${monthlySalary.toLocaleString('en-IN')}`}  sub="Base amount"        colorKey="blue"   iconEl={Icon.dollar} />
+        <KpiCard label="Total Received"  value={`₹${totalPaid.toLocaleString('en-IN')}`}       sub="All-time paid"      colorKey="green"  iconEl={Icon.check} />
+        <KpiCard label="Pending"         value={`₹${totalPending.toLocaleString('en-IN')}`}    sub="Awaiting payment"   colorKey="yellow" iconEl={Icon.bell} />
+      </div>
+
+      {/* Salary records */}
+      {records.length === 0 ? (
+        <Card>
+          <div style={{ textAlign:'center', padding:'40px 0', color:C.mute, fontSize:13 }}>No salary records yet. Records will appear here once admin adds them.</div>
+        </Card>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {records.map(rec => {
+            const dedTotal = rec.deductions.reduce((s,d)=>s+d.amount,0);
+            const bonTotal = rec.bonuses.reduce((s,b)=>s+b.amount,0);
+            return (
+              <Card key={rec._id} title={`${SAL_MONTHS[rec.month-1]} ${rec.year}`}
+                action={<span style={{ padding:'4px 12px', borderRadius:20, fontSize:11, fontWeight:700, background:rec.status==='PAID'?C.green+'20':C.yellow+'20', color:rec.status==='PAID'?C.green:C.yellow }}>{rec.status}</span>}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:14, marginBottom: (rec.deductions.length||rec.bonuses.length||rec.notes)?16:0 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Base Salary</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:C.text }}>₹{rec.baseSalary.toLocaleString('en-IN')}</div>
+                  </div>
+                  {dedTotal>0 && (
+                    <div>
+                      <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Deductions</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:'#f87171' }}>-₹{dedTotal.toLocaleString('en-IN')}</div>
+                    </div>
+                  )}
+                  {bonTotal>0 && (
+                    <div>
+                      <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Bonuses</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:C.green }}>+₹{bonTotal.toLocaleString('en-IN')}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Net Salary</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:C.blue }}>₹{rec.netSalary.toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+
+                {rec.deductions.length>0 && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:'#f87171', marginBottom:4 }}>Deductions</div>
+                    {rec.deductions.map((d,i)=>(
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 0', borderBottom:`1px solid ${C.line}` }}>
+                        <span style={{ color:C.sub }}>{d.reason}</span>
+                        <span style={{ fontWeight:700, color:'#f87171' }}>-₹{d.amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {rec.bonuses.length>0 && (
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:C.green, marginBottom:4 }}>Bonuses</div>
+                    {rec.bonuses.map((b,i)=>(
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 0', borderBottom:`1px solid ${C.line}` }}>
+                        <span style={{ color:C.sub }}>{b.reason}</span>
+                        <span style={{ fontWeight:700, color:C.green }}>+₹{b.amount.toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {rec.notes && <div style={{ fontSize:12, color:C.mute, fontStyle:'italic', marginTop:4 }}>Note: {rec.notes}</div>}
+                {rec.paidAt && <div style={{ fontSize:11, color:C.mute, marginTop:4 }}>Paid on {new Date(rec.paidAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>}
+              </Card>
+            );
+          })}
         </div>
-
-        {error && (
-          <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: C.red + '18', border: `1px solid ${C.red}44`, color: '#f87171', fontSize: 13 }}>
-            {error}
-          </div>
-        )}
-
-        <button onClick={handleSubmit} disabled={saving}
-          style={{ marginTop: 20, width: '100%', padding: '11px 0', borderRadius: 10, background: C.accent, color: 'white', border: 'none', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>
-          {saving ? 'Setting up…' : 'Complete Setup & Enter Dashboard'}
-        </button>
-      </Card>
+      )}
     </div>
   );
 }
@@ -2309,6 +2446,7 @@ const NAV_TABS = [
   { id:'Delivery Areas',  iconEl: Icon.box     },
   { id:'Add Product',     iconEl: Icon.plus    },
   { id:'Coupons',         iconEl: Icon.coupon  },
+  { id:'My Salary',       iconEl: Icon.dollar  },
   { id:'Catalog',         iconEl: Icon.catalog },
   { id:'Settings',        iconEl: Icon.gear    },
 ];
@@ -2322,6 +2460,7 @@ const TAB_SUBTITLES = {
   'Delivery Areas': 'Manage pincodes and delivery charges',
   'Add Product':    'Create a new product listing',
   Coupons:          'Create and manage discount coupons for customers',
+  'My Salary':      'View your monthly salary, deductions, and bonuses',
   Catalog:          'Manage brands, categories, attributes and events',
   Settings:         'Configure COD availability, order amount limits, and booking payments',
 };
@@ -2329,7 +2468,16 @@ const TAB_SUBTITLES = {
 export default function SellerDashboard() {
   const { isMobile } = useResponsive();
   const [tab, setTab]           = useState('Overview');
+  const [mountedTabs, setMountedTabs] = useState(() => new Set(['Overview']));
+  const navTo = (t) => { setTab(t); setMountedTabs(prev => { if (prev.has(t)) return prev; const n = new Set(prev); n.add(t); return n; }); };
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [refreshKeys, setRefreshKeys] = useState({});
+  const [spinning, setSpinning]       = useState(false);
+  const doRefresh = () => {
+    setRefreshKeys(k => ({ ...k, [tab]: (k[tab] || 0) + 1 }));
+    setSpinning(true);
+    setTimeout(() => setSpinning(false), 700);
+  };
   const [profile, setProfile]   = useState(null);
   const [editProduct, setEdit]  = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -2347,7 +2495,7 @@ export default function SellerDashboard() {
   useEffect(() => { loadProfile(); }, [loadProfile]);
 
   const handleTabClick = (id) => {
-    setTab(id);
+    navTo(id);
     setEdit(null);
     if (isMobile) setSidebarOpen(false);
   };
@@ -2478,34 +2626,66 @@ export default function SellerDashboard() {
 
         {/* Page content */}
         <div style={{ padding: isMobile ? '18px 14px' : '28px 30px', flex:1 }}>
-          {!isMobile && (
-            <div style={{ marginBottom:22 }}>
-              <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:700, color:C.text, margin:0, lineHeight:1 }}>{pageTitle}</h1>
-              <p style={{ color:C.mute, margin:'6px 0 0', fontSize:13 }}>{pageSub}</p>
-            </div>
-          )}
+          <div style={{ marginBottom:22, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
+            {!isMobile && (
+              <div>
+                <h1 style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:700, color:C.text, margin:0, lineHeight:1 }}>{pageTitle}</h1>
+                <p style={{ color:C.mute, margin:'6px 0 0', fontSize:13 }}>{pageSub}</p>
+              </div>
+            )}
+            {!editProduct && tab !== 'Add Product' && (
+              <button onClick={doRefresh} disabled={spinning}
+                title="Refresh this page"
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8,
+                  background: spinning ? C.active : 'rgba(255,255,255,.06)',
+                  border:`1px solid ${C.line}`, color: spinning ? C.accent : C.sub,
+                  fontSize:13, fontWeight:500, cursor: spinning ? 'default' : 'pointer',
+                  fontFamily:'inherit', flexShrink:0,
+                  marginLeft: isMobile ? 'auto' : 0,
+                  transition:'color .2s, background .2s' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth="2"
+                  style={{ transform: spinning ? 'rotate(360deg)' : 'rotate(0deg)', transition:'transform .6s ease' }}>
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                {spinning ? 'Refreshing…' : 'Refresh'}
+              </button>
+            )}
+          </div>
 
           {loading ? <Loader /> : !profile ? (
-            /* Shop setup / self-registration */
-            <AccountSetupForm onSuccess={loadProfile} />
+            /* No profile — admin must create the employee account */
+            <div style={{ maxWidth:500, margin:'60px auto 0', textAlign:'center' }}>
+              <div style={{ width:64, height:64, borderRadius:'50%', background:C.yellow+'22', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 18px', color:C.yellow }}>
+                <SvgAt el={Icon.lock} size={28} />
+              </div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:22, color:C.text, marginBottom:8 }}>Account Not Set Up</div>
+              <div style={{ color:C.mute, fontSize:14, lineHeight:1.7 }}>Your employee account has not been created yet. Please contact the admin to add you to the system with your full details.</div>
+            </div>
           ) : (
             <>
-              {tab==='Overview'    && !editProduct && <OverviewTab profile={profile} />}
-              {tab==='My Products' && !editProduct && <ProductsTab onEdit={p=>setEdit(p)} />}
-              {tab==='My Products' && editProduct  && <ProductForm initial={editProduct} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
-              {tab==='Orders'      && !editProduct && <OrdersTab onViewReturns={() => handleTabClick('Returns')} />}
-              {tab==='Returns'        && !editProduct && <EmployeeReturnsTab />}
-              {tab==='Cancellations' && !editProduct && <EmployeeCancellationsTab />}
-              {tab==='Delivery Areas' && !editProduct && <DeliveryAreasTab />}
-              {tab==='Add Product' && !editProduct && <ProductForm onSave={handleAddProduct} />}
-              {tab==='Coupons'     && !editProduct && <EmployeeCouponsTab />}
-              {tab==='Catalog'     && !editProduct && <AdminCatalogTab />}
-              {tab==='Settings'    && !editProduct && <EmployeeSettingsTab />}
-            </>
+              {/* Keep-alive: mount once, CSS-hide when not active */}
+              {editProduct && <ProductForm initial={editProduct} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
+              {!editProduct && (<>
+                <div style={{ display: tab==='Overview'      ? '' : 'none' }}>{mountedTabs.has('Overview')      && <OverviewTab          key={refreshKeys['Overview']       || 0} profile={profile} />}</div>
+                <div style={{ display: tab==='My Products'   ? '' : 'none' }}>{mountedTabs.has('My Products')   && <ProductsTab          key={refreshKeys['My Products']    || 0} onEdit={p=>setEdit(p)} />}</div>
+                <div style={{ display: tab==='Orders'        ? '' : 'none' }}>{mountedTabs.has('Orders')        && <OrdersTab            key={refreshKeys['Orders']         || 0} onViewReturns={() => navTo('Returns')} />}</div>
+                <div style={{ display: tab==='Returns'       ? '' : 'none' }}>{mountedTabs.has('Returns')       && <EmployeeReturnsTab   key={refreshKeys['Returns']        || 0} />}</div>
+                <div style={{ display: tab==='Cancellations' ? '' : 'none' }}>{mountedTabs.has('Cancellations') && <EmployeeCancellationsTab key={refreshKeys['Cancellations'] || 0} />}</div>
+                <div style={{ display: tab==='Delivery Areas'? '' : 'none' }}>{mountedTabs.has('Delivery Areas')&& <DeliveryAreasTab      key={refreshKeys['Delivery Areas'] || 0} />}</div>
+                <div style={{ display: tab==='Coupons'       ? '' : 'none' }}>{mountedTabs.has('Coupons')       && <EmployeeCouponsTab   key={refreshKeys['Coupons']        || 0} />}</div>
+                <div style={{ display: tab==='My Salary'     ? '' : 'none' }}>{mountedTabs.has('My Salary')     && <MySalaryTab          key={refreshKeys['My Salary']      || 0} />}</div>
+                <div style={{ display: tab==='Catalog'       ? '' : 'none' }}>{mountedTabs.has('Catalog')       && <AdminCatalogTab      key={refreshKeys['Catalog']        || 0} />}</div>
+                <div style={{ display: tab==='Settings'      ? '' : 'none' }}>{mountedTabs.has('Settings')      && <EmployeeSettingsTab  key={refreshKeys['Settings']       || 0} />}</div>
+                {tab==='Add Product' && <ProductForm onSave={handleAddProduct} />}
+              </>)}
+          </>
           )}
         </div>
       </div>
     </div>
   );
 }
+
 

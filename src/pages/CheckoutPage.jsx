@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
@@ -125,7 +125,7 @@ function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, 
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 16, color: '#0f172a', borderTop: '2px solid #e5e7eb', paddingTop: 8, marginTop: 2 }}>
                     <span>Pay on Delivery:</span>
-                    <span>{formatPriceShort(total - codBookingAmount)}</span>
+                    <span>{formatPriceShort(checkoutTotal - codBookingAmount)}</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Cash at doorstep · Booking non-refundable</div>
                 </>
@@ -137,7 +137,7 @@ function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, 
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#555' }}>
                     <span>Pay on delivery:</span>
-                    <span>{formatPriceShort(total - codBookingAmount)}</span>
+                    <span>{formatPriceShort(checkoutTotal - codBookingAmount)}</span>
                   </div>
                   <div style={{ fontSize: 10, color: '#9ca3af' }}>* Booking amount is non-refundable</div>
                 </>
@@ -195,7 +195,20 @@ function loadRazorpayScript() {
 /* ══════════════════ Main page ══════════════════ */
 export default function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const buyNow   = location.state?.buyNow || null;          // set when coming from "Buy Now"
   const { items, subtotal, total, deliveryCharge, discountAmount, clearCart } = useCart();
+
+  // Buy-now: synthetic display items + totals (bypasses cart entirely)
+  const checkoutItems    = buyNow
+    ? [{ _id: 'buy-now', product: { _id: buyNow.productId, title: buyNow.title, images: buyNow.image ? [buyNow.image] : [] }, quantity: buyNow.quantity, price: buyNow.price }]
+    : items;
+  const checkoutSubtotal = buyNow ? buyNow.price * buyNow.quantity : subtotal;
+  const checkoutDelivery = buyNow ? (checkoutSubtotal >= 5000 ? 0 : 120) : deliveryCharge;
+  const checkoutDiscount = buyNow ? 0 : discountAmount;
+  const checkoutTotal    = buyNow ? checkoutSubtotal + checkoutDelivery : total;
+  // Extra payload fields forwarded to every placeOrder call when buy-now
+  const buyNowExtra      = buyNow ? { useCart: false, directItem: { productId: buyNow.productId, quantity: buyNow.quantity } } : {};
   const { user } = useAuth();
   const { placeOrder } = useOrders();
   const toast = useToast();
@@ -233,8 +246,8 @@ export default function CheckoutPage() {
         const enabled = s ? (s.codEnabled ?? s.enabled ?? true) : true;
         const min = s?.minOrderAmount || 0;
         const max = s?.maxOrderAmount || 0;
-        const tooLow  = min > 0 && total < min;
-        const tooHigh = max > 0 && total > max;
+        const tooLow  = min > 0 && checkoutTotal < min;
+        const tooHigh = max > 0 && checkoutTotal > max;
         if (!enabled || tooLow || tooHigh) setPaymentMethod('RAZORPAY');
       })
       .catch(() => {});
@@ -248,18 +261,18 @@ export default function CheckoutPage() {
   // COD-only order limits
   const minOrderAmt = codCfg?.minOrderAmount || 0;
   const maxOrderAmt = codCfg?.maxOrderAmount || 0;
-  const codTooLow  = minOrderAmt > 0 && total < minOrderAmt;
-  const codTooHigh = maxOrderAmt > 0 && total > maxOrderAmt;
+  const codTooLow  = minOrderAmt > 0 && checkoutTotal < minOrderAmt;
+  const codTooHigh = maxOrderAmt > 0 && checkoutTotal > maxOrderAmt;
   const orderAmountBlocked = paymentMethod === 'COD' && (codTooLow || codTooHigh);
 
   const codBookingRequired = codAvailable && !orderAmountBlocked && codCfg?.bookingEnabled;
   const codBookingAmount = codBookingRequired
     ? (codCfg.bookingType === 'percent'
-        ? Math.round((total * codCfg.bookingValue) / 100)
+        ? Math.round((checkoutTotal * codCfg.bookingValue) / 100)
         : codCfg.bookingValue)
     : 0;
 
-  if (items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
+  if (!buyNow && items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
 
   const checkDelivery = async (pin) => {
     if (!pin || pin.length !== 6) { setDeliveryCheck(null); return; }
@@ -347,6 +360,7 @@ export default function CheckoutPage() {
       const result = await placeOrder({
         shippingAddressId: selectedAddressId,
         paymentMethod: 'ONLINE',
+        ...buyNowExtra,
       });
 
       if (!result.success) {
@@ -372,7 +386,7 @@ export default function CheckoutPage() {
       try {
         await openRazorpayModal(rzpOrderData, orderId);
         setOrderSubmitted(true);
-        await clearCart();
+        if (!buyNow) await clearCart();
         toast('Payment successful! Order confirmed.');
         navigate('/orders');
       } catch (err) {
@@ -393,11 +407,12 @@ export default function CheckoutPage() {
       shippingAddressId: selectedAddressId,
       paymentMethod: 'COD',
       codBookingUtr: bookingConfirmed ? bookingPaymentId : '',
+      ...buyNowExtra,
     });
     setLoading(false);
     if (result.success) {
       setOrderSubmitted(true);
-      await clearCart();
+      if (!buyNow) await clearCart();
       toast('Order placed successfully!');
       navigate('/orders');
     } else {
@@ -589,12 +604,12 @@ export default function CheckoutPage() {
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#dc2626' }}>Order cannot be placed</div>
                     {codTooLow && (
                       <div style={{ fontSize: 13, color: '#b91c1c', marginTop: 3 }}>
-                        COD requires a minimum order of <strong>Rs. {minOrderAmt.toLocaleString('en-IN')}</strong>. Your total is Rs. {total.toLocaleString('en-IN')}. Add more items or pay online.
+                        COD requires a minimum order of <strong>Rs. {minOrderAmt.toLocaleString('en-IN')}</strong>. Your total is Rs. {checkoutTotal.toLocaleString('en-IN')}. Add more items or pay online.
                       </div>
                     )}
                     {codTooHigh && (
                       <div style={{ fontSize: 13, color: '#b91c1c', marginTop: 3 }}>
-                        COD is not available for orders above <strong>Rs. {maxOrderAmt.toLocaleString('en-IN')}</strong>. Your total is Rs. {total.toLocaleString('en-IN')}. Please pay online instead.
+                        COD is not available for orders above <strong>Rs. {maxOrderAmt.toLocaleString('en-IN')}</strong>. Your total is Rs. {checkoutTotal.toLocaleString('en-IN')}. Please pay online instead.
                       </div>
                     )}
                   </div>
@@ -698,7 +713,7 @@ export default function CheckoutPage() {
                       <div style={{ width: 1, height: 60, background: '#fde68a', flexShrink: 0 }} />
                       <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '.06em' }}>Pay on Delivery</div>
-                        <div style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>{formatPriceShort(total - codBookingAmount)}</div>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: '#0f172a' }}>{formatPriceShort(checkoutTotal - codBookingAmount)}</div>
                         <div style={{ fontSize: 11, color: '#6b7280' }}>Cash at doorstep</div>
                       </div>
                     </div>
@@ -735,11 +750,12 @@ export default function CheckoutPage() {
                                   shippingAddressId: selectedAddressId,
                                   paymentMethod: 'COD',
                                   codBookingUtr: payId,
+                                  ...buyNowExtra,
                                 });
                                 setLoading(false);
                                 if (result.success) {
                                   setOrderSubmitted(true);
-                                  await clearCart();
+                                  if (!buyNow) await clearCart();
                                   toast('Order placed successfully!');
                                   navigate('/orders');
                                 } else {
@@ -845,7 +861,7 @@ export default function CheckoutPage() {
                       <>
                         <div style={{ fontWeight: 700, fontSize: 14 }}>Razorpay (Online Payment)</div>
                         <div style={{ fontSize: 12, color: '#3b82f6', marginTop: 2, fontWeight: 600 }}>
-                          UPI / Card / Net Banking · {formatPriceShort(total)} due now
+                          UPI / Card / Net Banking · {formatPriceShort(checkoutTotal)} due now
                         </div>
                       </>
                     ) : (
@@ -854,7 +870,7 @@ export default function CheckoutPage() {
                         {codBookingRequired && bookingConfirmed ? (
                           <div style={{ fontSize: 12, marginTop: 4 }}>
                             <span style={{ color: '#16a34a', fontWeight: 700 }}>✓ Booking {formatPriceShort(codBookingAmount)} paid via Razorpay</span>
-                            <span style={{ color: '#555', marginLeft: 6 }}>· {formatPriceShort(total - codBookingAmount)} on delivery</span>
+                            <span style={{ color: '#555', marginLeft: 6 }}>· {formatPriceShort(checkoutTotal - codBookingAmount)} on delivery</span>
                           </div>
                         ) : (
                           <div style={{ fontSize: 12, color: '#007600', marginTop: 2 }}>Pay when delivered · No advance payment needed</div>
@@ -871,7 +887,7 @@ export default function CheckoutPage() {
                 {/* Items */}
                 <div style={{ padding: '16px 20px' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 14 }}>Items ordered:</div>
-                  {items.map(item => {
+                  {checkoutItems.map(item => {
                     const product = item.product || {};
                     const image   = product.images?.[0];
                     const title   = product.title || product.name || 'Product';
@@ -901,8 +917,8 @@ export default function CheckoutPage() {
                   {loading
                     ? (paymentMethod === 'RAZORPAY' ? 'Opening payment gateway…' : 'Placing your order…')
                     : (paymentMethod === 'RAZORPAY'
-                        ? `Pay ${formatPriceShort(total)} via Razorpay`
-                        : `Place your order · ${formatPriceShort(total)}`)}
+                        ? `Pay ${formatPriceShort(checkoutTotal)} via Razorpay`
+                        : `Place your order · ${formatPriceShort(checkoutTotal)}`)}
                 </button>
                 <div style={{ fontSize: 12, color: '#555', lineHeight: 1.6, textAlign: 'center' }}>
                   By placing your order, you agree to our{' '}
@@ -921,11 +937,11 @@ export default function CheckoutPage() {
 
         {/* Right column — Order Summary */}
         <OrderSummary
-          items={items}
-          subtotal={subtotal}
-          deliveryCharge={deliveryCharge}
-          discountAmount={discountAmount}
-          total={total}
+          items={checkoutItems}
+          subtotal={checkoutSubtotal}
+          deliveryCharge={checkoutDelivery}
+          discountAmount={checkoutDiscount}
+          total={checkoutTotal}
           onPlace={handlePlaceOrder}
           loading={loading}
           canPlace={!!selectedAddressId}

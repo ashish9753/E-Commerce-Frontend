@@ -121,11 +121,40 @@ function ReturnTracker({ status, resolution }) {
   );
 }
 
+function RefundProofModal({ proof, onClose }) {
+  const [idx, setIdx] = useState(0);
+  if (!proof?.length) return null;
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'#000c', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'white', borderRadius:12, padding:24, maxWidth:500, width:'90vw' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15 }}>🧾 Refund Proof</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#888', lineHeight:1 }}>×</button>
+        </div>
+        <img src={proof[idx].url} alt={`Proof ${idx+1}`}
+          style={{ width:'100%', maxHeight:340, objectFit:'contain', borderRadius:8, border:'1px solid #ddd', display:'block' }} />
+        {proof.length > 1 && (
+          <div style={{ display:'flex', gap:8, marginTop:12, justifyContent:'center', flexWrap:'wrap' }}>
+            {proof.map((p, i) => (
+              <img key={i} src={p.url} alt="" onClick={() => setIdx(i)}
+                style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border: i===idx ? '2px solid #FF5A1F' : '2px solid #ddd', cursor:'pointer' }} />
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize:11, color:'#aaa', marginTop:10, textAlign:'center' }}>
+          {proof.length} screenshot{proof.length!==1?'s':''} uploaded by our team
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MyReturnsView({ onNewReturn }) {
   const navigate = useNavigate();
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
+  const [proofModal, setProofModal] = useState(null); // proof array to show
 
   useEffect(() => {
     returnsApi.getMy()
@@ -174,8 +203,18 @@ function MyReturnsView({ onNewReturn }) {
                 <div style={{ fontSize:10, fontWeight:700, color:'#888', letterSpacing:'.06em', textTransform:'uppercase' }}>Resolution</div>
                 <div style={{ fontSize:13, fontWeight:600, marginTop:2 }}>{resMeta?.label || req.resolution || '—'}</div>
               </div>
-              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
                 <StatusBadge status={req.status} />
+                {req.refundProof?.length > 0 && (
+                  <button onClick={() => setProofModal(req.refundProof)}
+                    title="View refund proof screenshots"
+                    style={{ display:'flex', alignItems:'center', gap:4, fontSize:12, color:'#0369a1', background:'#f0f9ff', border:'1px solid #0ea5e933', cursor:'pointer', fontWeight:700, padding:'5px 12px', borderRadius:20 }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="M1 12C1 12 5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    Proof
+                  </button>
+                )}
                 <button onClick={() => navigate(`/return-status/${req._id}`)}
                   style={{ fontSize:12, color:'white', background:'#FF5A1F', border:'none', cursor:'pointer', fontWeight:700, padding:'5px 14px', borderRadius:20 }}>
                   Track Return →
@@ -245,6 +284,7 @@ function MyReturnsView({ onNewReturn }) {
           </div>
         );
       })}
+      {proofModal && <RefundProofModal proof={proofModal} onClose={() => setProofModal(null)} />}
     </div>
   );
 }
@@ -263,6 +303,8 @@ export default function ReturnsPage() {
   const [selectedItem, setSelItem]  = useState(null);
   const [reason, setReason]         = useState('');
   const [resolution, setResolution] = useState('refund');
+  const [refundMethod, setRefundMethod] = useState('');   // '' means use default
+  const [bankDetails, setBankDetails]   = useState({});
   const [description, setDesc]      = useState('');
   const [photos, setPhotos]         = useState([]);
   const [video, setVideo]           = useState(null);
@@ -294,6 +336,10 @@ export default function ReturnsPage() {
       if (pid) fd.append('productId', typeof pid === 'object' ? pid.toString() : pid);
       fd.append('reason', reason);
       fd.append('resolution', resolution);
+      if (resolution === 'refund' && refundMethod) {
+        fd.append('refundMethod', refundMethod);
+        if (refundMethod !== 'original_payment') fd.append('bankDetails', JSON.stringify(bankDetails));
+      }
       if (description) fd.append('description', description);
       photos.forEach(file => fd.append('photos', file));
       if (video) fd.append('video', video);
@@ -693,6 +739,84 @@ export default function ReturnsPage() {
                         </div>
                       ))}
                     </div>
+
+                    {/* Refund method — shown only when Refund is selected */}
+                    {resolution === 'refund' && (() => {
+                      const isCOD = selectedOrder?.paymentMethod === 'COD';
+                      const effectiveMethod = refundMethod || (isCOD ? 'bank_transfer' : 'original_payment');
+                      const setB = (k, v) => setBankDetails(b => ({ ...b, [k]: v }));
+                      const inp = (label, key, placeholder) => (
+                        <div>
+                          <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>{label}</label>
+                          <input value={bankDetails[key]||''} onChange={e=>setB(key,e.target.value)} placeholder={placeholder}
+                            style={{ width:'100%', height:36, border:'1px solid #ddd', borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                        </div>
+                      );
+                      return (
+                        <div style={{ marginBottom:20, padding:'16px', background:'#f8fafc', borderRadius:8, border:'1px solid #e2e8f0' }}>
+                          <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#333' }}>💳 How would you like to receive your refund?</div>
+                          {isCOD && (
+                            <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:6, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#854d0e' }}>
+                              ℹ️ <strong>COD order</strong> — refund can only be sent to bank account or UPI (no original digital payment to return to).
+                            </div>
+                          )}
+                          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
+                            {!isCOD && (
+                              <div onClick={()=>{ setRefundMethod('original_payment'); setBankDetails({}); }}
+                                style={{ border:`2px solid ${effectiveMethod==='original_payment'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='original_payment'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
+                                <span style={{ fontSize:20 }}>💳</span>
+                                <div style={{ flex:1 }}>
+                                  <div style={{ fontWeight:700, fontSize:13 }}>Back to Original Payment</div>
+                                  <div style={{ fontSize:12, color:'#888' }}>Returned to {selectedOrder?.paymentMethod} · 5–7 business days</div>
+                                </div>
+                                <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${effectiveMethod==='original_payment'?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                  {effectiveMethod==='original_payment' && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
+                                </div>
+                              </div>
+                            )}
+                            <div onClick={()=>setRefundMethod('bank_transfer')}
+                              style={{ border:`2px solid ${effectiveMethod==='bank_transfer'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='bank_transfer'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
+                              <span style={{ fontSize:20 }}>🏦</span>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontWeight:700, fontSize:13 }}>Bank Transfer</div>
+                                <div style={{ fontSize:12, color:'#888' }}>Direct to your bank account · 3–5 business days</div>
+                              </div>
+                              <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${effectiveMethod==='bank_transfer'?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                {effectiveMethod==='bank_transfer' && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
+                              </div>
+                            </div>
+                            <div onClick={()=>setRefundMethod('upi')}
+                              style={{ border:`2px solid ${effectiveMethod==='upi'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='upi'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
+                              <span style={{ fontSize:20 }}>📱</span>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontWeight:700, fontSize:13 }}>UPI Transfer</div>
+                                <div style={{ fontSize:12, color:'#888' }}>Instant transfer to UPI ID · Within 24 hours</div>
+                              </div>
+                              <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${effectiveMethod==='upi'?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                {effectiveMethod==='upi' && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
+                              </div>
+                            </div>
+                          </div>
+                          {effectiveMethod === 'bank_transfer' && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                              <div style={{ display:'flex', gap:10 }}>
+                                {inp('Account Holder Name *', 'accountName', 'As per bank records')}
+                                {inp('Bank Name *', 'bankName', 'State Bank of India')}
+                              </div>
+                              <div style={{ display:'flex', gap:10 }}>
+                                {inp('Account Number *', 'accountNumber', '1234567890')}
+                                {inp('IFSC Code *', 'ifscCode', 'SBIN0001234')}
+                              </div>
+                            </div>
+                          )}
+                          {effectiveMethod === 'upi' && (
+                            <div>
+                              {inp('UPI ID *', 'upiId', 'yourname@paytm / @gpay / @ybl')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     <button onClick={handleSubmit} disabled={loading}
                       style={{ width:'100%', padding:'13px', borderRadius:8, background:'#FF5A1F', border:'none', color:'white', fontWeight:700, fontSize:15, cursor:'pointer', opacity:loading?0.7:1 }}>

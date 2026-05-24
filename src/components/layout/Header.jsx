@@ -40,25 +40,42 @@ function CopyButton({ code }) {
 
 function NotificationDropdown({ onClose }) {
   const navigate = useNavigate();
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, fetchNotifications } = useNotifications();
+  const [refreshing, setRefreshing] = useState(false);
   const recent = notifications.slice(0, 8);
 
+  // Fetch fresh notifications every time the dropdown opens
+  useEffect(() => {
+    let cancelled = false;
+    setRefreshing(true);
+    fetchNotifications().finally(() => { if (!cancelled) setRefreshing(false); });
+    return () => { cancelled = true; };
+  }, [fetchNotifications]);
+
   return (
-    <div style={{
+    <div className="notif-dropdown" style={{
       position:'absolute', top:'calc(100% + 10px)', right:0,
       width:380, background:'white', borderRadius:14,
-      boxShadow:'0 8px 32px #0000001a, 0 0 0 1px #e5e7eb',
+      boxShadow:'0 8px 32px #0000001a',
+      border:'1px solid rgba(0,0,0,0.1)',
       zIndex:200, overflow:'hidden',
     }}>
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid #f0f0f0' }}>
-        <div style={{ fontWeight:800, fontSize:15 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, fontWeight:800, fontSize:15 }}>
           Notifications
-          {unreadCount > 0 && <span style={{ fontSize:12, fontWeight:700, color:'#FF5A1F', background:'#FF5A1F15', padding:'1px 7px', borderRadius:99, marginLeft:6 }}>{unreadCount} new</span>}
+          {unreadCount > 0 && <span style={{ fontSize:12, fontWeight:700, color:'#FF5A1F', background:'#FF5A1F15', padding:'1px 7px', borderRadius:99 }}>{unreadCount} new</span>}
+          {refreshing && (
+            <span style={{ display:'inline-block', width:12, height:12, border:'2px solid #e5e7eb', borderTopColor:'#FF5A1F', borderRadius:'50%', animation:'spin .7s linear infinite' }} />
+          )}
         </div>
-        {unreadCount > 0 && (
-          <button onClick={markAllRead} style={{ fontSize:12, fontWeight:700, color:'#007185', background:'none', border:'none', cursor:'pointer' }}>Mark all read</button>
-        )}
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <button onClick={async () => { setRefreshing(true); await fetchNotifications(); setRefreshing(false); }}
+            title="Refresh" style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#9ca3af', lineHeight:1, padding:'2px 4px' }}>↻</button>
+          {unreadCount > 0 && (
+            <button onClick={markAllRead} style={{ fontSize:12, fontWeight:700, color:'#007185', background:'none', border:'none', cursor:'pointer' }}>Mark all read</button>
+          )}
+        </div>
       </div>
 
       {/* List */}
@@ -243,6 +260,7 @@ export default function Header() {
   );
 
   return (
+    <>
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
       transform: hidden ? 'translateY(-100%)' : 'translateY(0)',
@@ -526,108 +544,102 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Mobile drawer */}
-          {mobileOpen && (
-            <>
-              <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 200 }} />
-              <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 285, background: '#131921', zIndex: 201, overflowY: 'auto', overflowX: 'hidden' }}>
-                {/* Drawer header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: '#1a2a3a', borderBottom: '1px solid #2a2a2a' }}>
-                  {user ? (
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>Hello, {user.name.split(' ')[0]}</div>
-                      {(user.role === 'admin' || user.role === 'employee') && (
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4, marginTop: 4, display: 'inline-block',
-                          background: user.role === 'admin' ? '#7c3aed33' : '#f59e0b22',
-                          color: user.role === 'admin' ? '#c4b5fd' : '#fcd34d', textTransform: 'uppercase' }}>
-                          {user.role}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
-                      style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                      Sign In
-                    </button>
-                  )}
-                  <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>✕</button>
-                </div>
-
-                {/* Drawer nav */}
-                <div style={{ padding: '8px 0' }}>
-                  <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Shop</div>
-                  {[
-                    { label: '🏠  Home', path: '/' },
-                    { label: '🛒  All Products', path: '/products' },
-                    { label: '⚡  Flash Sale', path: '/products?sort=discount' },
-                    { label: '🆕  New Arrivals', path: '/products?sort=newest' },
-                    { label: '🔥  Top Selling', path: '/products?sort=popular' },
-                    { label: '🏷️  Brands', path: '/products?sort=brand' },
-                  ].map(item => (
-                    <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
-                      style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                        textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                      {item.label}
-                    </button>
-                  ))}
-
-                  {navCats.length > 0 && (
-                    <>
-                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                      <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Categories</div>
-                      {navCats.slice(0, 8).map(c => (
-                        <button key={c.id || c.name} onClick={() => { navigate(`/products?category=${encodeURIComponent(c.name)}`); setMobileOpen(false); }}
-                          style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                            textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                          {c.emo}  {c.name}
-                        </button>
-                      ))}
-                    </>
-                  )}
-
-                  {user && (
-                    <>
-                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                      <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Account</div>
-                      {[
-                        { label: '📦  My Orders', path: '/orders' },
-                        { label: '❤️  Wishlist', path: '/wishlist' },
-                        { label: '👤  Profile', path: '/profile' },
-                        { label: '💬  Support', path: '/support' },
-                        ...(user.role === 'admin' ? [{ label: '⚙️  Admin Panel', path: '/admin' }] : []),
-                        ...(user.role === 'employee' ? [{ label: '🖥️  Employee Panel', path: '/employee' }] : []),
-                      ].map(item => (
-                        <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
-                          style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                            textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                          {item.label}
-                        </button>
-                      ))}
-                    </>
-                  )}
-
-                  {!user && (
-                    <>
-                      <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                      <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
-                        style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                          textAlign: 'left', color: '#FF5A1F', fontSize: 14, cursor: 'pointer', fontWeight: 700, boxSizing: 'border-box' }}>
-                        Sign In / Register →
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
         </>
       )}
     </nav>
+    {isMobile && mobileOpen && (
+      <>
+        <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 200 }} />
+        <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 285, background: '#131921', zIndex: 201, overflowY: 'auto', overflowX: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: '#1a2a3a', borderBottom: '1px solid #2a2a2a' }}>
+            {user ? (
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>Hello, {user.name.split(' ')[0]}</div>
+                {(user.role === 'admin' || user.role === 'employee') && (
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4, marginTop: 4, display: 'inline-block',
+                    background: user.role === 'admin' ? '#7c3aed33' : '#f59e0b22',
+                    color: user.role === 'admin' ? '#c4b5fd' : '#fcd34d', textTransform: 'uppercase' }}>
+                    {user.role}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+                style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                Sign In
+              </button>
+            )}
+            <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>✕</button>
+          </div>
+          <div style={{ padding: '8px 0' }}>
+            <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Shop</div>
+            {[
+              { label: '🏠  Home', path: '/' },
+              { label: '🛒  All Products', path: '/products' },
+              { label: '⚡  Flash Sale', path: '/products?sort=discount' },
+              { label: '🆕  New Arrivals', path: '/products?sort=newest' },
+              { label: '🔥  Top Selling', path: '/products?sort=popular' },
+              { label: '🏷️  Brands', path: '/products?sort=brand' },
+            ].map(item => (
+              <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+                style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                  textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                {item.label}
+              </button>
+            ))}
+            {navCats.length > 0 && (
+              <>
+                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Categories</div>
+                {navCats.slice(0, 8).map(c => (
+                  <button key={c.id || c.name} onClick={() => { navigate(`/products?category=${encodeURIComponent(c.name)}`); setMobileOpen(false); }}
+                    style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                      textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                    {c.emo}  {c.name}
+                  </button>
+                ))}
+              </>
+            )}
+            {user && (
+              <>
+                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Account</div>
+                {[
+                  { label: '📦  My Orders', path: '/orders' },
+                  { label: '❤️  Wishlist', path: '/wishlist' },
+                  { label: '👤  Profile', path: '/profile' },
+                  { label: '💬  Support', path: '/support' },
+                  ...(user.role === 'admin' ? [{ label: '⚙️  Admin Panel', path: '/admin' }] : []),
+                  ...(user.role === 'employee' ? [{ label: '🖥️  Employee Panel', path: '/employee' }] : []),
+                ].map(item => (
+                  <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+                    style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                      textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
+                    {item.label}
+                  </button>
+                ))}
+              </>
+            )}
+            {!user && (
+              <>
+                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
+                <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+                  style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
+                    textAlign: 'left', color: '#FF5A1F', fontSize: 14, cursor: 'pointer', fontWeight: 700, boxSizing: 'border-box' }}>
+                  Sign In / Register →
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+    </>
   );
 }

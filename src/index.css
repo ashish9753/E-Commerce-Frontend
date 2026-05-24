@@ -27,6 +27,7 @@
 }
 
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 html { scroll-behavior: smooth; }
 body { font-feature-settings: "ss01","cv11"; -webkit-font-smoothing: antialiased; }
@@ -161,4 +162,43 @@ input[type=number] { -moz-appearance: textfield; }
     padding: 6px 0 8px;
   }
   .ord-search-wrap input { width: 100% !important; }
+}
+
+/* Orders page mobile responsiveness */
+@media (max-width: 520px) {
+  .ord-order-header { gap: 12px !important; padding: 10px 14px !important; }
+  .ord-order-header > div:last-child { margin-left: 0 !important; text-align: left !important; width: 100%; }
+  .ord-order-header > div:last-child > div { justify-content: flex-start !important; }
+  .ord-item { flex-wrap: wrap; }
+  .ord-item-actions {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .ord-item-actions button,
+  .ord-item-actions span { flex: 1 1 auto; min-width: 100px; text-align: center; }
+}
+
+/* Notification dropdown — responsive */
+.notif-dropdown {
+  /* desktop: stays as inline style */
+}
+@media (max-width: 768px) {
+  .notif-dropdown {
+    position: fixed !important;
+    top: 110px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 130px) !important;
+    overflow-y: auto !important;
+    border-radius: 12px !important;
+  }
+  /* Let outer container scroll; disable inner list's own scroll */
+  .notif-dropdown > div:nth-child(2) {
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
 }

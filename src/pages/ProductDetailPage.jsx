@@ -119,11 +119,20 @@ export default function ProductDetailPage() {
     if (result?.success === false) toast(result.error, 'error');
     else toast(`${product.name} added to cart`);
   };
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!user) { navigate('/login'); return; }
-    const result = await addToCart(product._id, qty);
-    if (result?.success === false) { toast(result.error, 'error'); return; }
-    navigate('/cart');
+    navigate('/checkout', {
+      state: {
+        buyNow: {
+          productId: product._id,
+          title:     product.name || product.title,
+          price:     product.discountPrice || product.price,
+          image:     product.images?.[0],
+          stock:     product.stock,
+          quantity:  qty,
+        },
+      },
+    });
   };
   const handleWish = async () => {
     if (!user) { toast('Please sign in to save items', 'error'); navigate('/login'); return; }

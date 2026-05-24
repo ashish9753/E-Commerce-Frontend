@@ -20,9 +20,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
+    // Backend clears the httpOnly refresh cookie when /auth/logout runs.
     authApi.logout().catch(() => {});
     localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     clearApiCache(); // drop cached catalog/product data so the next user starts clean
     setUser(null);
@@ -47,7 +47,6 @@ export function AuthProvider({ children }) {
       })
       .catch(() => {
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
         setUser(null);
       })
@@ -57,9 +56,8 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       const { data } = await authApi.login({ email, password });
-      const { user: u, accessToken, refreshToken } = data.data;
+      const { user: u, accessToken } = data.data;
       localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(u));
       setUser(u);
       return { success: true, user: u };
@@ -71,9 +69,8 @@ export function AuthProvider({ children }) {
   const register = async ({ name, email, phone, password }) => {
     try {
       const { data } = await authApi.register({ name, email, phone, password });
-      const { user: u, accessToken, refreshToken } = data.data;
+      const { user: u, accessToken } = data.data;
       localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(u));
       setUser(u);
       return { success: true, user: u };

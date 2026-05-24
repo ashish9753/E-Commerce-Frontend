@@ -2,9 +2,12 @@ import axios from 'axios';
 
 const BASE_URL = '/api/v1';
 
+// withCredentials so the httpOnly refresh-token cookie is sent along with
+// /auth/refresh-token requests. The access token still rides in the
+// Authorization header on every other request.
 export const client = axios.create({
   baseURL: BASE_URL,
-  withCredentials: false,
+  withCredentials: true,
 });
 
 // Attach access token to every request
@@ -29,13 +32,6 @@ client.interceptors.response.use(
     const original = error.config;
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (!refreshToken) {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        window.dispatchEvent(new Event('auth:logout'));
-        return Promise.reject(error);
-      }
 
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -48,11 +44,15 @@ client.interceptors.response.use(
 
       isRefreshing = true;
       try {
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, { refreshToken });
+        // The refresh token is in an httpOnly cookie — sent automatically via
+        // withCredentials. We never see or store it in JS.
+        const { data } = await axios.post(
+          `${BASE_URL}/auth/refresh-token`,
+          {},
+          { withCredentials: true },
+        );
         const newAccess = data.data.accessToken;
-        const newRefresh = data.data.refreshToken;
         localStorage.setItem('accessToken', newAccess);
-        localStorage.setItem('refreshToken', newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${newAccess}`;
         processQueue(null, newAccess);
         original.headers.Authorization = `Bearer ${newAccess}`;
@@ -60,7 +60,6 @@ client.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         window.dispatchEvent(new Event('auth:logout'));
         return Promise.reject(refreshError);
       } finally {

@@ -173,8 +173,8 @@ function Th({ children }) {
 function Td({ children, style }) {
   return <td style={{ padding: '14px 14px', fontSize: 13.5, borderBottom: `1px solid ${C.line}`, color: C.text, verticalAlign: 'middle', ...style }}>{children}</td>;
 }
-function Input({ value, onChange, placeholder, style }) {
-  return <input value={value} onChange={onChange} placeholder={placeholder}
+function Input({ value, onChange, onKeyDown, placeholder, style }) {
+  return <input value={value} onChange={onChange} onKeyDown={onKeyDown} placeholder={placeholder}
     style={{ height: 36, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', fontSize: 13, outline: 'none', background: C.bg, color: C.text, fontFamily: 'inherit', ...style }} />;
 }
 function Select({ value, onChange, children, style }) {
@@ -720,6 +720,8 @@ function UserDetailModal({ user, onClose }) {
 function UsersTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(1);
+  const [pagination, setPag]  = useState({ total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
   const [busy, setBusy]       = useState(null);
   const [search, setSearch]   = useState('');
   const [roleFilter, setRole] = useState('');
@@ -729,19 +731,33 @@ function UsersTab({ globalSearch = '' }) {
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
-  useEffect(() => {
-    adminApi.getUsers({ limit: 500 })
-      .then(r => setAll(r.data?.data?.data || []))
-      .catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  // appliedSearch is only updated on Enter or Search button — no API calls while typing
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const applySearch = () => { setPage(1); setAppliedSearch(search); };
 
-  const users = all.filter(u => {
-    const q = search.toLowerCase();
-    const matchQ = !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.includes(q);
-    const matchR = !roleFilter || u.role === roleFilter;
-    const matchS = !statusFilter || (statusFilter === 'blocked' ? u.isBlocked : !u.isBlocked);
-    return matchQ && matchR && matchS;
-  });
+  useEffect(() => { setPage(1); }, [roleFilter, statusFilter]);
+
+  const hasLoadedRef = useRef(false);
+
+  const fetchUsers = useCallback(() => {
+    setLoading(true);
+    const params = { limit: 100, page };
+    if (roleFilter) params.role = roleFilter;
+    if (statusFilter === 'blocked')  params.isBlocked = true;
+    if (statusFilter === 'active')   params.isBlocked = false;
+    if (appliedSearch) params.search = appliedSearch;
+    adminApi.getUsers(params)
+      .then(r => {
+        setAll(r.data?.data?.data || []);
+        setPag(r.data?.data?.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+      })
+      .catch(() => {}).finally(() => { setLoading(false); hasLoadedRef.current = true; });
+  }, [page, roleFilter, statusFilter, appliedSearch]);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  // server already filtered — just use all
+  const users = all;
 
   const roleCounts = { admin: 0, employee: 0, user: 0 };
   all.forEach(u => { if (roleCounts[u.role] !== undefined) roleCounts[u.role]++; });
@@ -781,10 +797,10 @@ function UsersTab({ globalSearch = '' }) {
     setBusy(null);
   };
 
-  if (loading) return <Loader />;
+  if (loading && !hasLoadedRef.current) return <Loader />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, opacity: loading ? 0.55 : 1, transition: 'opacity .2s', pointerEvents: loading ? 'none' : 'auto' }}>
       {viewUser && <UserDetailModal user={viewUser} onClose={() => setViewUser(null)} />}
       {/* Mini KPI */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
@@ -853,11 +869,17 @@ function UsersTab({ globalSearch = '' }) {
       {/* Filters */}
       <Card title="Filter & Search">
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 0 }}>
-          <Input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, email, phone…"
-            style={{ flex: 1, minWidth: 220 }}
-          />
+          <div style={{ flex: 1, minWidth: 220, display: 'flex', gap: 6 }}>
+            <Input
+              value={search} onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && applySearch()}
+              placeholder="Search by name, email, phone…"
+              style={{ flex: 1 }}
+            />
+            <Btn variant="primary" onClick={applySearch} style={{ flexShrink: 0 }}>
+              <SvgAt el={Icon.search} size={14} /> Search
+            </Btn>
+          </div>
           <Select value={roleFilter} onChange={e => setRole(e.target.value)}>
             <option value="">All Roles</option>
             <option value="user">User</option>
@@ -869,17 +891,18 @@ function UsersTab({ globalSearch = '' }) {
             <option value="active">Active</option>
             <option value="blocked">Blocked</option>
           </Select>
-          {(search || roleFilter || statusFilter) && (
-            <Btn onClick={() => { setSearch(''); setRole(''); setSt(''); }}>Clear</Btn>
+          {(appliedSearch || roleFilter || statusFilter) && (
+            <Btn onClick={() => { setSearch(''); setAppliedSearch(''); setRole(''); setSt(''); setPage(1); }}>Clear</Btn>
           )}
         </div>
         <div style={{ marginTop: 12, fontSize: 13, color: C.mute }}>
-          Showing <strong>{users.length}</strong> of <strong>{all.length}</strong> users
+          <strong style={{color:C.text}}>{pagination.total}</strong> {appliedSearch ? 'result' + (pagination.total !== 1 ? 's' : '') + ' found' : 'total users'}
         </div>
       </Card>
 
       {/* Table */}
-      <Card title={`Users (${users.length})`}>
+      <Card title={`Users (${pagination.total})`}>
+        <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} />
         {users.length === 0
           ? <Empty text="No users match your filters" />
           : <div style={{ overflowX: 'auto' }}>
@@ -925,6 +948,9 @@ function UsersTab({ globalSearch = '' }) {
               </table>
             </div>
         }
+        <div style={{ borderTop:`1px solid ${C.line}`, marginTop:8, paddingTop:4 }}>
+          <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} />
+        </div>
       </Card>
     </div>
   );
@@ -933,24 +959,40 @@ function UsersTab({ globalSearch = '' }) {
 /* ══════════════════════════════════════════════════════
    SELLERS TAB
 ══════════════════════════════════════════════════════ */
-const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', shopName:'', businessAddress:'', gstNumber:'', shopDescription:'' };
+const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', designation:'', department:'', joiningDate:'', monthlySalary:'', businessAddress:'' };
+const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const EMPTY_SAL = { month: new Date().getMonth()+1, year: new Date().getFullYear(), baseSalary:'', deductions:[], bonuses:[], status:'PENDING', notes:'' };
+
+const EmpInp = { width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' };
+const EmpLbl = ({ ch }) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{ch}</label>;
 
 function EmployeesTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy]       = useState(null);
   const [search, setSearch]   = useState('');
-  const [verFilter, setVer]   = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [addMode, setAddMode] = useState('new'); // 'new' | 'existing'
+  const [statusFilter, setStatusFilter] = useState('');
+
+  const [showAdd, setShowAdd]     = useState(false);
+  const [editEmp, setEditEmp]     = useState(null);
+  const [salaryEmp, setSalaryEmp] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+
   const [form, setForm, clearEmpDraft] = useFormDraft('admin-emp-draft', EMPTY_EMP_FORM);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating]   = useState(false);
   const [createErr, setCreateErr] = useState('');
-  // existing-user mode
-  const [allUsers, setAllUsers]       = useState([]);
-  const [userSearch, setUserSearch]   = useState('');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [existShop, setExistShop]     = useState({ shopName: '', businessAddress: '', gstNumber: '', shopDescription: '' });
+
+  const [editForm, setEditForm]     = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editErr, setEditErr]       = useState('');
+
+  const [salaryRecords, setSalaryRecords]   = useState([]);
+  const [salaryLoading, setSalaryLoading]   = useState(false);
+  const [salaryForm, setSalaryForm]         = useState(EMPTY_SAL);
+  const [salaryEditId, setSalaryEditId]     = useState(null);
+  const [salarySaving, setSalarySaving]     = useState(false);
+  const [salaryErr, setSalaryErr]           = useState('');
+  const [salaryEmpInfo, setSalaryEmpInfo]   = useState(null);
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
@@ -962,270 +1004,435 @@ function EmployeesTab({ globalSearch = '' }) {
 
   const employees = all.filter(s => {
     const q = search.toLowerCase();
-    const matchQ = !q || s.shopName?.toLowerCase().includes(q) || s.user?.name?.toLowerCase().includes(q) || s.user?.email?.toLowerCase().includes(q);
-    const matchV = !verFilter || (verFilter === 'verified' ? s.isVerified : !s.isVerified);
-    return matchQ && matchV;
+    const matchQ = !q || s.user?.name?.toLowerCase().includes(q) || s.user?.email?.toLowerCase().includes(q)
+      || s.designation?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q);
+    const matchS = !statusFilter
+      || (statusFilter==='active'   && !s.isBlocked)
+      || (statusFilter==='blocked'  &&  s.isBlocked)
+      || (statusFilter==='verified' &&  s.isVerified)
+      || (statusFilter==='pending'  && !s.isVerified);
+    return matchQ && matchS;
   });
 
-  const verified = all.filter(s => s.isVerified).length;
+  const active  = all.filter(s => !s.isBlocked).length;
+  const blocked = all.filter(s =>  s.isBlocked).length;
+  const totalPayroll = all.reduce((s, e) => s + (e.monthlySalary || 0), 0);
 
-  const handleVerify = async (id, isVerified) => {
-    setBusy(id);
-    await adminApi.verifyEmployee(id).catch(() => {});
-    setAll(prev => prev.map(x => x._id === id ? { ...x, isVerified: !isVerified } : x));
-    setBusy(null);
+  const handleBlock = async (emp) => {
+    setBusy(emp._id);
+    try {
+      await adminApi.blockEmployee(emp._id);
+      setAll(prev => prev.map(x => x._id===emp._id ? {...x, isBlocked: !x.isBlocked} : x));
+    } catch(e) {} finally { setBusy(null); }
   };
-
-  const openAddModal = () => {
-    setAddMode('new'); setSelectedUser(null); setUserSearch(''); setAllUsers([]); setCreateErr(''); setShowAdd(true);
+  const handleDelete = async () => {
+    if (!confirmDel) return;
+    setBusy(confirmDel._id);
+    try {
+      await adminApi.deleteEmployee(confirmDel._id);
+      setAll(prev => prev.filter(x => x._id !== confirmDel._id));
+    } catch(e) {} finally { setBusy(null); setConfirmDel(null); }
   };
-
-  const loadUsers = () => {
-    if (allUsers.length) return;
-    adminApi.getUsers({ limit: 200 }).then(r => setAllUsers(r.data?.data?.data || [])).catch(() => {});
-  };
-
   const handleCreate = async () => {
-    if (addMode === 'existing') {
-      if (!selectedUser) { setCreateErr('Select a user first.'); return; }
-      if (!existShop.shopName.trim()) { setCreateErr('Shop name is required.'); return; }
-      setCreating(true); setCreateErr('');
-      try {
-        const res = await adminApi.registerExistingUserAsEmployee({ userId: selectedUser._id, ...existShop });
-        const emp = res.data?.data?.employee;
-        if (emp) setAll(prev => [emp, ...prev]);
-        setShowAdd(false);
-      } catch (e) {
-        setCreateErr(e?.response?.data?.message || 'Failed to register user as employee.');
-      } finally { setCreating(false); }
-      return;
-    }
-    if (!form.name || !form.email || !form.phone || !form.password || !form.shopName) {
-      setCreateErr('Name, email, phone, password and shop name are required.'); return;
-    }
+    if (!form.name || !form.email || !form.phone || !form.password) { setCreateErr('Name, email, phone and password are required.'); return; }
     setCreating(true); setCreateErr('');
     try {
-      const res = await adminApi.createEmployee(form);
+      const res = await adminApi.createEmployee({ ...form, monthlySalary: form.monthlySalary ? Number(form.monthlySalary) : 0 });
       const emp = res.data?.data?.employee;
       if (emp) setAll(prev => [emp, ...prev]);
       setShowAdd(false); clearEmpDraft();
-    } catch (e) {
-      setCreateErr(e?.response?.data?.message || 'Failed to create employee.');
-    } finally { setCreating(false); }
+    } catch(e) { setCreateErr(e?.response?.data?.message || 'Failed.'); } finally { setCreating(false); }
+  };
+  const openEdit = (emp) => {
+    setEditEmp(emp);
+    setEditForm({
+      name: emp.user?.name || '', email: emp.user?.email || '', phone: emp.user?.phone || '', newPassword: '',
+      designation: emp.designation||'', department: emp.department||'',
+      joiningDate: emp.joiningDate ? emp.joiningDate.slice(0,10) : '',
+      monthlySalary: emp.monthlySalary||'', businessAddress: emp.businessAddress||'',
+    });
+    setEditErr('');
+  };
+  const handleEditSave = async () => {
+    if (!editForm.name || !editForm.email || !editForm.phone) { setEditErr('Name, email and phone are required.'); return; }
+    setEditSaving(true); setEditErr('');
+    try {
+      const payload = { ...editForm, monthlySalary: editForm.monthlySalary ? Number(editForm.monthlySalary) : 0 };
+      if (!payload.newPassword) delete payload.newPassword;
+      const res = await adminApi.updateEmployee(editEmp._id, payload);
+      const updated = res.data?.data?.employee;
+      setAll(prev => prev.map(x => x._id===editEmp._id ? {...x, ...updated} : x));
+      setEditEmp(null);
+    } catch(e) { setEditErr(e?.response?.data?.message || 'Save failed.'); } finally { setEditSaving(false); }
+  };
+  const openSalary = async (emp) => {
+    setSalaryEmp(emp); setSalaryRecords([]); setSalaryLoading(true);
+    setSalaryForm({ ...EMPTY_SAL, baseSalary: emp.monthlySalary || '' });
+    setSalaryEditId(null); setSalaryErr(''); setSalaryEmpInfo(null);
+    try {
+      const res = await adminApi.getEmployeeSalary(emp._id);
+      setSalaryRecords(res.data?.data?.records || []);
+      setSalaryEmpInfo(res.data?.data?.employee || null);
+    } catch(e) {} finally { setSalaryLoading(false); }
+  };
+  const addDedRow = () => setSalaryForm(f => ({ ...f, deductions:[...f.deductions,{reason:'',amount:''}] }));
+  const addBonRow = () => setSalaryForm(f => ({ ...f, bonuses:[...f.bonuses,{reason:'',amount:''}] }));
+  const rmDed = i => setSalaryForm(f => ({ ...f, deductions:f.deductions.filter((_,j)=>j!==i) }));
+  const rmBon = i => setSalaryForm(f => ({ ...f, bonuses:f.bonuses.filter((_,j)=>j!==i) }));
+  const setDF = (i,k,v) => setSalaryForm(f => { const d=[...f.deductions]; d[i]={...d[i],[k]:v}; return {...f,deductions:d}; });
+  const setBF = (i,k,v) => setSalaryForm(f => { const b=[...f.bonuses];    b[i]={...b[i],[k]:v}; return {...f,bonuses:b};    });
+  const salNet = () => {
+    const base=Number(salaryForm.baseSalary)||0, ded=salaryForm.deductions.reduce((s,d)=>s+(Number(d.amount)||0),0), bon=salaryForm.bonuses.reduce((s,b)=>s+(Number(b.amount)||0),0);
+    return Math.max(0, base-ded+bon);
+  };
+  const startEditSal = (rec) => { setSalaryEditId(rec._id); setSalaryForm({ month:rec.month, year:rec.year, baseSalary:rec.baseSalary, deductions:rec.deductions.map(d=>({...d})), bonuses:rec.bonuses.map(b=>({...b})), status:rec.status, notes:rec.notes||'' }); setSalaryErr(''); };
+  const handleSalSave = async () => {
+    if (!salaryForm.baseSalary) { setSalaryErr('Base salary is required.'); return; }
+    setSalarySaving(true); setSalaryErr('');
+    try {
+      const payload = { month:Number(salaryForm.month), year:Number(salaryForm.year), baseSalary:Number(salaryForm.baseSalary), deductions:salaryForm.deductions.filter(d=>d.reason&&d.amount).map(d=>({reason:d.reason,amount:Number(d.amount)})), bonuses:salaryForm.bonuses.filter(b=>b.reason&&b.amount).map(b=>({reason:b.reason,amount:Number(b.amount)})), status:salaryForm.status, notes:salaryForm.notes };
+      if (salaryEditId) {
+        const res = await adminApi.updateSalaryRecord(salaryEditId, payload);
+        setSalaryRecords(prev => prev.map(r => r._id===salaryEditId ? res.data?.data?.record : r));
+        setSalaryEditId(null);
+      } else {
+        const res = await adminApi.addSalaryRecord(salaryEmp._id, payload);
+        setSalaryRecords(prev => [res.data?.data?.record, ...prev]);
+      }
+      setSalaryForm({ ...EMPTY_SAL, baseSalary: salaryEmpInfo?.monthlySalary||salaryEmp.monthlySalary||'' });
+    } catch(e) { setSalaryErr(e?.response?.data?.message || 'Failed.'); } finally { setSalarySaving(false); }
+  };
+  const delSalRec = async (id) => {
+    if (!window.confirm('Delete this salary record?')) return;
+    try { await adminApi.deleteSalaryRecord(id); setSalaryRecords(prev=>prev.filter(r=>r._id!==id)); } catch(e) {}
+  };
+  const markPaid = async (rec) => {
+    try { const res=await adminApi.updateSalaryRecord(rec._id,{status:'PAID'}); setSalaryRecords(prev=>prev.map(r=>r._id===rec._id?res.data?.data?.record:r)); } catch(e) {}
   };
 
   if (loading) return <Loader />;
 
-  const donutData = [
-    { name: 'Verified', value: verified },
-    { name: 'Pending', value: all.length - verified },
-  ];
-
-  const F = (k) => ({ value: form[k], onChange: e => { setForm(p => ({...p, [k]: e.target.value})); setCreateErr(''); } });
+  const OV = { position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 };
+  const MB = { background:C.card, borderRadius:16, width:'100%', boxShadow:'0 24px 64px rgba(0,0,0,.4)', maxHeight:'92vh', overflowY:'auto' };
+  const MH = (title, onClose) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 24px 0' }}>
+      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:17, color:C.text }}>{title}</div>
+      <button onClick={onClose} style={{ background:'none', border:'none', color:C.mute, fontSize:22, cursor:'pointer' }}>✕</button>
+    </div>
+  );
+  const MP = { padding:'14px 24px 24px' };
+  const EI = { width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' };
+  const EL = (t) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{t}</label>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── Add Employee Modal ── */}
       {showAdd && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <div style={{ background: C.card, borderRadius:16, padding:28, width:'100%', maxWidth:520, boxShadow:'0 24px 64px rgba(0,0,0,.35)', maxHeight:'90vh', overflowY:'auto' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, color:C.text }}>Add Employee</div>
-              <button onClick={() => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); }}
-                style={{ background:'none', border:'none', color:C.mute, fontSize:20, cursor:'pointer', lineHeight:1 }}>✕</button>
-            </div>
-
-            {/* Mode toggle */}
-            <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:10, padding:4, marginBottom:20 }}>
-              {[['new','Create New User'],['existing','Use Existing User']].map(([mode, label]) => (
-                <button key={mode} onClick={() => { setAddMode(mode); setCreateErr(''); if (mode==='existing') loadUsers(); }}
-                  style={{ flex:1, padding:'8px 0', borderRadius:7, border:'none', fontWeight:600, fontSize:12, cursor:'pointer', fontFamily:'inherit',
-                    background: addMode===mode ? C.accent : 'transparent', color: addMode===mode ? '#fff' : C.mute }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {addMode === 'new' ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={OV}>
+          <div style={{ ...MB, maxWidth:580 }}>
+            {MH('Add New Employee', () => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); })}
+            <div style={MP}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 {[
-                  { label:'Full Name *', key:'name', placeholder:'Employee full name' },
-                  { label:'Email *', key:'email', placeholder:'employee@example.com', type:'email' },
-                  { label:'Phone *', key:'phone', placeholder:'10-digit mobile number' },
-                  { label:'Password *', key:'password', placeholder:'Set a password', type:'password' },
-                  { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
-                  { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
-                  { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
-                ].map(({ label, key, placeholder, type='text' }) => (
-                  <div key={key}>
-                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
-                    <input type={type} placeholder={placeholder} {...F(key)}
-                      style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
+                  { l:'Full Name *',        k:'name',          t:'text',     p:'Employee full name',   col:'1/-1' },
+                  { l:'Email *',            k:'email',         t:'email',    p:'employee@email.com' },
+                  { l:'Phone *',            k:'phone',         t:'text',     p:'Mobile number' },
+                  { l:'Password *',         k:'password',      t:'password', p:'Login password' },
+                  { l:'Designation',        k:'designation',   t:'text',     p:'e.g. Sales Manager' },
+                  { l:'Department',         k:'department',    t:'text',     p:'e.g. Sales' },
+                  { l:'Joining Date',       k:'joiningDate',   t:'date',     p:'' },
+                  { l:'Monthly Salary (₹)', k:'monthlySalary', t:'number',   p:'e.g. 25000' },
+                  { l:'Work Address',       k:'businessAddress',t:'text',    p:'Office / work location', col:'1/-1' },
+                ].map(({ l, k, t, p, col }) => (
+                  <div key={k} style={col ? { gridColumn:col } : {}}>
+                    {EL(l)}
+                    <input value={form[k]} onChange={e=>{setForm(f=>({...f,[k]:e.target.value}));setCreateErr('');}} type={t} placeholder={p} style={EI} />
                   </div>
                 ))}
-                <div>
-                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
-                  <textarea placeholder="Brief description (optional)" {...F('shopDescription')} rows={2}
-                    style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
-                </div>
               </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                {/* User search */}
-                <div>
-                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Search Existing User *</label>
-                  <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search by name or email…"
-                    style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
-                  {/* User results */}
-                  {userSearch.length > 1 && (
-                    <div style={{ border:`1px solid ${C.line}`, borderRadius:8, marginTop:6, maxHeight:160, overflowY:'auto', background:C.bg }}>
-                      {allUsers.filter(u => u.role !== 'employee' && (u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))).slice(0,8).map(u => (
-                        <div key={u._id} onClick={() => { setSelectedUser(u); setUserSearch(u.name + ' — ' + u.email); setCreateErr(''); }}
-                          style={{ padding:'10px 14px', cursor:'pointer', borderBottom:`1px solid ${C.line}`, transition:'background .1s' }}
-                          onMouseEnter={e => e.currentTarget.style.background = C.active}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <div style={{ fontSize:13, fontWeight:600, color:C.text }}>{u.name}</div>
-                          <div style={{ fontSize:11, color:C.mute }}>{u.email} · {u.phone || 'no phone'}</div>
-                        </div>
-                      ))}
-                      {allUsers.filter(u => u.role !== 'employee' && (u.name?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()))).length === 0 && (
-                        <div style={{ padding:'12px 14px', color:C.mute, fontSize:12 }}>No matching users found</div>
-                      )}
-                    </div>
-                  )}
-                  {selectedUser && (
-                    <div style={{ marginTop:8, padding:'8px 12px', borderRadius:8, background:C.green+'15', border:`1px solid ${C.green}44`, fontSize:12, color:C.green, fontWeight:600 }}>
-                      ✓ Selected: {selectedUser.name} ({selectedUser.email})
-                    </div>
-                  )}
-                </div>
-                {/* Shop details */}
-                {[
-                  { label:'Shop Name *', key:'shopName', placeholder:'Shop / Business name' },
-                  { label:'Business Address', key:'businessAddress', placeholder:'Address (optional)' },
-                  { label:'GST Number', key:'gstNumber', placeholder:'GST (optional)' },
-                ].map(({ label, key, placeholder }) => (
-                  <div key={key}>
-                    <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</label>
-                    <input value={existShop[key]} onChange={e => { setExistShop(p => ({...p, [key]: e.target.value})); setCreateErr(''); }} placeholder={placeholder}
-                      style={{ width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' }} />
-                  </div>
-                ))}
-                <div>
-                  <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>Shop Description</label>
-                  <textarea value={existShop.shopDescription} onChange={e => setExistShop(p => ({...p, shopDescription: e.target.value}))} placeholder="Brief description (optional)" rows={2}
-                    style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box', resize:'vertical' }} />
-                </div>
+              {createErr && <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background:C.red+'18', color:'#f87171', fontSize:13 }}>{createErr}</div>}
+              <div style={{ display:'flex', gap:10, marginTop:18, justifyContent:'flex-end' }}>
+                <Btn onClick={()=>{setShowAdd(false);clearEmpDraft();setCreateErr('');}}>Cancel</Btn>
+                <Btn variant="primary" onClick={handleCreate} disabled={creating}>{creating?'Creating…':'Create Employee'}</Btn>
               </div>
-            )}
-
-            {createErr && (
-              <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background: C.red+'18', border:`1px solid ${C.red}44`, color: '#f87171', fontSize:13 }}>{createErr}</div>
-            )}
-
-            <div style={{ display:'flex', gap:10, marginTop:20, justifyContent:'flex-end' }}>
-              <button onClick={() => { setShowAdd(false); clearEmpDraft(); setCreateErr(''); }}
-                style={{ padding:'9px 18px', borderRadius:8, border:`1px solid ${C.line}`, background:C.card2, color:C.sub, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>
-                Cancel
-              </button>
-              <button onClick={handleCreate} disabled={creating}
-                style={{ padding:'9px 20px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', opacity: creating ? .6 : 1 }}>
-                {creating ? 'Processing…' : addMode==='existing' ? 'Register as Employee' : 'Create Employee'}
-              </button>
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
-        <KpiCard label="Total Employees" value={fmt(all.length)}          sub="Registered employees" colorKey="yellow" iconEl={Icon.bag} />
-        <KpiCard label="Verified"        value={fmt(verified)}            sub="Approved employees"   colorKey="green"  iconEl={Icon.shield} />
-        <KpiCard label="Pending"         value={fmt(all.length-verified)} sub="Awaiting approval"    colorKey="red"    iconEl={Icon.bell} />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 20 }}>
-        <Card title="Verification">
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={75}
-                dataKey="value" paddingAngle={3}>
-                <Cell fill={C.green} />
-                <Cell fill={C.yellow} />
-              </Pie>
-              <Tooltip />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="Filter">
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search shop name, owner, email…" style={{ flex: 1, minWidth: 220 }} />
-            <Select value={verFilter} onChange={e => setVer(e.target.value)}>
-              <option value="">All</option>
-              <option value="verified">Verified</option>
-              <option value="pending">Pending</option>
-            </Select>
-            {(search || verFilter) && <Btn onClick={() => { setSearch(''); setVer(''); }}>Clear</Btn>}
+      {/* ── Edit Employee Modal ── */}
+      {editEmp && (
+        <div style={OV}>
+          <div style={{ ...MB, maxWidth:580 }}>
+            {MH(`Edit — ${editEmp.user?.name||'Employee'}`, ()=>setEditEmp(null))}
+            <div style={MP}>
+              {/* Account Details */}
+              <div style={{ fontSize:11, fontWeight:700, color:C.accent, letterSpacing:'.07em', textTransform:'uppercase', marginBottom:10 }}>Account Details</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+                {[
+                  { l:'Full Name *',  k:'name',        t:'text',     p:'Employee full name', col:'1/-1' },
+                  { l:'Email *',      k:'email',       t:'email',    p:'employee@email.com' },
+                  { l:'Phone *',      k:'phone',       t:'text',     p:'Mobile number' },
+                  { l:'New Password', k:'newPassword', t:'password', p:'Leave blank to keep current' },
+                ].map(({ l, k, t, p, col }) => (
+                  <div key={k} style={col ? { gridColumn:col } : {}}>
+                    {EL(l)}
+                    <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} style={EI} />
+                  </div>
+                ))}
+              </div>
+              {/* Employment Details */}
+              <div style={{ fontSize:11, fontWeight:700, color:C.accent, letterSpacing:'.07em', textTransform:'uppercase', marginBottom:10, marginTop:4 }}>Employment Details</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                {[
+                  { l:'Designation',        k:'designation',    t:'text',   p:'e.g. Sales Manager' },
+                  { l:'Department',         k:'department',     t:'text',   p:'e.g. Sales' },
+                  { l:'Joining Date',       k:'joiningDate',    t:'date',   p:'' },
+                  { l:'Monthly Salary (₹)', k:'monthlySalary',  t:'number', p:'e.g. 25000' },
+                  { l:'Work Address',       k:'businessAddress',t:'text',   p:'Office address', col:'1/-1' },
+                ].map(({ l, k, t, p, col }) => (
+                  <div key={k} style={col ? { gridColumn:col } : {}}>
+                    {EL(l)}
+                    <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} style={EI} />
+                  </div>
+                ))}
+              </div>
+              {editErr && <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background:C.red+'18', color:'#f87171', fontSize:13 }}>{editErr}</div>}
+              <div style={{ display:'flex', gap:10, marginTop:18, justifyContent:'flex-end' }}>
+                <Btn onClick={()=>setEditEmp(null)}>Cancel</Btn>
+                <Btn variant="primary" onClick={handleEditSave} disabled={editSaving}>{editSaving?'Saving…':'Save Changes'}</Btn>
+              </div>
+            </div>
           </div>
-          <div style={{ marginTop: 12, fontSize: 13, color: C.mute }}>
-            Showing <strong>{employees.length}</strong> of <strong>{all.length}</strong> employees
-          </div>
-        </Card>
-      </div>
+        </div>
+      )}
 
-      <Card title={`Employees (${employees.length})`}
-        action={
-          <button onClick={openAddModal}
-            style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 16px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-            <span style={{ fontSize:17, lineHeight:1 }}>+</span> Add Employee
-          </button>
-        }>
-        {employees.length === 0
-          ? <Empty text="No employees match your filters" />
-          : <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>
-                  <Th>Shop</Th><Th>Owner</Th><Th>Contact</Th><Th>Rating</Th><Th>Total Sales</Th><Th>Registered</Th><Th>Status</Th><Th>Action</Th>
-                </tr></thead>
-                <tbody>
-                  {employees.map(s => (
-                    <tr key={s._id}>
-                      <Td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: C.yellow + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, overflow: 'hidden' }}>
-                            {s.shopLogo ? <img src={s.shopLogo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🏪'}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700 }}>{s.shopName}</div>
-                            <div style={{ fontSize: 11, color: C.mute }}>{s.businessAddress || '—'}</div>
+      {/* ── Delete Confirm ── */}
+      {confirmDel && (
+        <div style={OV}>
+          <div style={{ ...MB, maxWidth:400 }}>
+            {MH('Remove Employee', ()=>setConfirmDel(null))}
+            <div style={MP}>
+              <p style={{ color:C.sub, fontSize:14, margin:'0 0 18px' }}>Remove <strong>{confirmDel.user?.name}</strong>? Their account reverts to a regular customer and all salary records will be deleted.</p>
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+                <Btn onClick={()=>setConfirmDel(null)}>Cancel</Btn>
+                <Btn variant="danger" onClick={handleDelete} disabled={busy===confirmDel._id}>{busy===confirmDel._id?'Removing…':'Remove'}</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Salary Management Modal ── */}
+      {salaryEmp && (
+        <div style={OV}>
+          <div style={{ ...MB, maxWidth:700 }}>
+            {MH(`Salary — ${salaryEmp.user?.name}`, ()=>{setSalaryEmp(null);setSalaryEditId(null);})}
+            <div style={MP}>
+              {/* Summary strip */}
+              <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap' }}>
+                {[
+                  { l:'Base Salary', v:`₹${(salaryEmpInfo?.monthlySalary||salaryEmp.monthlySalary||0).toLocaleString('en-IN')}`, color:C.blue },
+                  { l:'Records',     v:salaryRecords.length,                                           color:C.yellow },
+                  { l:'Paid',        v:salaryRecords.filter(r=>r.status==='PAID').length,              color:C.green },
+                  { l:'Pending',     v:salaryRecords.filter(r=>r.status==='PENDING').length,           color:C.red },
+                ].map(s => (
+                  <div key={s.l} style={{ flex:'1 1 110px', padding:'10px 14px', background:C.bg, borderRadius:10, border:`1px solid ${C.line}` }}>
+                    <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em' }}>{s.l}</div>
+                    <div style={{ fontSize:17, fontWeight:800, color:s.color, marginTop:3 }}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add/Edit form */}
+              <div style={{ background:C.bg, borderRadius:12, padding:16, border:`1px solid ${C.line}`, marginBottom:18 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:C.text, marginBottom:12 }}>{salaryEditId ? '✏️ Edit Record' : '➕ Add Monthly Salary'}</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:12 }}>
+                  <div>
+                    {EL('Month *')}
+                    <select value={salaryForm.month} onChange={e=>setSalaryForm(f=>({...f,month:Number(e.target.value)}))} style={{ ...EI, cursor:'pointer' }}>
+                      {MONTHS_FULL.map((m,i)=><option key={i+1} value={i+1}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    {EL('Year *')}
+                    <input value={String(salaryForm.year)} onChange={e=>setSalaryForm(f=>({...f,year:e.target.value}))} type="number" placeholder="2024" style={EI} />
+                  </div>
+                  <div>
+                    {EL('Base Salary (₹) *')}
+                    <input value={String(salaryForm.baseSalary)} onChange={e=>setSalaryForm(f=>({...f,baseSalary:e.target.value}))} type="number" placeholder="25000" style={EI} />
+                  </div>
+                </div>
+
+                {/* Deductions */}
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                    {EL('Deductions')}
+                    <button onClick={addDedRow} style={{ fontSize:11, color:C.red, background:'none', border:`1px solid ${C.red}50`, borderRadius:6, padding:'2px 10px', cursor:'pointer', marginBottom:5 }}>+ Add</button>
+                  </div>
+                  {salaryForm.deductions.map((d,i)=>(
+                    <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
+                      <input value={d.reason} onChange={e=>setDF(i,'reason',e.target.value)} placeholder="Reason (e.g. Late fine)" style={{ ...EI, flex:2 }} />
+                      <input value={d.amount} onChange={e=>setDF(i,'amount',e.target.value)} type="number" placeholder="₹" style={{ ...EI, flex:1 }} />
+                      <button onClick={()=>rmDed(i)} style={{ background:C.red+'18', border:`1px solid ${C.red}40`, borderRadius:7, padding:'0 10px', color:C.red, cursor:'pointer' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bonuses */}
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                    {EL('Bonuses')}
+                    <button onClick={addBonRow} style={{ fontSize:11, color:C.green, background:'none', border:`1px solid ${C.green}50`, borderRadius:6, padding:'2px 10px', cursor:'pointer', marginBottom:5 }}>+ Add</button>
+                  </div>
+                  {salaryForm.bonuses.map((b,i)=>(
+                    <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
+                      <input value={b.reason} onChange={e=>setBF(i,'reason',e.target.value)} placeholder="Reason (e.g. Diwali bonus)" style={{ ...EI, flex:2 }} />
+                      <input value={b.amount} onChange={e=>setBF(i,'amount',e.target.value)} type="number" placeholder="₹" style={{ ...EI, flex:1 }} />
+                      <button onClick={()=>rmBon(i)} style={{ background:C.red+'18', border:`1px solid ${C.red}40`, borderRadius:7, padding:'0 10px', color:C.red, cursor:'pointer' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:12 }}>
+                  <div>
+                    {EL('Status')}
+                    <select value={salaryForm.status} onChange={e=>setSalaryForm(f=>({...f,status:e.target.value}))} style={{ ...EI, cursor:'pointer' }}>
+                      <option value="PENDING">PENDING</option><option value="PAID">PAID</option>
+                    </select>
+                  </div>
+                  <div>
+                    {EL('Net Salary (auto)')}
+                    <div style={{ height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', display:'flex', alignItems:'center', fontWeight:800, fontSize:14, color:C.green, background:C.card }}>₹{salNet().toLocaleString('en-IN')}</div>
+                  </div>
+                  <div>
+                    {EL('Notes')}
+                    <input value={salaryForm.notes} onChange={e=>setSalaryForm(f=>({...f,notes:e.target.value}))} placeholder="Remarks…" style={EI} />
+                  </div>
+                </div>
+
+                {salaryErr && <div style={{ marginBottom:10, padding:'8px 12px', borderRadius:8, background:C.red+'18', color:'#f87171', fontSize:13 }}>{salaryErr}</div>}
+                <div style={{ display:'flex', gap:8 }}>
+                  <Btn variant="primary" onClick={handleSalSave} disabled={salarySaving}>{salarySaving?'Saving…':salaryEditId?'Update Record':'Add Record'}</Btn>
+                  {salaryEditId && <Btn onClick={()=>{setSalaryEditId(null);setSalaryForm({...EMPTY_SAL,baseSalary:salaryEmpInfo?.monthlySalary||salaryEmp.monthlySalary||''});setSalaryErr('');}}>Cancel</Btn>}
+                </div>
+              </div>
+
+              {/* Records list */}
+              {salaryLoading ? <Loader /> : salaryRecords.length===0 ? <Empty text="No salary records yet" /> : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {salaryRecords.map(rec => {
+                    const dt=rec.deductions.reduce((s,d)=>s+d.amount,0), bt=rec.bonuses.reduce((s,b)=>s+b.amount,0);
+                    return (
+                      <div key={rec._id} style={{ background:C.bg, border:`1px solid ${C.line}`, borderRadius:10, padding:'14px 16px' }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                          <div style={{ fontWeight:700, fontSize:14 }}>{MONTHS_FULL[rec.month-1]} {rec.year}</div>
+                          <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+                            <Badge text={rec.status} color={rec.status==='PAID'?C.green:C.yellow} />
+                            {rec.status==='PENDING' && <button onClick={()=>markPaid(rec)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:`1px solid ${C.green}50`, background:C.green+'15', color:C.green, cursor:'pointer' }}>Mark Paid</button>}
+                            <button onClick={()=>startEditSal(rec)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:`1px solid ${C.blue}50`, background:C.blue+'15', color:C.blue, cursor:'pointer' }}>Edit</button>
+                            <button onClick={()=>delSalRec(rec._id)} style={{ fontSize:11, padding:'3px 10px', borderRadius:6, border:`1px solid ${C.red}40`, background:C.red+'12', color:C.red, cursor:'pointer' }}>Del</button>
                           </div>
                         </div>
-                      </Td>
-                      <Td><span style={{ fontWeight: 600 }}>{s.user?.name || '—'}</span></Td>
-                      <Td style={{ color: C.mute, fontSize: 12 }}>{s.user?.email}<br />{s.user?.phone}</Td>
-                      <Td>
-                        <span style={{ fontWeight: 700, color: C.yellow }}>★ {(s.rating || 0).toFixed(1)}</span>
-                      </Td>
-                      <Td><span style={{ fontWeight: 700 }}>{fmtRs(s.totalSales)}</span></Td>
-                      <Td style={{ color: C.mute, fontSize: 12 }}>{new Date(s.createdAt).toLocaleDateString()}</Td>
-                      <Td>
-                        <Badge text={s.isVerified ? 'Verified' : 'Pending'}
-                          color={s.isVerified ? C.green : C.yellow} />
-                      </Td>
-                      <Td>
-                        <Btn variant={s.isVerified ? 'danger' : 'success'} disabled={busy === s._id}
-                          onClick={() => handleVerify(s._id, s.isVerified)}>
-                          {s.isVerified ? 'Revoke' : 'Verify'}
-                        </Btn>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:13 }}>
+                          <span>Base: <strong>₹{rec.baseSalary.toLocaleString('en-IN')}</strong></span>
+                          {dt>0 && <span style={{color:C.red}}>Ded: <strong>-₹{dt.toLocaleString('en-IN')}</strong></span>}
+                          {bt>0 && <span style={{color:C.green}}>Bon: <strong>+₹{bt.toLocaleString('en-IN')}</strong></span>}
+                          <span style={{color:C.blue}}>Net: <strong>₹{rec.netSalary.toLocaleString('en-IN')}</strong></span>
+                        </div>
+                        {rec.deductions.map((d,i)=><div key={i} style={{ fontSize:11, color:C.mute, marginTop:2 }}>↓ {d.reason}: ₹{d.amount.toLocaleString('en-IN')}</div>)}
+                        {rec.bonuses.map((b,i)   =><div key={i} style={{ fontSize:11, color:C.green+'cc', marginTop:2 }}>↑ {b.reason}: ₹{b.amount.toLocaleString('en-IN')}</div>)}
+                        {rec.notes && <div style={{ fontSize:11, color:C.mute, fontStyle:'italic', marginTop:4 }}>Note: {rec.notes}</div>}
+                        {rec.paidAt && <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>Paid: {new Date(rec.paidAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-        }
+          </div>
+        </div>
+      )}
+
+      {/* ── KPI cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+        <KpiCard label="Total Employees" value={fmt(all.length)}     sub="All staff"          colorKey="yellow" iconEl={Icon.person} />
+        <KpiCard label="Active"          value={fmt(active)}         sub="Access granted"     colorKey="green"  iconEl={Icon.shield} />
+        <KpiCard label="Blocked"         value={fmt(blocked)}        sub="Access suspended"   colorKey="red"    iconEl={Icon.bell} />
+        <KpiCard label="Monthly Payroll" value={`₹${totalPayroll.toLocaleString('en-IN')}`} sub="Total salaries" colorKey="blue" iconEl={Icon.dollar} />
+      </div>
+
+      {/* ── Filter + Add bar ── */}
+      <Card>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+          <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name, email, designation, department…" style={{ flex:1, minWidth:220 }} />
+          <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+            <option value="">All Employees</option>
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+            <option value="verified">Verified</option>
+            <option value="pending">Pending Verify</option>
+          </Select>
+          {(search||statusFilter) && <Btn onClick={()=>{setSearch('');setStatusFilter('');}}>Clear</Btn>}
+          <button onClick={()=>{setShowAdd(true);clearEmpDraft();setCreateErr('');}}
+            style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, border:'none', background:C.accent, color:'white', fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+            <span style={{ fontSize:17, lineHeight:1 }}>+</span> Add Employee
+          </button>
+        </div>
+        <div style={{ marginTop:10, fontSize:12, color:C.mute }}>Showing {employees.length} of {all.length} employees</div>
+      </Card>
+
+      {/* ── Employee table ── */}
+      <Card title={`Employees (${employees.length})`}>
+        {employees.length === 0 ? <Empty text="No employees match your filters" /> : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead><tr>
+                <Th>Employee</Th><Th>Designation</Th><Th>Contact</Th><Th>Joined</Th><Th>Salary/mo</Th><Th>Status</Th><Th>Actions</Th>
+              </tr></thead>
+              <tbody>
+                {employees.map(s => (
+                  <tr key={s._id}>
+                    <Td>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ width:36, height:36, borderRadius:9, background:C.blue+'22', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0, overflow:'hidden' }}>
+                          {s.shopLogo ? <img src={s.shopLogo} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : '👤'}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:700, fontSize:13 }}>{s.user?.name || '—'}</div>
+                          <div style={{ fontSize:11, color:C.mute }}>{s.department || '—'}</div>
+                        </div>
+                      </div>
+                    </Td>
+                    <Td style={{ fontSize:13 }}>{s.designation || <span style={{ color:C.mute }}>—</span>}</Td>
+                    <Td style={{ color:C.mute, fontSize:12 }}>{s.user?.email}<br />{s.user?.phone}</Td>
+                    <Td style={{ fontSize:12, color:C.mute }}>
+                      {s.joiningDate ? new Date(s.joiningDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}
+                    </Td>
+                    <Td><span style={{ fontWeight:700, color:C.green }}>₹{(s.monthlySalary||0).toLocaleString('en-IN')}</span></Td>
+                    <Td>
+                      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                        <Badge text={s.isVerified ? 'Verified' : 'Pending'} color={s.isVerified ? C.green : C.yellow} />
+                        {s.isBlocked && <Badge text="Blocked" color={C.red} />}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                        <button onClick={()=>openEdit(s)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${C.blue}50`, background:C.blue+'12', color:C.blue, cursor:'pointer' }}>Edit</button>
+                        <button onClick={()=>openSalary(s)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${C.green}50`, background:C.green+'12', color:C.green, cursor:'pointer' }}>Salary</button>
+                        <button onClick={()=>handleBlock(s)} disabled={busy===s._id} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${s.isBlocked?C.green:C.yellow}50`, background:s.isBlocked?C.green+'12':C.yellow+'12', color:s.isBlocked?C.green:C.yellow, cursor:'pointer', opacity:busy===s._id?.6:1 }}>
+                          {s.isBlocked ? 'Unblock' : 'Block'}
+                        </button>
+                        <button onClick={()=>setConfirmDel(s)} style={{ fontSize:11, padding:'4px 10px', borderRadius:6, border:`1px solid ${C.red}40`, background:C.red+'12', color:C.red, cursor:'pointer' }}>Remove</button>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -1239,6 +1446,8 @@ const ORDER_STATUSES = ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVER
 function OrdersTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage]       = useState(1);
+  const [pagination, setPag]  = useState({ total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
   const [updating, setUpd]    = useState(null);
   const [search, setSearch]   = useState('');
   const [statusF, setStatusF] = useState('');
@@ -1251,29 +1460,36 @@ function OrdersTab({ globalSearch = '' }) {
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
-  useEffect(() => {
-    adminApi.getOrders({ limit: 200 })
-      .then(r => setAll(r.data?.data?.data || []))
-      .catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  // appliedSearch only updates on Enter / Search button — no API calls while typing
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const applySearch = () => { setPage(1); setAppliedSearch(search); };
 
+  useEffect(() => { setPage(1); }, [statusF, paymentF]);
+
+  const hasLoadedRef = useRef(false);
+
+  const fetchOrders = useCallback(() => {
+    setLoading(true);
+    const params = { limit: 100, page };
+    if (statusF)        params.status        = statusF;
+    if (paymentF)       params.paymentStatus = paymentF;
+    if (appliedSearch)  params.search        = appliedSearch;
+    adminApi.getOrders(params)
+      .then(r => {
+        setAll(r.data?.data?.data || []);
+        setPag(r.data?.data?.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+      })
+      .catch(() => {}).finally(() => { setLoading(false); hasLoadedRef.current = true; });
+  }, [page, statusF, paymentF, appliedSearch]);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // date filter is client-side (no backend support); text/status/payment are server-side
   const orders = all.filter(o => {
-    const q = search.toLowerCase();
-    const matchQ = !q ||
-      o.orderNumber?.toLowerCase().includes(q) ||
-      o._id?.toLowerCase().includes(q) ||
-      o.user?.name?.toLowerCase().includes(q) ||
-      o.user?.email?.toLowerCase().includes(q) ||
-      o.user?.phone?.includes(q) ||
-      o.shippingAddress?.phone?.includes(q) ||
-      o.shippingAddress?.name?.toLowerCase().includes(q) ||
-      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
-    const matchS = !statusF || o.orderStatus === statusF;
-    const matchP = !paymentF || o.paymentStatus === paymentF;
     const d = o.createdAt ? new Date(o.createdAt) : null;
     const matchD = (!dateFrom || (d && d >= new Date(dateFrom))) &&
                    (!dateTo   || (d && d <= new Date(dateTo + 'T23:59:59')));
-    return matchQ && matchS && matchP && matchD;
+    return matchD;
   });
 
   const handleStatusChange = async (orderId, status) => {
@@ -1324,10 +1540,10 @@ function OrdersTab({ globalSearch = '' }) {
     } finally { setRefunding(false); }
   };
 
-  if (loading) return <Loader />;
+  if (loading && !hasLoadedRef.current) return <Loader />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, opacity: loading ? 0.55 : 1, transition: 'opacity .2s', pointerEvents: loading ? 'none' : 'auto' }}>
       {/* Force Refund Modal */}
       {refundModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -1387,7 +1603,14 @@ function OrdersTab({ globalSearch = '' }) {
       {/* Filter bar */}
       <Card>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…" style={{ flex: 1, minWidth: 240 }} />
+          <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 240 }}>
+            <Input value={search} onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && applySearch()}
+              placeholder="Order #, name, email, phone…" style={{ flex: 1 }} />
+            <Btn variant="primary" onClick={applySearch} style={{ flexShrink: 0 }}>
+              <SvgAt el={Icon.search} size={14} /> Search
+            </Btn>
+          </div>
           <Select value={statusF} onChange={e => setStatusF(e.target.value)}>
             <option value="">All Status</option>
             {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1404,14 +1627,18 @@ function OrdersTab({ globalSearch = '' }) {
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
             title="To date"
             style={{ height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 10px', fontSize:12, background:C.card, color:C.text, outline:'none', cursor:'pointer' }} />
-          {(search || statusF || paymentF || dateFrom || dateTo) && <Btn onClick={() => { setSearch(''); setStatusF(''); setPayF(''); setDateFrom(''); setDateTo(''); }}>Clear</Btn>}
+          {(appliedSearch || statusF || paymentF || dateFrom || dateTo) && <Btn onClick={() => { setSearch(''); setAppliedSearch(''); setStatusF(''); setPayF(''); setDateFrom(''); setDateTo(''); setPage(1); }}>Clear</Btn>}
           <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}>
-            <strong>{orders.length}</strong> of <strong>{all.length}</strong> orders
+            {dateFrom || dateTo
+              ? <><strong style={{color:C.text}}>{orders.length}</strong> match · </>
+              : null}
+            <strong style={{color:C.text}}>{pagination.total}</strong> {appliedSearch ? 'found' : 'total'}
           </span>
         </div>
       </Card>
 
-      <Card title={`Orders (${orders.length})`}>
+      <Card title={`Orders (${pagination.total})`}>
+        <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total orders`} />
         {orders.length === 0
           ? <Empty text="No orders match your filters" />
           : <div style={{ overflowX: 'auto' }}>
@@ -1476,12 +1703,37 @@ function OrdersTab({ globalSearch = '' }) {
               </table>
             </div>
         }
+        <div style={{ borderTop:`1px solid ${C.line}`, marginTop:8, paddingTop:4 }}>
+          <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total orders`} />
+        </div>
       </Card>
     </div>
   );
 }
 
 /* ── Shared micro-components ─────────────────────── */
+function PagBar({ page, pagination, loading, setPage, label = '' }) {
+  if (pagination.totalPages <= 1) return null;
+  const style = { display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 4px', borderBottom:`1px solid ${C.line}`, marginBottom:8 };
+  return (
+    <div style={style}>
+      <span style={{ fontSize:13, color:C.mute }}>
+        Page <strong style={{color:C.text}}>{page}</strong> of <strong style={{color:C.text}}>{pagination.totalPages}</strong>
+        {label && <span style={{ marginLeft:8 }}>· {label}</span>}
+      </span>
+      <div style={{ display:'flex', gap:6 }}>
+        <Btn onClick={() => setPage(p => p - 1)} disabled={!pagination.hasPrevPage || loading}>← Prev</Btn>
+        {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).filter(p => Math.abs(p - page) <= 2).map(p => (
+          <button key={p} onClick={() => setPage(p)}
+            style={{ minWidth:34, height:34, borderRadius:8, border:`1px solid ${p===page?C.accent:C.line}`, background:p===page?C.accent:'transparent', color:p===page?'white':C.text, fontWeight:p===page?700:400, fontSize:13, cursor:'pointer' }}>
+            {p}
+          </button>
+        ))}
+        <Btn onClick={() => setPage(p => p + 1)} disabled={!pagination.hasNextPage || loading}>Next →</Btn>
+      </div>
+    </div>
+  );
+}
 function Loader() {
   return (
     <div style={{ padding: 60, textAlign: 'center', color: C.mute }}>
@@ -1530,13 +1782,15 @@ function ReturnStatusBadge({ status }) {
 
 function AdminReturnsTab({ globalSearch = '' }) {
   const { isMobile, isTablet } = useResponsive();
-  const [returns, setReturns]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [filter, setFilter]         = useState('ALL');
-  const [actionId, setActionId]     = useState(null);
-  const [actionForm, setActionForm] = useState({ status:'', adminNote:'', refundAmount:'' });
-  const [saving, setSaving]         = useState(false);
-  const [search, setSearch]         = useState('');
+  const [returns, setReturns]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState('ALL');
+  const [actionId, setActionId]       = useState(null);
+  const [actionForm, setActionForm]   = useState({ status:'', adminNote:'', refundAmount:'' });
+  const [proofFiles, setProofFiles]   = useState([]);
+  const [proofModal, setProofModal]   = useState(null); // return object to show proof
+  const [saving, setSaving]           = useState(false);
+  const [search, setSearch]           = useState('');
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
@@ -1554,8 +1808,10 @@ function AdminReturnsTab({ globalSearch = '' }) {
     if (!actionForm.status) return;
     setSaving(true);
     try {
-      await returnsApi.process(id, actionForm);
-      setActionId(null); setActionForm({ status:'', adminNote:'', refundAmount:'' });
+      await returnsApi.process(id, { ...actionForm, files: proofFiles.length ? proofFiles : undefined });
+      setActionId(null);
+      setActionForm({ status:'', adminNote:'', refundAmount:'' });
+      setProofFiles([]);
       load();
     } catch(e) {
       alert(e?.response?.data?.message || 'Action failed');
@@ -1798,23 +2054,24 @@ function AdminReturnsTab({ globalSearch = '' }) {
                     </div>
                   )}
 
-                  {/* Razorpay auto-refund success banner */}
-                  {req.status === 'REFUND_COMPLETED' && req.order?.paymentMethod === 'ONLINE' && (() => {
-                    const rzEntry = [...(req.timeline || [])].reverse().find(e => e.note?.includes('Auto-refunded'));
-                    if (!rzEntry) return null;
-                    const idMatch  = rzEntry.note?.match(/ID:\s*([\w]+)/);
-                    const amtMatch = rzEntry.note?.match(/₹([\d,.]+)/);
-                    return (
-                      <div style={{ padding:'10px 18px', background:'#f0fdf4', borderTop:`1px solid ${C.line}`, display:'flex', alignItems:'center', gap:10, fontSize:12 }}>
-                        <span style={{ fontSize:16 }}>✅</span>
-                        <div>
-                          <span style={{ fontWeight:700, color:'#16a34a' }}>Auto-refunded via Razorpay</span>
-                          {amtMatch && <span style={{ color:'#555', marginLeft:8 }}>₹{amtMatch[1]}</span>}
-                          {idMatch  && <span style={{ color:'#888', marginLeft:8, fontFamily:'monospace', fontSize:11 }}>ID: {idMatch[1]}</span>}
-                        </div>
+                  {/* Refund proof photos (uploaded by admin/employee) */}
+                  {req.refundProof?.length > 0 && (
+                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:C.green, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
+                        🧾 Refund Proof ({req.refundProof.length} screenshot{req.refundProof.length !== 1 ? 's' : ''})
                       </div>
-                    );
-                  })()}
+                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+                        {req.refundProof.map((p, i) => (
+                          <a key={i} href={p.url} target="_blank" rel="noopener noreferrer" title={`Proof ${i+1} — by ${p.uploadedBy}`}>
+                            <img src={p.url} alt={`Refund proof ${i+1}`}
+                              style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:`2px solid ${C.green}55`, cursor:'zoom-in', display:'block', transition:'all .15s' }}
+                              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green;e.currentTarget.style.transform='scale(1.06)';}}
+                              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.green+'55';e.currentTarget.style.transform='scale(1)';}} />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Timeline preview */}
                   {req.timeline?.length > 0 && !isOpen && (
@@ -1861,13 +2118,6 @@ function AdminReturnsTab({ globalSearch = '' }) {
                           )}
                         </div>
                       )}
-                      {/* Auto Razorpay refund notice */}
-                      {actionForm.status === 'REFUND_INITIATED' && req.order?.paymentMethod === 'ONLINE' && req.order?.paymentStatus === 'PAID' && (
-                        <div style={{ background: C.green+'18', border:`1px solid ${C.green}40`, borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:12, color: C.green, fontWeight:600 }}>
-                          ⚡ Razorpay refund of {fmtRs(Number(actionForm.refundAmount) || req.refundAmount)} will be issued automatically when you update this status.
-                        </div>
-                      )}
-
                       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
                         <div>
                           <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>New Status *</label>
@@ -1891,13 +2141,33 @@ function AdminReturnsTab({ globalSearch = '' }) {
                           placeholder="Message to customer about this update…"
                           style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', background: C.bg, color: C.text }} />
                       </div>
+                      {/* Refund proof upload */}
+                      {['REFUND_INITIATED','REFUND_COMPLETED'].includes(actionForm.status) && (
+                        <div style={{ marginBottom:12 }}>
+                          <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>
+                            Refund Proof / Screenshot <span style={{ fontWeight:400, textTransform:'none' }}>(optional, up to 5 photos)</span>
+                          </label>
+                          <input type="file" accept="image/*" multiple
+                            onChange={e => setProofFiles(Array.from(e.target.files || []))}
+                            style={{ fontSize:12, color:C.text }} />
+                          {proofFiles.length > 0 && (
+                            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+                              {proofFiles.map((f, i) => (
+                                <div key={i} style={{ fontSize:11, background:C.card2, borderRadius:6, padding:'3px 8px', color:C.sub, display:'flex', alignItems:'center', gap:4 }}>
+                                  🖼 {f.name}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div style={{ display:'flex', gap:10 }}>
                         <button onClick={() => doProcess(req._id)} disabled={saving || !actionForm.status}
                           style={{ padding:'9px 24px', borderRadius:8, background: !actionForm.status ? C.line : C.accent, color: !actionForm.status ? C.mute : 'white',
                             border:'none', fontWeight:700, fontSize:13, cursor: actionForm.status ? 'pointer' : 'not-allowed', opacity: saving ? 0.6 : 1 }}>
                           {saving ? 'Saving…' : 'Update Return Status'}
                         </button>
-                        <button onClick={() => setActionId(null)}
+                        <button onClick={() => { setActionId(null); setProofFiles([]); }}
                           style={{ padding:'9px 20px', borderRadius:8, background: C.card, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
                           Cancel
                         </button>
@@ -3003,9 +3273,19 @@ const TABS = NAV_SECTIONS.flatMap(s => s.tabs);
 export default function AdminDashboard() {
   const { isMobile, isTablet } = useResponsive();
   const [tab, setTab]               = useState('Overview');
+  // Keep-alive: track which tabs have ever been visited so we can CSS-hide instead of unmount
+  const [mountedTabs, setMountedTabs] = useState(() => new Set(['Overview']));
+  const navTo = (t) => { setTab(t); setMountedTabs(prev => { if (prev.has(t)) return prev; const n = new Set(prev); n.add(t); return n; }); };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [openTicketCount, setOTC]   = useState(0);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [refreshKeys, setRefreshKeys]   = useState({});
+  const [spinning, setSpinning]         = useState(false);
+  const doRefresh = () => {
+    setRefreshKeys(k => ({ ...k, [tab]: (k[tab] || 0) + 1 }));
+    setSpinning(true);
+    setTimeout(() => setSpinning(false), 700);
+  };
   const navigate                    = useNavigate();
   const { user, logout }            = useAuth();
   const { notifications }           = useNotifications();
@@ -3027,7 +3307,7 @@ export default function AdminDashboard() {
 
   // Clear global search when tab changes
   const handleTabClick = (id) => {
-    setTab(id);
+    navTo(id);
     setGlobalSearch('');
     if (id === 'Support') setOTC(0);
     if (isMobile) setSidebarOpen(false);
@@ -3251,26 +3531,46 @@ export default function AdminDashboard() {
 
         {/* ── Page content ── */}
         <div style={{ padding: isMobile ? '18px 14px' : isTablet ? '22px 20px' : '28px 30px', flex: 1 }}>
-          {/* Page title — hidden on mobile (shown in topbar instead) */}
-          {!isMobile && (
-            <div style={{ marginBottom: 22 }}>
-              <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: C.text, margin: 0, lineHeight: 1 }}>{tab}</h1>
-              <p style={{ color: C.mute, margin: '6px 0 0', fontSize: 13 }}>{TAB_SUBTITLES[tab]}</p>
-            </div>
-          )}
+          {/* Page title + Refresh button */}
+          <div style={{ marginBottom: 22, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
+            {!isMobile && (
+              <div>
+                <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: C.text, margin: 0, lineHeight: 1 }}>{tab}</h1>
+                <p style={{ color: C.mute, margin: '6px 0 0', fontSize: 13 }}>{TAB_SUBTITLES[tab]}</p>
+              </div>
+            )}
+            <button onClick={doRefresh} disabled={spinning}
+              title="Refresh this page"
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8,
+                background: spinning ? C.active : 'rgba(255,255,255,.06)',
+                border:`1px solid ${C.line}`, color: spinning ? C.accent : C.sub,
+                fontSize:13, fontWeight:500, cursor: spinning ? 'default' : 'pointer',
+                fontFamily:'inherit', flexShrink:0,
+                marginLeft: isMobile ? 'auto' : 0,
+                transition:'color .2s, background .2s' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor" strokeWidth="2"
+                style={{ transform: spinning ? 'rotate(360deg)' : 'rotate(0deg)', transition:'transform .6s ease' }}>
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              {spinning ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
 
-          {tab === 'Overview'      && <OverviewTab />}
-          {tab === 'Users'         && <UsersTab         globalSearch={globalSearch} />}
-          {tab === 'Employees'     && <EmployeesTab     globalSearch={globalSearch} />}
-          {tab === 'Orders'        && <OrdersTab        globalSearch={globalSearch} />}
-          {tab === 'Returns'        && <AdminReturnsTab     globalSearch={globalSearch} />}
-          {tab === 'Cancellations' && <CancellationsTab  globalSearch={globalSearch} />}
-          {tab === 'Coupons'       && <AdminCouponsTab   globalSearch={globalSearch} />}
-          {tab === 'Notifications' && <AdminNotificationsTab />}
-          {tab === 'Support'       && <AdminSupportTab  globalSearch={globalSearch} />}
-          {tab === 'Inventory'     && <InventoryTab     globalSearch={globalSearch} />}
-          {tab === 'Catalog'       && <AdminCatalogTab />}
-          {tab === 'Settings'      && <AdminSettingsTab />}
+          {/* Keep-alive: mount once, CSS-hide when not active — preserves state across tab switches */}
+          <div style={{ display: tab === 'Overview'      ? '' : 'none' }}>{mountedTabs.has('Overview')      && <OverviewTab       key={refreshKeys['Overview']      || 0} />}</div>
+          <div style={{ display: tab === 'Users'         ? '' : 'none' }}>{mountedTabs.has('Users')         && <UsersTab          key={refreshKeys['Users']         || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Employees'     ? '' : 'none' }}>{mountedTabs.has('Employees')     && <EmployeesTab      key={refreshKeys['Employees']     || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Orders'        ? '' : 'none' }}>{mountedTabs.has('Orders')        && <OrdersTab         key={refreshKeys['Orders']        || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Returns'       ? '' : 'none' }}>{mountedTabs.has('Returns')       && <AdminReturnsTab   key={refreshKeys['Returns']       || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Cancellations' ? '' : 'none' }}>{mountedTabs.has('Cancellations') && <CancellationsTab   key={refreshKeys['Cancellations'] || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Coupons'       ? '' : 'none' }}>{mountedTabs.has('Coupons')       && <AdminCouponsTab    key={refreshKeys['Coupons']       || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Notifications' ? '' : 'none' }}>{mountedTabs.has('Notifications') && <AdminNotificationsTab key={refreshKeys['Notifications'] || 0} />}</div>
+          <div style={{ display: tab === 'Support'       ? '' : 'none' }}>{mountedTabs.has('Support')       && <AdminSupportTab   key={refreshKeys['Support']       || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Inventory'     ? '' : 'none' }}>{mountedTabs.has('Inventory')     && <InventoryTab      key={refreshKeys['Inventory']     || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Catalog'       ? '' : 'none' }}>{mountedTabs.has('Catalog')       && <AdminCatalogTab   key={refreshKeys['Catalog']       || 0} />}</div>
+          <div style={{ display: tab === 'Settings'      ? '' : 'none' }}>{mountedTabs.has('Settings')      && <AdminSettingsTab  key={refreshKeys['Settings']      || 0} />}</div>
         </div>
       </div>
     </div>

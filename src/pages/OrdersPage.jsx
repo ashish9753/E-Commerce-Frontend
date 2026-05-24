@@ -231,7 +231,7 @@ export default function OrdersPage() {
               return (
                 <div key={order._id} style={{ background:'white', borderRadius:8, border:'1px solid #ddd', overflow:'hidden' }}>
                   {/* Order header - Amazon style grey bar */}
-                  <div style={{ background:'#f0f2f2', padding:'12px 20px', display:'flex', alignItems:'center', gap:32, flexWrap:'wrap', borderBottom:'1px solid #ddd' }}>
+                  <div className="ord-order-header" style={{ background:'#f0f2f2', padding:'12px 20px', display:'flex', alignItems:'center', gap:32, flexWrap:'wrap', borderBottom:'1px solid #ddd' }}>
                     <div>
                       <div style={{ fontSize:10,fontWeight:700,color:'#888',letterSpacing:'.06em',textTransform:'uppercase' }}>Order Placed</div>
                       <div style={{ fontSize:13,fontWeight:600,marginTop:2 }}>{formatDate(order.createdAt)}</div>
@@ -285,7 +285,7 @@ export default function OrdersPage() {
                   {/* Order items */}
                   <div style={{ padding:'16px 20px' }}>
                     {(order.orderItems || []).map((item, i) => (
-                      <div key={i} style={{ display:'flex', gap:16, padding:'12px 0', borderBottom:i<order.orderItems.length-1?'1px solid #f0f0f0':'none', alignItems:'flex-start' }}>
+                      <div key={i} className="ord-item" style={{ display:'flex', gap:16, padding:'12px 0', borderBottom:i<order.orderItems.length-1?'1px solid #f0f0f0':'none', alignItems:'flex-start' }}>
                         {/* Image */}
                         <div style={{ width:80, height:80, border:'1px solid #ddd', borderRadius:6, overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#fafafa' }}>
                           {item.image
@@ -317,7 +317,7 @@ export default function OrdersPage() {
                           const windowExpired = daysElapsed > returnWindow;
                           const canReturn = isDelivered && isReturnable && !windowExpired;
                           return (
-                            <div style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0, alignItems:'stretch' }}>
+                            <div className="ord-item-actions" style={{ display:'flex', flexDirection:'column', gap:6, flexShrink:0, alignItems:'stretch' }}>
                               <button onClick={()=>navigate(`/track?id=${order._id}`)}
                                 style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #D5D9D9',background:'linear-gradient(to bottom, #f7f8fa, #e7e9ec)',cursor:'pointer',whiteSpace:'nowrap' }}>
                                 Track Package
