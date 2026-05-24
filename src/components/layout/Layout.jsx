@@ -13,16 +13,16 @@ function AnnouncementBar() {
     cached(
       'layout:announcementCoupons',
       10 * 60 * 1000,
-      () => couponsApi.getAll({ isActive: true })
-        .then(({ data }) => data.data?.coupons || data.data?.data || [])
+      () => couponsApi.getPublic()
+        .then(({ data }) => data.data?.coupons || [])
     ).then(all => {
-      setCoupons(all.filter(c => c.isActive !== false && (!c.applicableTo || c.applicableTo === 'all')).slice(0, 3));
+      setCoupons(all.slice(0, 3));
     }).catch(() => {});
   }, []);
 
   const items = [
     ...events.slice(0, 3).map(e => `🎉 ${e.name}${e.discount ? ` — Up to ${e.discount}% OFF` : ''}`),
-    ...coupons.map(c => `🏷️ Use code ${c.code} — ${c.discountType === 'percentage' ? `${c.discountValue}% off` : `Rs. ${c.discountValue} off`}`),
+    ...coupons.map(c => `🏷️ Use code ${c.code} — ${c.discountType === 'PERCENTAGE' ? `${c.discountValue}% off` : `Rs. ${c.discountValue} off`}`),
     '🚚 Free Delivery on orders above Rs. 5,000',
     '🔥 Flash Sale Ends Tonight!',
   ];

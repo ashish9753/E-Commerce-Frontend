@@ -455,12 +455,6 @@ export default function Header() {
                   </button>
                 ))}
               </div>
-              <button onClick={() => {}}
-                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, background: 'none',
-                  border: '1px solid #3a3a3a', borderRadius: 4, color: '#d1d5db', fontSize: 12, fontWeight: 600,
-                  padding: '0 12px', height: 32, cursor: 'pointer', marginLeft: 8 }}>
-                📱 Get App
-              </button>
             </div>
           </div>
         </>

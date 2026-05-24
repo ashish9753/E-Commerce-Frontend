@@ -2084,7 +2084,7 @@ function MySalaryTab() {
 const EMPTY_COUPON_EMP = {
   code: '', discountType: 'PERCENTAGE', discountValue: '',
   minimumAmount: '', maximumDiscount: '', expiryDate: '',
-  usageLimit: '', isActive: true,
+  usageLimit: '', isActive: true, visibility: 'everyone',
   applicableBrands: [], applicableCategories: [], applicableSubcategories: [],
 };
 
@@ -2129,6 +2129,7 @@ function EmployeeCouponsTab() {
       minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
       expiryDate: c.expiryDate ? c.expiryDate.slice(0, 10) : '',
       usageLimit: c.usageLimit || '', isActive: c.isActive,
+      visibility: c.visibility || 'everyone',
       applicableBrands:        (c.applicableBrands        || []).map(x => x?._id || x),
       applicableCategories:    (c.applicableCategories    || []).map(x => x?._id || x),
       applicableSubcategories: (c.applicableSubcategories || []).map(x => x?._id || x),
@@ -2151,6 +2152,7 @@ function EmployeeCouponsTab() {
         expiryDate: form.expiryDate,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
         isActive: form.isActive,
+        visibility: form.visibility || 'everyone',
         applicableBrands:        form.applicableBrands.length        ? form.applicableBrands        : [],
         applicableCategories:    form.applicableCategories.length    ? form.applicableCategories    : [],
         applicableSubcategories: form.applicableSubcategories.length ? form.applicableSubcategories : [],
@@ -2253,6 +2255,15 @@ function EmployeeCouponsTab() {
                 Active (users can apply this coupon)
               </label>
             </div>
+            <div>
+              <label style={LabelStyle}>Visibility</label>
+              <select value={form.visibility} onChange={e => set('visibility', e.target.value)}
+                style={{ ...InpStyle, cursor: 'pointer' }}>
+                <option value="everyone">Everyone — show on home page</option>
+                <option value="new_users">First-order users only — show to new users</option>
+                <option value="hidden">Hidden — manual apply only</option>
+              </select>
+            </div>
           </div>
 
           {/* Applicable To */}
@@ -2320,7 +2331,7 @@ function EmployeeCouponsTab() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr>
-                    {['Code', 'Type', 'Value', 'Min Order', 'Cap', 'Usage', 'Expiry', 'Status', 'Actions'].map(h => (
+                    {['Code', 'Type', 'Value', 'Min Order', 'Cap', 'Usage', 'Expiry', 'Status', 'Visibility', 'Actions'].map(h => (
                       <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: C.mute, letterSpacing: '.06em', textTransform: 'uppercase', borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr></thead>
@@ -2364,6 +2375,13 @@ function EmployeeCouponsTab() {
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 99, background: statusColor + '20', color: statusColor }}>
                               <span style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor }} />{statusLabel}
                             </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}`, fontSize: 12, whiteSpace: 'nowrap' }}>
+                            {c.visibility === 'new_users'
+                              ? <span style={{ color: C.yellow, fontWeight: 700 }}>First-order Users</span>
+                              : c.visibility === 'hidden'
+                              ? <span style={{ color: C.mute }}>Hidden</span>
+                              : <span style={{ color: C.green }}>Everyone</span>}
                           </td>
                           <td style={{ padding: '10px 12px', borderBottom: `1px solid ${C.line}` }}>
                             <div style={{ display: 'flex', gap: 6 }}>
@@ -2955,5 +2973,4 @@ export default function SellerDashboard() {
     </div>
   );
 }
-
 

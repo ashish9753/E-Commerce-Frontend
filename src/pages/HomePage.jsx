@@ -1,223 +1,249 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import HeroSection from '../components/home/HeroSection';
+import {
+  AirVent,
+  ArrowLeft,
+  ArrowRight,
+  BadgePercent,
+  Camera,
+  ChevronRight,
+  Headphones,
+  Laptop,
+  Monitor,
+  PackageCheck,
+  Refrigerator,
+  ShieldCheck,
+  Smartphone,
+  Speaker,
+  Sparkles,
+  Truck,
+  Tv,
+  WashingMachine,
+} from 'lucide-react';
 import { productsApi } from '../api/products';
 import { couponsApi } from '../api/coupons';
-import { normalizeProducts } from '../utils/normalizers';
 import { useCatalog } from '../context/CatalogContext';
-import { useCart } from '../context/CartContext';
 import { cached } from '../utils/apiCache';
+import { normalizeProducts } from '../utils/normalizers';
 
-/* ── palette ── */
-const BG    = '#f4f4f4';
-const WHITE = '#ffffff';
-const BDR   = '#e0e0e0';
-const BLUE  = '#0166b2';
-const ORG   = '#f26522';
-const RED   = '#e53935';
-const TXT   = '#1a1a1a';
-const TXT2  = '#444444';
-const MUT   = '#757575';
-const DARK  = '#1c2b3a';
-const DARK2 = '#11192a';
-
-const fmtRs = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
-const z2    = n => String(n).padStart(2, '0');
-
-const SUB_EMO = {
-  'Mobiles': '📱', 'Smartphones': '📱', 'Laptops': '💻', 'Televisions': '📺',
-  'Headphones': '🎧', 'Cameras': '📷', 'Speakers': '🔊', 'Wearables': '⌚',
-  'Accessories': '🔌', 'Refrigerators': '🧊', 'Washing Machines': '🫧',
-  'Air Conditioners': '❄️', 'Microwaves': '📡', 'Vacuum Cleaners': '🧹',
-  'Water Purifiers': '💧', 'Kitchen Appliances': '🍳', 'Fans & Coolers': '💨',
-  'Monitors': '🖥️', 'Printers': '🖨️', 'Gaming': '🎮', 'Tablets': '📲',
-  'Dishwashers': '🍽️', 'Chimneys': '🏭', 'Ovens': '🥘', 'Mixers': '🥄',
-};
-const emo = n => SUB_EMO[n] || '🛒';
-
-const VCOLS = [
-  { bg: '#b54208', lt: '#fb923c' },
-  { bg: '#166534', lt: '#4ade80' },
-  { bg: '#1e40af', lt: '#60a5fa' },
-  { bg: '#6d28d9', lt: '#c084fc' },
-  { bg: '#9f1239', lt: '#fb7185' },
-  { bg: '#78350f', lt: '#fbbf24' },
+const heroSlides = [
+  {
+    image: '/Banner1.png',
+    brand: 'Tech Carnival',
+    title: 'Smartphones & audio essentials',
+    offer: 'Min. 40% Off',
+    path: '/products?category=Electronics',
+  },
+  {
+    image: '/Banner2.png',
+    brand: 'Home Upgrade Fest',
+    title: 'Appliances for every room',
+    offer: 'Min. 35% Off',
+    path: '/products',
+  },
+  {
+    image: '/Banner3.png',
+    brand: 'New Season Tech',
+    title: 'Premium gadgets, better prices',
+    offer: 'No Cost EMI',
+    path: '/products?sort=popular',
+  },
 ];
 
-/* ════════════════════════════════════════════════════════════════
-   1. VOUCHERS STRIP
-════════════════════════════════════════════════════════════════ */
-function VouchersStrip({ coupons }) {
-  const navigate = useNavigate();
-  const [copied, setCopied] = useState(null);
-  const scrollRef = useRef(null);
-  if (!coupons.length) return null;
+const fallbackCategories = [
+  { name: 'Smartphones', offer: '40-70% OFF' },
+  { name: 'Laptops', offer: '20-45% OFF' },
+  { name: 'Televisions', offer: '30-60% OFF' },
+  { name: 'Refrigerators', offer: '25-55% OFF' },
+  { name: 'Washing Machines', offer: '30-60% OFF' },
+  { name: 'Air Conditioners', offer: '25-50% OFF' },
+  { name: 'Headphones', offer: '50-80% OFF' },
+  { name: 'Kitchen Appliances', offer: '35-70% OFF' },
+  { name: 'Cameras', offer: '20-45% OFF' },
+  { name: 'Speakers', offer: '45-75% OFF' },
+  { name: 'Monitors', offer: '25-55% OFF' },
+  { name: 'Accessories', offer: '60-85% OFF' },
+];
 
-  const copy = (code, id) => {
-    navigator.clipboard.writeText(code).catch(() => {});
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
+const fallbackBrands = ['Samsung', 'LG', 'Sony', 'Bosch', 'Panasonic', 'Philips', 'Xiaomi', 'IFB'];
+
+const categoryIcons = {
+  smartphones: Smartphone,
+  mobiles: Smartphone,
+  laptops: Laptop,
+  televisions: Tv,
+  tv: Tv,
+  refrigerators: Refrigerator,
+  'washing machines': WashingMachine,
+  'air conditioners': AirVent,
+  headphones: Headphones,
+  audio: Speaker,
+  speakers: Speaker,
+  cameras: Camera,
+  monitors: Monitor,
+};
+
+const money = (value) => `Rs. ${Number(value || 0).toLocaleString('en-IN')}`;
+
+function getProductImage(product) {
+  return product?.images?.[0] || '';
+}
+
+function getDiscountLabel(product, fallback = 'Min. 40% Off') {
+  if (product?.off > 0) return `Min. ${product.off}% Off`;
+  return fallback;
+}
+
+function SectionTitle({ children }) {
+  return <h2 className="myn-section-title">{children}</h2>;
+}
+
+function HeroMyntraStyle() {
+  const [index, setIndex] = useState(0);
+  const navigate = useNavigate();
+  const current = heroSlides[index];
+
+  useEffect(() => {
+    const timer = setInterval(() => setIndex((value) => (value + 1) % heroSlides.length), 4500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const move = (direction) => {
+    setIndex((value) => (value + direction + heroSlides.length) % heroSlides.length);
   };
-  const scroll = d => scrollRef.current?.scrollBy({ left: d * 260, behavior: 'smooth' });
 
   return (
-    <div style={{ background: '#111', padding: '14px 0', borderBottom: '2px solid #1e1e1e' }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '0 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: 15 }}>🏷️</span>
-            <span style={{ fontWeight: 800, fontSize: 14, color: '#fff' }}>Exclusive Vouchers</span>
-          </div>
-          <button onClick={() => navigate('/products')}
-            style={{ fontSize: 12, color: ORG, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>
-            View All Vouchers →
-          </button>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => scroll(-1)}
-            style={{ position: 'absolute', left: -14, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
-              width: 24, height: 24, borderRadius: '50%', background: '#333', border: '1px solid #555',
-              color: '#fff', fontSize: 13, cursor: 'pointer', lineHeight: 1 }}>‹</button>
-          <div ref={scrollRef} style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none' }}>
-            {coupons.map((c, i) => {
-              const col = VCOLS[i % VCOLS.length];
-              const isCopied = copied === c._id;
-              const discLabel = c.discountType === 'PERCENTAGE' ? `Flat ${c.discountValue}% OFF` : `Rs. ${c.discountValue} OFF`;
-              const minLabel  = c.minimumAmount > 0 ? `Min. Order Rs. ${Number(c.minimumAmount).toLocaleString('en-IN')}` : 'No minimum order';
-              return (
-                <div key={c._id} style={{ flexShrink: 0, width: 235, borderRadius: 8, overflow: 'hidden', background: col.bg }}>
-                  <div style={{ padding: '10px 12px', borderBottom: `1px dashed rgba(255,255,255,.2)` }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: col.lt, letterSpacing: 1.5, marginBottom: 2, textTransform: 'uppercase' }}>
-                      {c.code}
-                    </div>
-                    <div style={{ fontWeight: 900, fontSize: 17, color: '#fff' }}>{discLabel}</div>
-                  </div>
-                  <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,.6)' }}>{minLabel}</div>
-                      {c.expiryDate && (
-                        <div style={{ fontSize: 9, color: 'rgba(255,255,255,.4)', marginTop: 2 }}>
-                          Expires {new Date(c.expiryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={() => copy(c.code, c._id)}
-                      style={{ background: isCopied ? '#16a34a' : '#fff', color: isCopied ? '#fff' : col.bg,
-                        border: 'none', borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer', flexShrink: 0 }}>
-                      {isCopied ? '✓ Copied!' : 'Copy Code'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <button onClick={() => scroll(1)}
-            style={{ position: 'absolute', right: -14, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
-              width: 24, height: 24, borderRadius: '50%', background: '#333', border: '1px solid #555',
-              color: '#fff', fontSize: 13, cursor: 'pointer', lineHeight: 1 }}>›</button>
-        </div>
+    <section className="myn-hero">
+      <button className="myn-hero-arrow left" onClick={() => move(-1)} aria-label="Previous banner">
+        <ArrowLeft size={22} />
+      </button>
+      <div className="myn-hero-media">
+        <img src={current.image} alt={current.title} />
       </div>
-    </div>
+      <div className="myn-hero-copy">
+        <p>{current.brand}</p>
+        <h1>{current.title}</h1>
+        <strong>{current.offer}</strong>
+        <button onClick={() => navigate(current.path)}>
+          Explore <ChevronRight size={18} />
+        </button>
+      </div>
+      <button className="myn-hero-arrow right" onClick={() => move(1)} aria-label="Next banner">
+        <ArrowRight size={22} />
+      </button>
+      <div className="myn-dots" aria-label="Banner slides">
+        {heroSlides.map((slide, slideIndex) => (
+          <button
+            key={slide.title}
+            className={slideIndex === index ? 'active' : ''}
+            onClick={() => setIndex(slideIndex)}
+            aria-label={`Show ${slide.brand}`}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-/* ════════════════════════════════════════════════════════════════
-   2. TWO PROMOTIONAL BANNERS (events or top categories)
-════════════════════════════════════════════════════════════════ */
-function TwoPromoBanners({ events }) {
+function RisingStars({ products }) {
   const navigate = useNavigate();
-
-  /* Only show when admin has created events with banner images */
-  const panels = events.filter(e => e.image).slice(0, 2).map(e => ({
-    key:   e._id,
-    tag:   e.badge || e.name.split(' ').slice(0, 2).join(' ').toUpperCase(),
-    title: e.name,
-    sub:   e.description || '',
-    cta:   e.discountPercent > 0 ? `Shop – Up to ${e.discountPercent}% off` : 'Shop Now',
-    img:   e.image,
-    path:  `/products`,
-    hasImg: true,
-  }));
-
-  if (!panels.length) return null;
+  const items = products.slice(0, 5);
+  if (!items.length) return null;
 
   return (
-    <div className="hp-2col" style={{ marginBottom: 2, gap: 2 }}>
-      {panels.map((p, i) => (
-        <div key={p.key}
-          onClick={() => navigate(p.path)}
-          style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer', minHeight: 210,
-            background: p.bg || (i === 0 ? '#e8f4ff' : '#fffde7') }}>
-          {p.img && (
-            <img src={p.img} alt={p.tag}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-          )}
-          <div style={{
-            position: 'relative', zIndex: 1, padding: '28px 36px', height: '100%',
-            background: p.hasImg ? 'linear-gradient(90deg,rgba(0,0,0,.55) 40%,transparent)' : 'transparent',
-            color: p.hasImg ? '#fff' : TXT,
-          }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.5, marginBottom: 7, opacity: .85 }}>{p.tag}</div>
-            <div style={{ fontWeight: 900, fontSize: 22, lineHeight: 1.2, marginBottom: 8, maxWidth: 300 }}>{p.title}</div>
-            {p.sub && <div style={{ fontSize: 12, opacity: .75, marginBottom: 18, maxWidth: 260 }}>{p.sub}</div>}
-            <button style={{
-              background: p.hasImg ? '#fff' : TXT, color: p.hasImg ? TXT : '#fff',
-              border: 'none', borderRadius: 4, padding: '9px 22px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            }}>
-              {p.cta}
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   3. SHOP BY CATEGORY (dynamic top categories + subcategories)
-════════════════════════════════════════════════════════════════ */
-function ShopByCategorySection({ topCategories, getSubcats }) {
-  const navigate = useNavigate();
-  if (!topCategories.length) return null;
-
-  return (
-    <section style={{ marginBottom: 8 }}>
-      <div className="hp-cat-grid">
-        {topCategories.slice(0, 4).map(cat => {
-          const subs = getSubcats(cat._id);
-          const items = subs.length > 0 ? subs : [];
-          return (
-            <div key={cat._id} style={{ background: WHITE, border: `1px solid ${BDR}` }}>
-              <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BDR}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 13, color: TXT }}>{cat.name}</span>
-                <button onClick={() => navigate(`/products?category=${encodeURIComponent(cat.name)}`)}
-                  style={{ fontSize: 11, color: BLUE, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  See all
-                </button>
-              </div>
-              <div style={{ padding: '8px 6px', display: 'flex', flexWrap: 'wrap' }}>
-                {items.slice(0, 8).map(s => (
-                  <div key={s._id || s.name}
-                    onClick={() => navigate(`/products?category=${encodeURIComponent(s.name)}`)}
-                    style={{ width: '12.5%', minWidth: 70, textAlign: 'center', padding: '8px 4px', cursor: 'pointer', borderRadius: 4 }}
-                    onMouseEnter={e => e.currentTarget.style.background = BG}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    {s.image
-                      ? <img src={s.image} alt={s.name} style={{ width: 44, height: 44, objectFit: 'contain', marginBottom: 4 }} />
-                      : <div style={{ fontSize: 32, marginBottom: 4 }}>{emo(s.name)}</div>}
-                    <div style={{ fontSize: 10, color: TXT2, lineHeight: 1.3, fontWeight: 500 }}>{s.name}</div>
-                  </div>
-                ))}
-                {items.length === 0 && (
-                  <div style={{ padding: '12px 16px', color: MUT, fontSize: 12, width: '100%', textAlign: 'center' }}>
-                    <button onClick={() => navigate(`/products?category=${encodeURIComponent(cat.name)}`)}
-                      style={{ background: BLUE, color: '#fff', border: 'none', borderRadius: 4, padding: '8px 20px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
-                      Browse {cat.name}
-                    </button>
-                  </div>
-                )}
-              </div>
+    <section>
+      <SectionTitle>Rising Stars</SectionTitle>
+      <div className="myn-brand-row">
+        {items.map((product) => (
+          <button className="myn-star-card" key={product._id} onClick={() => navigate(`/product/${product._id}`)}>
+            <div className="myn-star-img">
+              {getProductImage(product) ? (
+                <img src={getProductImage(product)} alt={product.name} />
+              ) : (
+                <PackageCheck size={58} />
+              )}
             </div>
+            <div className="myn-star-offer">
+              <span>{product.brand || product.category || 'Featured Pick'}</span>
+              <p>{product.name}</p>
+              <strong>{getDiscountLabel(product)}</strong>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MedalBrands({ brands, products }) {
+  const navigate = useNavigate();
+  const brandList = brands.filter((brand) => brand.isActive !== false).slice(0, 6);
+  const list = brandList.length ? brandList : fallbackBrands.map((name) => ({ name }));
+  const productImages = products.map(getProductImage).filter(Boolean);
+
+  return (
+    <section>
+      <SectionTitle>Medal Worthy Brands To Bag</SectionTitle>
+      <div className="myn-medal-row">
+        {list.slice(0, 6).map((brand, index) => (
+          <button
+            className="myn-medal-card"
+            key={brand._id || brand.name}
+            onClick={() => navigate(`/products?brand=${encodeURIComponent(brand.name)}`)}
+          >
+            <div className="myn-medal-img">
+              {brand.logo ? (
+                <img src={brand.logo} alt={brand.name} />
+              ) : productImages[index] ? (
+                <img src={productImages[index]} alt={brand.name} />
+              ) : (
+                <Sparkles size={54} />
+              )}
+            </div>
+            <div className="myn-medal-copy">
+              <span>{brand.name}</span>
+              <p>{index % 2 === 0 ? 'Trending Electronics' : 'Home Appliance Deals'}</p>
+              <strong>Starting Rs. {index % 2 === 0 ? '999' : '1499'}</strong>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ShopByCategory({ categories }) {
+  const navigate = useNavigate();
+  const displayCategories = useMemo(() => {
+    if (!categories.length) return fallbackCategories;
+    return categories.slice(0, 12).map((category, index) => ({
+      ...category,
+      offer: fallbackCategories[index % fallbackCategories.length].offer,
+    }));
+  }, [categories]);
+
+  return (
+    <section>
+      <SectionTitle>Shop By Category</SectionTitle>
+      <div className="myn-category-grid">
+        {displayCategories.map((category, index) => {
+          const key = category.name.toLowerCase();
+          const Icon = categoryIcons[key] || categoryIcons[key.replace('&', '').trim()] || PackageCheck;
+          return (
+            <button
+              className="myn-category-card"
+              key={category._id || category.name}
+              onClick={() => navigate(`/products?category=${encodeURIComponent(category.name)}`)}
+            >
+              <div className={`myn-category-visual tone-${index % 6}`}>
+                {category.image ? <img src={category.image} alt={category.name} /> : <Icon size={70} strokeWidth={1.5} />}
+              </div>
+              <div className="myn-category-label">
+                <span>{category.name}</span>
+                <strong>{category.offer}</strong>
+                <p>Shop Now</p>
+              </div>
+            </button>
           );
         })}
       </div>
@@ -225,468 +251,610 @@ function ShopByCategorySection({ topCategories, getSubcats }) {
   );
 }
 
-/* ════════════════════════════════════════════════════════════════
-   4. DEAL OF THE DAY
-════════════════════════════════════════════════════════════════ */
-function DealOfTheDaySection({ products, events }) {
-  const navigate = useNavigate();
-  const { addToCart } = useCart();
-  const dealEvent = events.find(e => e.discountPercent > 0);
+function CouponStrip({ coupons }) {
+  const [copied, setCopied] = useState('');
+  if (!coupons.length) return null;
 
-  const [endTime] = useState(() =>
-    dealEvent?.endDate
-      ? new Date(dealEvent.endDate).getTime()
-      : Date.now() + 7 * 3600000 + 45 * 60000
-  );
-  const [time, setTime] = useState({ h: '07', m: '45', s: '00' });
-  const [idx, setIdx] = useState(0);
-  const [vis, setVis] = useState(() => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1200;
-    return w < 640 ? 2 : w < 1024 ? 3 : w < 1280 ? 4 : 6;
-  });
-
-  useEffect(() => {
-    const tick = () => {
-      const left = Math.max(0, endTime - Date.now());
-      setTime({ h: z2(Math.floor(left % 86400000 / 3600000)), m: z2(Math.floor(left % 3600000 / 60000)), s: z2(Math.floor(left % 60000 / 1000)) });
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [endTime]);
-
-  useEffect(() => {
-    const upd = () => {
-      const w = window.innerWidth;
-      setVis(w < 640 ? 2 : w < 1024 ? 3 : w < 1280 ? 4 : 6);
-      setIdx(0);
-    };
-    window.addEventListener('resize', upd);
-    return () => window.removeEventListener('resize', upd);
-  }, []);
-
-  const prods = products.filter(p => p.off > 0);
-  if (!prods.length) return null;
-
-  const maxDisc = dealEvent?.discountPercent
-    || Math.max(...prods.slice(0, 6).map(p => p.off), 0);
-  const maxIdx = Math.max(0, prods.length - vis);
+  const copyCoupon = (code) => {
+    navigator.clipboard?.writeText(code).catch(() => {});
+    setCopied(code);
+    setTimeout(() => setCopied(''), 1800);
+  };
 
   return (
-    <section style={{ background: DARK, marginBottom: 8, padding: '18px 20px 20px' }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ color: '#fff', fontWeight: 900, fontSize: 17 }}>{dealEvent?.name || 'Deal of the Day'}</div>
-            <div style={{ color: '#9ca3af', fontSize: 11 }}>Limited time offer</div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: ORG }}>Up to</span>
-            <span style={{ fontSize: 40, fontWeight: 900, color: ORG, lineHeight: 1 }}>{maxDisc}%</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: ORG }}>off</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>Ends in</span>
-            {[time.h, time.m, time.s].map((v, i) => (
-              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <span style={{ background: DARK2, color: '#fff', fontWeight: 800, fontSize: 14, padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>{v}</span>
-                {i < 2 && <span style={{ color: ORG, fontWeight: 900 }}>:</span>}
-              </span>
-            ))}
-          </div>
-          <button onClick={() => navigate('/products?sort=discount')}
-            style={{ marginLeft: 'auto', background: ORG, color: '#fff', border: 'none', borderRadius: 4, padding: '8px 20px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            Shop now
+    <section className="myn-coupons">
+      <div>
+        <BadgePercent size={22} />
+        <span>Deal Desk</span>
+        <strong>Extra savings on electronics and appliances</strong>
+      </div>
+      <div className="myn-coupon-list">
+        {coupons.slice(0, 4).map((coupon) => (
+          <button key={coupon._id || coupon.code} onClick={() => copyCoupon(coupon.code)}>
+            <span>{coupon.code}</span>
+            <strong>
+              {coupon.discountType === 'PERCENTAGE'
+                ? `${coupon.discountValue}% OFF`
+                : `${money(coupon.discountValue)} OFF`}
+            </strong>
+            <small>{copied === coupon.code ? 'Copied' : 'Tap to copy'}</small>
           </button>
-        </div>
-
-        {/* Cards */}
-        <div style={{ position: 'relative' }}>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', transform: `translateX(-${idx * (100 / vis)}%)`, transition: 'transform .35s ease' }}>
-              {prods.map(p => (
-                <div key={p._id}
-                  style={{ flexShrink: 0, width: `calc(${100 / vis}% - 10px)`, marginRight: 10, background: WHITE, borderRadius: 6, overflow: 'hidden', cursor: 'pointer' }}
-                  onClick={() => navigate(`/product/${p._id}`)}>
-                  <div style={{ height: 155, background: BG, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-                    {p.images?.[0]
-                      ? <img src={p.images[0]} alt={p.name} style={{ height: '100%', width: '100%', objectFit: 'contain' }} />
-                      : <span style={{ fontSize: 48 }}>🛍️</span>}
-                    {p.off > 0 && <span style={{ position: 'absolute', top: 8, left: 8, background: RED, color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 3 }}>-{p.off}%</span>}
-                  </div>
-                  <div style={{ padding: '8px 10px 10px' }}>
-                    <div style={{ fontSize: 11, color: TXT2, height: 30, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: 4 }}>{p.name}</div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 6 }}>
-                      <span style={{ fontWeight: 800, fontSize: 13, color: TXT }}>{fmtRs(p.price)}</span>
-                      {p.was > p.price && <span style={{ fontSize: 10, color: MUT, textDecoration: 'line-through' }}>{fmtRs(p.was)}</span>}
-                    </div>
-                    <button onClick={e => { e.stopPropagation(); addToCart?.(p._id); }}
-                      style={{ width: '100%', background: ORG, color: '#fff', border: 'none', borderRadius: 3, padding: '5px 0', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          {idx > 0 && (
-            <button onClick={() => setIdx(i => Math.max(0, i - 1))}
-              style={{ position: 'absolute', left: -4, top: '42%', transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: '50%', background: 'rgba(0,0,0,.7)', border: '1px solid #444', color: '#fff', fontSize: 17, cursor: 'pointer', zIndex: 2 }}>‹</button>
-          )}
-          {idx < maxIdx && (
-            <button onClick={() => setIdx(i => Math.min(maxIdx, i + 1))}
-              style={{ position: 'absolute', right: -4, top: '42%', transform: 'translateY(-50%)', width: 30, height: 30, borderRadius: '50%', background: 'rgba(0,0,0,.7)', border: '1px solid #444', color: '#fff', fontSize: 17, cursor: 'pointer', zIndex: 2 }}>›</button>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   5. BEST SELLERS (two panels side by side)
-════════════════════════════════════════════════════════════════ */
-function BestSellersPanel({ title, category }) {
-  const navigate = useNavigate();
-  const [prods, setProds] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    cached(
-      `bestsellers:${category}`,
-      10 * 60 * 1000, // 10 min
-      () => productsApi.getAll({ category, sort: 'popular', limit: 4 })
-        .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || []))
-    )
-      .then((ps) => setProds(ps))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [category]);
-
-  if (!loading && !prods.length) return null;
-
-  return (
-    <div style={{ background: WHITE, border: `1px solid ${BDR}`, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BDR}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: TXT }}>{title}</span>
-        <button onClick={() => navigate(`/products?category=${encodeURIComponent(category)}&sort=popular`)}
-          style={{ fontSize: 11, color: BLUE, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
-          See more
-        </button>
-      </div>
-      <div style={{ padding: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        {(loading ? Array(4).fill(null) : prods.slice(0, 4)).map((p, i) => (
-          <div key={p?._id || i}
-            onClick={() => p && navigate(`/product/${p._id}`)}
-            style={{ cursor: p ? 'pointer' : 'default', padding: 8, borderRadius: 4, background: BG }}
-            onMouseEnter={e => e.currentTarget.style.background = '#e0efff'}
-            onMouseLeave={e => e.currentTarget.style.background = BG}>
-            <div style={{ height: 105, display: 'flex', alignItems: 'center', justifyContent: 'center', background: WHITE, borderRadius: 4, marginBottom: 6, overflow: 'hidden' }}>
-              {loading
-                ? <div style={{ width: '100%', height: '100%', background: '#eee', animation: 'pulse 1.5s infinite' }} />
-                : p?.images?.[0]
-                  ? <img src={p.images[0]} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                  : <span style={{ fontSize: 32 }}>🛍️</span>}
-            </div>
-            {p && (
-              <>
-                <div style={{ fontSize: 10, color: TXT2, lineHeight: 1.3, height: 26, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: 3 }}>{p.name}</div>
-                {p.rating > 0 && (
-                  <div style={{ fontSize: 9, color: '#f59e0b', marginBottom: 2 }}>
-                    {'★'.repeat(Math.round(p.rating))}
-                    <span style={{ color: MUT, marginLeft: 2 }}>({p.reviews})</span>
-                  </div>
-                )}
-                <div style={{ fontWeight: 700, fontSize: 12, color: TXT }}>{fmtRs(p.price)}</div>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BestSellersSection({ topCategories }) {
-  const cats = topCategories.slice(0, 2);
-  if (!cats.length) return null;
-  return (
-    <section style={{ marginBottom: 8 }}>
-      <div className="hp-2col" style={{ gap: 2 }}>
-        {cats.map(c => <BestSellersPanel key={c._id} title={`Best Sellers in ${c.name}`} category={c.name} />)}
-      </div>
-    </section>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   6. ACTIVE SCHEMES / EVENTS
-════════════════════════════════════════════════════════════════ */
-function ActiveSchemesSection({ events }) {
-  const navigate = useNavigate();
-  const scrollRef = useRef(null);
-  if (!events.length) return null;
-
-  const ACCO = [[ORG, '#fff3e0'], ['#22c55e', '#f0fdf4'], [BLUE, '#eff6ff'], ['#a855f7', '#faf5ff'], [RED, '#fff1f2']];
-  const scroll = d => scrollRef.current?.scrollBy({ left: d * 240, behavior: 'smooth' });
-
-  return (
-    <section style={{ background: WHITE, border: `1px solid ${BDR}`, marginBottom: 8, padding: '16px 20px' }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: TXT }}>Active Offers & Schemes</span>
-          <button onClick={() => navigate('/products')}
-            style={{ fontSize: 11, color: BLUE, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
-            View All →
-          </button>
-        </div>
-        <div style={{ position: 'relative' }}>
-          <button onClick={() => scroll(-1)}
-            style={{ position: 'absolute', left: -14, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
-              width: 26, height: 26, borderRadius: '50%', background: '#ddd', border: `1px solid ${BDR}`,
-              color: TXT, fontSize: 13, cursor: 'pointer', lineHeight: 1 }}>‹</button>
-          <div ref={scrollRef} style={{ display: 'flex', gap: 12, overflowX: 'auto', scrollbarWidth: 'none' }}>
-            {events.map((e, i) => {
-              const [acc, bg] = ACCO[i % ACCO.length];
-              return (
-                <div key={e._id}
-                  onClick={() => navigate('/products')}
-                  style={{ flexShrink: 0, width: 210, borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                    background: bg, border: `1px solid ${acc}33` }}>
-                  {e.image
-                    ? <img src={e.image} alt={e.name} style={{ width: '100%', height: 110, objectFit: 'cover' }} />
-                    : <div style={{ height: 70, background: `${acc}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 36 }}>🎯</span>
-                      </div>}
-                  <div style={{ padding: '10px 12px 12px' }}>
-                    {e.badge && <div style={{ fontSize: 9, fontWeight: 700, color: acc, letterSpacing: 1.5, marginBottom: 3 }}>{e.badge}</div>}
-                    <div style={{ fontWeight: 700, fontSize: 12, color: TXT, marginBottom: 3 }}>{e.name}</div>
-                    {e.discountPercent > 0 && (
-                      <div style={{ fontSize: 17, fontWeight: 900, color: acc, lineHeight: 1 }}>Up to {e.discountPercent}% off</div>
-                    )}
-                    {e.description && <div style={{ fontSize: 10, color: MUT, marginTop: 3 }}>{e.description}</div>}
-                    <div style={{ fontSize: 10, color: acc, fontWeight: 700, marginTop: 8 }}>Shop Now →</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <button onClick={() => scroll(1)}
-            style={{ position: 'absolute', right: -14, top: '50%', transform: 'translateY(-50%)', zIndex: 2,
-              width: 26, height: 26, borderRadius: '50%', background: '#ddd', border: `1px solid ${BDR}`,
-              color: TXT, fontSize: 13, cursor: 'pointer', lineHeight: 1 }}>›</button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   7. TOP BRANDS
-════════════════════════════════════════════════════════════════ */
-const FB_BRANDS = ['Samsung', 'LG', 'Sony', 'Xiaomi', 'Philips', 'Bosch', 'Panasonic', 'IFB'];
-
-function BrandsSection({ brands }) {
-  const navigate = useNavigate();
-  const activeBrands = brands.filter(b => b.isActive !== false);
-  const list = activeBrands.length > 0 ? activeBrands : FB_BRANDS.map(n => ({ name: n }));
-
-  return (
-    <section style={{ background: WHITE, border: `1px solid ${BDR}`, marginBottom: 8, padding: '16px 20px' }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: TXT }}>Top Brands</span>
-          <button onClick={() => navigate('/products')}
-            style={{ fontSize: 11, color: BLUE, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>
-            See all brands
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {list.slice(0, 12).map((b, i) => (
-            <div key={b._id || i}
-              onClick={() => navigate(`/products?brand=${encodeURIComponent(b.name)}`)}
-              style={{ flexShrink: 0, minWidth: 96, padding: '12px 8px', textAlign: 'center',
-                border: `1px solid ${BDR}`, borderRadius: 4, cursor: 'pointer', background: WHITE, transition: 'all .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = BLUE; e.currentTarget.style.background = '#f0f7ff'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = BDR; e.currentTarget.style.background = WHITE; }}>
-              {b.logo
-                ? <img src={b.logo} alt={b.name} style={{ height: 32, maxWidth: 78, objectFit: 'contain' }} />
-                : <div style={{ fontWeight: 900, fontSize: 13, color: TXT, letterSpacing: -.2 }}>{b.name.toUpperCase()}</div>}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   8. FEATURE CARDS (Exchange / EMI / Warranty)
-════════════════════════════════════════════════════════════════ */
-const FEATURES = [
-  { icon: '📱', title: 'Exchange Offer', hl: 'Up to ₹15,000 off', desc: 'Exchange your old device and get the best value', cta: 'Exchange now' },
-  { icon: '💳', title: 'No Cost EMI', hl: 'Easy EMIs on your favourite products', desc: 'Available on select products & banks', cta: 'Check eligibility' },
-  { icon: '🛡️', title: 'Extended Warranty', hl: 'Complete protection for your products', desc: 'Covers all major breakdowns & issues', cta: 'Learn more' },
-];
-
-function FeaturesSection() {
-  return (
-    <section style={{ marginBottom: 8 }}>
-      <div className="hp-3col">
-        {FEATURES.map(f => (
-          <div key={f.title}
-            style={{ background: WHITE, border: `1px solid ${BDR}`, padding: '18px 20px', display: 'flex', gap: 14, cursor: 'pointer', transition: 'border-color .15s' }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = BLUE}
-            onMouseLeave={e => e.currentTarget.style.borderColor = BDR}>
-            <span style={{ fontSize: 34, flexShrink: 0 }}>{f.icon}</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: TXT, marginBottom: 2 }}>{f.title}</div>
-              <div style={{ fontWeight: 600, fontSize: 12, color: BLUE, marginBottom: 4 }}>{f.hl}</div>
-              {f.desc && <div style={{ fontSize: 11, color: MUT, marginBottom: 6 }}>{f.desc}</div>}
-              <span style={{ fontSize: 11, color: BLUE, fontWeight: 600, textDecoration: 'underline' }}>{f.cta}</span>
-            </div>
-          </div>
         ))}
       </div>
     </section>
   );
 }
 
-/* ════════════════════════════════════════════════════════════════
-   9. TRUST BAR
-════════════════════════════════════════════════════════════════ */
-const TRUST = [
-  { ic: '💰', name: 'Great Prices', sub: 'Best prices on top products' },
-  { ic: '🔒', name: 'Secure Payments', sub: '100% safe & secure' },
-  { ic: '🚚', name: 'Fast Delivery', sub: 'On orders over ₹499' },
-  { ic: '🔄', name: 'Easy Returns', sub: 'Hassle-free returns' },
-  { ic: '💬', name: 'Customer Support', sub: "We're here to help" },
-];
+function TrustBand() {
+  const items = [
+    { icon: Truck, title: 'Fast Delivery', text: 'Quick shipping on top cities' },
+    { icon: ShieldCheck, title: 'Secure Checkout', text: 'Protected payments every time' },
+    { icon: PackageCheck, title: 'Easy Returns', text: 'Simple returns on eligible items' },
+  ];
 
-function TrustBar() {
   return (
-    <div style={{ background: WHITE, borderTop: `1px solid ${BDR}`, marginBottom: 8 }}>
-      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '14px 20px' }}>
-        <div className="hp-trust">
-          {TRUST.map(t => (
-            <div key={t.name} style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>{t.ic}</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: TXT }}>{t.name}</div>
-                <div style={{ fontSize: 10, color: MUT }}>{t.sub}</div>
-              </div>
-            </div>
-          ))}
+    <section className="myn-trust-band">
+      {items.map(({ icon: Icon, title, text }) => (
+        <div key={title}>
+          <Icon size={26} />
+          <span>{title}</span>
+          <p>{text}</p>
         </div>
-      </div>
-    </div>
+      ))}
+    </section>
   );
 }
 
-
-/* ════════════════════════════════════════════════════════════════
-   MAIN PAGE
-════════════════════════════════════════════════════════════════ */
 export default function HomePage() {
-  const { brands, topCategories, getSubcats, events } = useCatalog();
-  const [dealProds, setDealProds] = useState([]);
-  const [coupons, setCoupons]     = useState([]);
+  const { brands, topCategories } = useCatalog();
+  const [products, setProducts] = useState([]);
+  const [coupons, setCoupons] = useState([]);
 
   useEffect(() => {
     cached(
-      'home:dealProds',
-      10 * 60 * 1000, // 10 min
-      () => productsApi.getAll({ sort: 'popular', limit: 18 })
-        .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || []))
-    ).then(setDealProds).catch(() => {});
-
-    cached(
-      'home:coupons',
+      'home:myntraStyleProducts',
       10 * 60 * 1000,
-      () => couponsApi.getAll({ isActive: true })
-        .then(({ data }) => data.data?.coupons || data.data?.data || [])
-    ).then(all => {
-      const now = new Date();
-      setCoupons(all.filter(c => c.isActive !== false && new Date(c.expiryDate) > now));
-    }).catch(() => {});
+      () => productsApi.getAll({ sort: 'popular', limit: 18 })
+        .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || [])),
+    ).then(setProducts).catch(() => {});
+
+    couponsApi.getPublic()
+      .then(({ data }) => setCoupons(data.data?.coupons || []))
+      .catch(() => {});
   }, []);
 
   return (
-    <div style={{ background: BG, minHeight: '100vh' }}>
-      {/* Vouchers strip — always above hero */}
-      <VouchersStrip coupons={coupons} />
-
-      {/* Hero slider */}
-      <HeroSection />
-
-      {/* Event promo banners — only shown when admin uploads event images */}
-      <TwoPromoBanners events={events} />
-
-      <div style={{ maxWidth: 1520, margin: '0 auto', padding: '0 8px 0' }}>
-        {/* Shop by Category (admin categories + subcategories) */}
-        <ShopByCategorySection topCategories={topCategories} getSubcats={getSubcats} />
-
-        {/* Deal of the Day */}
-        <DealOfTheDaySection products={dealProds} events={events} />
-
-        {/* Best Sellers by top 2 categories */}
-        <BestSellersSection topCategories={topCategories} />
-
-        {/* Active Schemes (events from admin) */}
-        <ActiveSchemesSection events={events} />
-
-        {/* Top Brands (admin brands) */}
-        <BrandsSection brands={brands} />
-
-        {/* Feature cards */}
-        <FeaturesSection />
-
-        {/* Trust bar */}
-        <TrustBar />
-
+    <main className="myn-home">
+      <HeroMyntraStyle />
+      <CouponStrip coupons={coupons} />
+      <div className="myn-content">
+        <RisingStars products={products} />
+        <MedalBrands brands={brands} products={products.slice(5)} />
+        <ShopByCategory categories={topCategories} />
+        <TrustBand />
       </div>
 
       <style>{`
-        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.7} }
-        ::-webkit-scrollbar { display: none }
+        .myn-home {
+          min-height: 100vh;
+          background: #ffffff;
+          color: #202436;
+        }
 
-        .hp-2col {
+        .myn-hero {
+          position: relative;
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2px;
+          grid-template-columns: minmax(0, 1.9fr) minmax(320px, .9fr);
+          min-height: clamp(330px, 38vw, 510px);
+          background: #f7f6f4;
+          overflow: hidden;
         }
-        .hp-3col {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 2px;
+
+        .myn-hero-media {
+          min-width: 0;
+          background: #edf1f4;
         }
-        .hp-cat-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2px;
-          margin-bottom: 8px;
+
+        .myn-hero-media img {
+          width: 100%;
+          height: 100%;
+          min-height: clamp(330px, 38vw, 510px);
+          object-fit: cover;
+          display: block;
         }
-        .hp-trust {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
+
+        .myn-hero-copy {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: flex-start;
+          gap: 22px;
+          padding: 54px 6vw 74px 52px;
+          background: linear-gradient(90deg, #ffffff 0%, #fbfaf8 100%);
+          border-left: 1px solid #ece7df;
+        }
+
+        .myn-hero-copy p {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: .24em;
+          text-transform: uppercase;
+          color: #0f766e;
+        }
+
+        .myn-hero-copy h1 {
+          margin: 0;
+          max-width: 470px;
+          font-size: clamp(34px, 4vw, 64px);
+          line-height: .96;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 500;
+          color: #171923;
+        }
+
+        .myn-hero-copy strong {
+          font-size: clamp(24px, 2.3vw, 38px);
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 500;
+          color: #55545c;
+        }
+
+        .myn-hero-copy button,
+        .myn-star-card,
+        .myn-medal-card,
+        .myn-category-card,
+        .myn-coupon-list button {
+          font: inherit;
+        }
+
+        .myn-hero-copy button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          height: 42px;
+          padding: 0;
+          border: 0;
+          border-top: 1px solid #dfdedb;
+          background: transparent;
+          color: #71717a;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .myn-hero-arrow {
+          position: absolute;
+          top: 50%;
+          z-index: 4;
+          width: 46px;
+          height: 72px;
+          border: 0;
+          background: rgba(38, 43, 62, .72);
+          color: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+
+        .myn-hero-arrow.left { left: 0; transform: translateY(-50%); }
+        .myn-hero-arrow.right { right: 0; transform: translateY(-50%); }
+
+        .myn-dots {
+          position: absolute;
+          left: 50%;
+          bottom: 18px;
+          transform: translateX(-50%);
+          display: flex;
           gap: 12px;
+          z-index: 5;
         }
 
-        @media (max-width: 1024px) {
-          .hp-cat-grid { grid-template-columns: 1fr 1fr; }
+        .myn-dots button {
+          width: 9px;
+          height: 9px;
+          border: 0;
+          border-radius: 50%;
+          background: #d7d8dd;
+          padding: 0;
+          cursor: pointer;
         }
-        @media (max-width: 768px) {
-          .hp-2col { grid-template-columns: 1fr; }
-          .hp-3col { grid-template-columns: 1fr; }
-          .hp-cat-grid { grid-template-columns: 1fr; }
-          .hp-trust { grid-template-columns: repeat(2, 1fr); }
+
+        .myn-dots button.active { background: #8c909a; }
+
+        .myn-content {
+          max-width: 1560px;
+          margin: 0 auto;
+          padding: 44px 0 60px;
         }
-        @media (max-width: 480px) {
-          .hp-trust { grid-template-columns: 1fr 1fr; }
+
+        .myn-section-title {
+          margin: 38px 38px 100px;
+          font-size: clamp(26px, 2.5vw, 38px);
+          line-height: 1.1;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+          font-weight: 800;
+          color: #30384f;
+        }
+
+        .myn-brand-row,
+        .myn-medal-row {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(180px, 1fr));
+          gap: 10px;
+          overflow-x: auto;
+          padding-bottom: 22px;
+        }
+
+        .myn-medal-row {
+          grid-template-columns: repeat(6, minmax(170px, 1fr));
+        }
+
+        .myn-star-card,
+        .myn-medal-card {
+          border: 0;
+          background: #fff;
+          padding: 0;
+          text-align: center;
+          cursor: pointer;
+          min-width: 0;
+        }
+
+        .myn-star-img,
+        .myn-medal-img {
+          height: 330px;
+          background: linear-gradient(135deg, #dfeaf0, #fafafa);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          color: #566176;
+        }
+
+        .myn-medal-img { height: 260px; }
+
+        .myn-star-img img,
+        .myn-medal-img img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 22px;
+          transition: transform .25s ease;
+        }
+
+        .myn-star-card:hover img,
+        .myn-medal-card:hover img,
+        .myn-category-card:hover img,
+        .myn-category-card:hover svg {
+          transform: scale(1.04);
+        }
+
+        .myn-star-offer,
+        .myn-medal-copy {
+          margin: -64px 12px 0;
+          min-height: 126px;
+          position: relative;
+          background: rgba(255, 255, 255, .94);
+          border: 1px solid #e6e3df;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 16px 12px;
+          box-shadow: 0 3px 12px rgba(19, 22, 31, .12);
+        }
+
+        .myn-medal-copy {
+          margin: 0;
+          min-height: 116px;
+          border: 0;
+          box-shadow: none;
+          align-items: flex-start;
+          text-align: left;
+          padding: 16px;
+        }
+
+        .myn-star-offer span,
+        .myn-medal-copy span {
+          font-size: 18px;
+          font-weight: 800;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+          color: #202436;
+        }
+
+        .myn-star-offer p,
+        .myn-medal-copy p {
+          margin: 7px 0 5px;
+          color: #1f2937;
+          font-size: 16px;
+          line-height: 1.25;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .myn-star-offer strong,
+        .myn-medal-copy strong {
+          font-size: 26px;
+          line-height: 1.1;
+          color: #050505;
+        }
+
+        .myn-medal-copy strong {
+          font-size: 20px;
+        }
+
+        .myn-category-grid {
+          display: grid;
+          grid-template-columns: repeat(6, minmax(130px, 1fr));
+          gap: 46px 42px;
+          padding: 0 68px 20px;
+        }
+
+        .myn-category-card {
+          border: 0;
+          background: transparent;
+          padding: 0;
+          cursor: pointer;
+          min-width: 0;
+        }
+
+        .myn-category-visual {
+          aspect-ratio: 1 / 1.18;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          color: #fff;
+        }
+
+        .myn-category-visual img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform .25s ease;
+        }
+
+        .myn-category-visual svg {
+          transition: transform .25s ease;
+        }
+
+        .tone-0 { background: #1f6f78; }
+        .tone-1 { background: #8a3f2d; }
+        .tone-2 { background: #5b6f47; }
+        .tone-3 { background: #31568a; }
+        .tone-4 { background: #8d2244; }
+        .tone-5 { background: #6a553f; }
+
+        .myn-category-label {
+          margin: -84px 10px 0;
+          min-height: 106px;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 12px 8px;
+          background: rgba(193, 70, 37, .9);
+          color: #fff;
+          text-align: center;
+        }
+
+        .myn-category-label span {
+          font-size: 18px;
+          line-height: 1.15;
+          font-weight: 800;
+        }
+
+        .myn-category-label strong {
+          margin-top: 6px;
+          font-size: 25px;
+          line-height: 1;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 500;
+        }
+
+        .myn-category-label p {
+          margin: 7px 0 0;
+          font-size: 16px;
+          font-weight: 700;
+        }
+
+        .myn-coupons {
+          display: grid;
+          grid-template-columns: minmax(240px, .55fr) minmax(0, 1.45fr);
+          gap: 18px;
+          align-items: center;
+          max-width: 1480px;
+          margin: 22px auto 0;
+          padding: 14px 22px;
+          background: #252b3d;
+          color: #fff;
+        }
+
+        .myn-coupons > div:first-child {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        .myn-coupons span {
+          font-weight: 900;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+
+        .myn-coupons strong {
+          color: rgba(255, 255, 255, .78);
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .myn-coupon-list {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(130px, 1fr));
+          gap: 10px;
+        }
+
+        .myn-coupon-list button {
+          min-width: 0;
+          border: 1px dashed rgba(255, 255, 255, .36);
+          background: rgba(255, 255, 255, .08);
+          color: #fff;
+          padding: 9px 12px;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .myn-coupon-list button span,
+        .myn-coupon-list button strong,
+        .myn-coupon-list button small {
+          display: block;
+        }
+
+        .myn-coupon-list button strong {
+          color: #fff;
+          font-size: 17px;
+          margin: 3px 0;
+        }
+
+        .myn-coupon-list button small {
+          color: rgba(255, 255, 255, .58);
+          font-size: 11px;
+        }
+
+        .myn-trust-band {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1px;
+          margin: 42px 38px 0;
+          background: #e7e8ec;
+        }
+
+        .myn-trust-band div {
+          min-height: 120px;
+          background: #fafafa;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 7px;
+          text-align: center;
+          padding: 18px;
+          color: #30384f;
+        }
+
+        .myn-trust-band span {
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: .12em;
+          font-size: 13px;
+        }
+
+        .myn-trust-band p {
+          margin: 0;
+          color: #666b78;
+          font-size: 13px;
+        }
+
+        @media (max-width: 1180px) {
+          .myn-brand-row,
+          .myn-medal-row {
+            grid-template-columns: repeat(5, minmax(220px, 1fr));
+            padding: 0 18px 20px;
+          }
+
+          .myn-category-grid {
+            grid-template-columns: repeat(4, minmax(140px, 1fr));
+            padding: 0 28px 20px;
+            gap: 32px 24px;
+          }
+        }
+
+        @media (max-width: 820px) {
+          .myn-hero {
+            grid-template-columns: 1fr;
+          }
+
+          .myn-hero-copy {
+            padding: 28px 22px 58px;
+            border-left: 0;
+          }
+
+          .myn-section-title {
+            margin: 34px 18px 42px;
+            letter-spacing: .14em;
+          }
+
+          .myn-brand-row,
+          .myn-medal-row {
+            display: flex;
+            overflow-x: auto;
+            padding: 0 16px 18px;
+          }
+
+          .myn-star-card,
+          .myn-medal-card {
+            width: 260px;
+            flex: 0 0 260px;
+          }
+
+          .myn-star-img {
+            height: 260px;
+          }
+
+          .myn-medal-img {
+            height: 220px;
+          }
+
+          .myn-category-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px 14px;
+            padding: 0 16px 20px;
+          }
+
+          .myn-coupons {
+            grid-template-columns: 1fr;
+            margin: 12px 12px 0;
+          }
+
+          .myn-coupon-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .myn-trust-band {
+            grid-template-columns: 1fr;
+            margin: 28px 16px 0;
+          }
+        }
+
+        @media (max-width: 520px) {
+          .myn-hero-arrow {
+            width: 38px;
+            height: 58px;
+          }
+
+          .myn-category-label {
+            margin: -74px 8px 0;
+            min-height: 96px;
+          }
+
+          .myn-category-label span {
+            font-size: 15px;
+          }
+
+          .myn-category-label strong {
+            font-size: 20px;
+          }
+
+          .myn-category-label p {
+            font-size: 13px;
+          }
         }
       `}</style>
-    </div>
+    </main>
   );
 }
