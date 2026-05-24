@@ -44,11 +44,13 @@ function NotificationDropdown({ onClose }) {
   const [refreshing, setRefreshing] = useState(false);
   const recent = notifications.slice(0, 8);
 
-  // Fetch fresh notifications every time the dropdown opens
+  // Fetch fresh notifications and auto-mark all read every time the dropdown opens
   useEffect(() => {
     let cancelled = false;
     setRefreshing(true);
-    fetchNotifications().finally(() => { if (!cancelled) setRefreshing(false); });
+    fetchNotifications().then(() => {
+      if (!cancelled) markAllRead();
+    }).finally(() => { if (!cancelled) setRefreshing(false); });
     return () => { cancelled = true; };
   }, [fetchNotifications]);
 

@@ -4,6 +4,7 @@ export const returnsApi = {
   // Customer
   submit:            (data)     => client.post('/returns', data),
   getMy:             ()         => client.get('/returns/my'),
+  getRefundDetails:  ()         => client.get('/returns/refund-details'),
   getById:           (id)       => client.get(`/returns/${id}`),
   updateRefundMethod:(id, data) => client.patch(`/returns/${id}/refund-method`, data),
 

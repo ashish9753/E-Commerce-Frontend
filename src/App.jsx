@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import HomePage from './pages/HomePage';
@@ -21,6 +22,44 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import NotificationsPage from './pages/NotificationsPage';
 import SupportPage from './pages/SupportPage';
+
+const SITE = 'Trade Engine';
+
+const PAGE_TITLES = {
+  '/':                'Home',
+  '/products':        'Products',
+  '/compare':         'Compare Products',
+  '/cart':            'Cart',
+  '/checkout':        'Checkout',
+  '/profile':         'My Profile',
+  '/orders':          'My Orders',
+  '/wishlist':        'Wishlist',
+  '/track':           'Track Order',
+  '/returns':         'Returns',
+  '/notifications':   'Notifications',
+  '/support':         'Support',
+  '/login':           'Login',
+  '/register':        'Register',
+  '/forgot-password': 'Forgot Password',
+  '/admin':           'Admin Dashboard',
+  '/employee':        'Employee Dashboard',
+};
+
+function PageTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const exact = PAGE_TITLES[pathname];
+    if (exact) {
+      document.title = `${exact} — ${SITE}`;
+      return;
+    }
+    if (pathname.startsWith('/product/')) { document.title = `Product — ${SITE}`; return; }
+    if (pathname.startsWith('/return-status/')) { document.title = `Return Status — ${SITE}`; return; }
+    if (pathname.startsWith('/reset-password/')) { document.title = `Reset Password — ${SITE}`; return; }
+    document.title = SITE;
+  }, [pathname]);
+  return null;
+}
 
 const Spinner = () => <div className="min-h-screen flex items-center justify-center"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
 
@@ -62,6 +101,7 @@ function GuestRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <PageTitle />
       <Routes>
         {/* Guest-only auth pages */}
         <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />

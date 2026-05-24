@@ -2,7 +2,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useFormDraft } from '../../hooks/useFormDraft';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { employeeApi } from '../../api/employee';
+import { ordersApi } from '../../api/orders';
 import { returnsApi } from '../../api/returns';
 import { deliveryAreasApi } from '../../api/deliveryAreas';
 import { getErrorMessage } from '../../api/client';
@@ -117,7 +119,7 @@ function SvgAt({ el, size = 17 }) {
 const ICON_COLOR_MAP = { blue: C.blue, purple: C.purple, yellow: C.yellow, green: C.green, orange: C.accent, red: C.red, cyan: C.cyan };
 const ICON_BG_MAP   = { blue: 'rgba(59,130,246,.15)', purple: 'rgba(139,92,246,.15)', yellow: 'rgba(234,179,8,.15)', green: 'rgba(34,197,94,.15)', orange: 'rgba(249,115,22,.15)', red: 'rgba(239,68,68,.15)', cyan: 'rgba(6,182,212,.15)' };
 
-function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
+function KpiCard({ label, value, sub, colorKey = 'blue', iconEl, rawValue }) {
   const col = ICON_COLOR_MAP[colorKey] || C.blue;
   const bg  = ICON_BG_MAP[colorKey]   || 'rgba(59,130,246,.15)';
   const nowrap = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
@@ -125,7 +127,8 @@ function KpiCard({ label, value, sub, colorKey = 'blue', iconEl }) {
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minWidth: 0 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11, color: C.mute, fontWeight: 500, marginBottom: 3, ...nowrap }}>{label}</div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}>{value}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.text, lineHeight: 1.2, margin: '3px 0 2px', ...nowrap }}
+          title={rawValue !== undefined ? fmtRs(rawValue) : undefined}>{value}</div>
         {sub && <div style={{ fontSize: 10.5, color: C.mute, ...nowrap }}>{sub}</div>}
       </div>
       <div style={{ width: 40, height: 40, borderRadius: 10, background: bg, color: col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -172,6 +175,7 @@ function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
     ghost:   { background: 'rgba(255,255,255,.06)', color: C.sub, border: `1px solid ${C.line}` },
     danger:  { background: 'rgba(239,68,68,.12)',   color: '#f87171', border: '1px solid rgba(239,68,68,.25)' },
     success: { background: 'rgba(34,197,94,.12)',   color: C.green,   border: '1px solid rgba(34,197,94,.25)' },
+    warn:    { background: 'rgba(234,179,8,.12)',   color: C.yellow,  border: '1px solid rgba(234,179,8,.25)' },
     primary: { background: C.accent, color: 'white' },
   };
   return <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant], opacity: disabled ? .5 : 1 }}>{children}</button>;
@@ -249,8 +253,8 @@ function OverviewTab({ profile }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
-        <KpiCard label="Net Revenue"     value={fmtShort(revenue)}   sub="Paid minus refunded"   colorKey="green"  iconEl={Icon.dollar} />
-        <KpiCard label="Refunded"        value={fmtShort(refunded)}  sub={`${breakdown.filter(b=>['RETURNED','CANCELLED'].includes(b._id)).reduce((a,b)=>a+b.count,0)} orders`} colorKey="red" iconEl={Icon.refund} />
+        <KpiCard label="Net Revenue"     value={fmtShort(revenue)}   sub="Paid minus refunded"   colorKey="green"  iconEl={Icon.dollar} rawValue={revenue} />
+        <KpiCard label="Refunded"        value={fmtShort(refunded)}  sub={`${breakdown.filter(b=>['RETURNED','CANCELLED'].includes(b._id)).reduce((a,b)=>a+b.count,0)} orders`} colorKey="red" iconEl={Icon.refund} rawValue={refunded} />
         <KpiCard label="Active Products" value={publishedN}          sub={`${products.length} total`} colorKey="orange" iconEl={Icon.bag} />
         <KpiCard label="Pending Orders"  value={fmt(pending)}        sub="To be processed"       colorKey="yellow" iconEl={Icon.truck} />
       </div>
@@ -258,7 +262,7 @@ function OverviewTab({ profile }) {
       {/* Charts row */}
       <div style={{ display: 'grid', gridTemplateColumns: cols3, gap: 16 }}>
         <Card title="Inventory Value">
-          <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 4 }}>{fmtShort(stockValue)}</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 4 }} title={fmtRs(stockValue)}>{fmtShort(stockValue)}</div>
           <div style={{ fontSize: 12, color: C.mute, marginBottom: 16 }}>{fmt(totalStock)} units in stock</div>
           {outOfStock.length > 0 && (
             <div style={{ background: C.red+'14', border:`1px solid ${C.red}33`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.red, marginBottom: 8, display:'flex', alignItems:'center', gap:8 }}>
@@ -276,9 +280,9 @@ function OverviewTab({ profile }) {
 
         <Card title="Order Status">
           {breakdown.length === 0 ? <Empty text="No orders yet" /> :
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={210}>
               <PieChart>
-                <Pie data={breakdown.map(b=>({name:b._id,value:b.count}))} cx="50%" cy="50%" innerRadius={45} outerRadius={68} paddingAngle={3} dataKey="value">
+                <Pie data={breakdown.map(b=>({name:b._id,value:b.count}))} cx="50%" cy="42%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
                   {breakdown.map(b => <Cell key={b._id} fill={STATUS_COLORS[b._id]||C.mute} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background: C.card, border:`1px solid ${C.line}`, borderRadius:8, color:C.text, fontSize:12 }} />
@@ -290,9 +294,9 @@ function OverviewTab({ profile }) {
 
         <Card title="Payment Methods">
           {payChart.length === 0 ? <Empty text="No orders yet" /> :
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={210}>
               <PieChart>
-                <Pie data={payChart} cx="50%" cy="50%" innerRadius={45} outerRadius={68} paddingAngle={3} dataKey="value">
+                <Pie data={payChart} cx="50%" cy="42%" innerRadius={38} outerRadius={58} paddingAngle={3} dataKey="value">
                   <Cell fill={C.blue} />
                   <Cell fill={C.green} />
                 </Pie>
@@ -376,7 +380,7 @@ function ProductsTab({ onEdit }) {
         <KpiCard label="Total Products"  value={all.length}                                    sub={`${all.filter(p=>p.isPublished).length} live`} colorKey="blue"   iconEl={Icon.bag} />
         <KpiCard label="Units in Stock"  value={fmt(all.reduce((a,p)=>a+(p.stock||0),0))}     sub="Across all products"                           colorKey="green"  iconEl={Icon.box} />
         <KpiCard label="Total Sold"      value={fmt(totalSold)}                               sub="Units sold ever"                               colorKey="orange" iconEl={Icon.check} />
-        <KpiCard label="Stock Value"     value={fmtShort(totalRevPotential)}                  sub="At current prices"                             colorKey="purple" iconEl={Icon.dollar} />
+        <KpiCard label="Stock Value"     value={fmtShort(totalRevPotential)}                  sub="At current prices"                             colorKey="purple" iconEl={Icon.dollar} rawValue={totalRevPotential} />
       </div>
 
       <Card>
@@ -548,6 +552,7 @@ function OrdersTab({ onViewReturns }) {
   const [dateTo,   setDateTo]   = useState('');
   const [page, setPage]         = useState(1);
   const [pagination, setPag]    = useState({ total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+  const [expandedId, setExpandedId] = useState(null);
 
 
   // appliedSearch only updates on Enter / Search button — no API calls while typing
@@ -575,7 +580,12 @@ function OrdersTab({ onViewReturns }) {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const handleStatusUpdated = useCallback(() => { fetchOrders(); }, [fetchOrders]);
+  const handleStatusUpdated = useCallback((orderId, newStatus) => {
+    if (statusF && newStatus !== statusF) {
+      setAll(prev => prev.filter(o => o._id !== orderId));
+    }
+    fetchOrders();
+  }, [fetchOrders, statusF]);
 
   // date filter is client-side (no backend support); text/status/payment are server-side
   const orders = all.filter(o => {
@@ -594,7 +604,7 @@ function OrdersTab({ onViewReturns }) {
     <div style={{ display:'flex', flexDirection:'column', gap:20, opacity: loading ? 0.55 : 1, transition: 'opacity .2s', pointerEvents: loading ? 'none' : 'auto' }}>
       <div style={{ display:'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12 }}>
         <KpiCard label="Total Orders"   value={fmt(all.length)}  sub={`${delivered} delivered`}   colorKey="blue"   iconEl={Icon.orders} />
-        <KpiCard label="Revenue Earned" value={fmtShort(revenue)} sub="From paid orders"           colorKey="green"  iconEl={Icon.dollar} />
+        <KpiCard label="Revenue Earned" value={fmtShort(revenue)} sub="From paid orders"           colorKey="green"  iconEl={Icon.dollar} rawValue={revenue} />
         <KpiCard label="Pending"        value={fmt(pending)}     sub="Awaiting fulfilment"         colorKey="yellow" iconEl={Icon.truck} />
         <KpiCard label="Cancelled"      value={fmt(all.filter(o=>o.orderStatus==='CANCELLED').length)} colorKey="red" iconEl={Icon.x} />
       </div>
@@ -655,70 +665,102 @@ function OrdersTab({ onViewReturns }) {
 
       <Card title={`Orders (${pagination.total})`}>
         <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total`} borderBottom />
-        {orders.length === 0 ? <Empty text="No orders match your filters" /> :
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' }}>
-              <colgroup>
-                <col style={{ width:'22%' }} />
-                <col style={{ width:'18%' }} />
-                <col style={{ width:'22%' }} />
-                <col style={{ width:'9%' }} />
-                <col style={{ width:'9%' }} />
-                <col style={{ width:'8%' }} />
-                <col style={{ width:'12%' }} />
-              </colgroup>
-              <thead><tr>
-                <Th>Order #</Th><Th>Customer</Th><Th>Products</Th><Th>Total</Th><Th>Method</Th><Th>Date</Th><Th>Status / Action</Th>
-              </tr></thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr key={o._id}>
-                    <Td>
-                      <span style={{ fontFamily:'monospace', fontSize:11.5, fontWeight:700, color:C.accent, wordBreak:'break-all' }}>{o.orderNumber}</span>
-                      {o.trackingId && <div style={{ fontSize:10, color:C.mute, marginTop:2 }}>Track: {o.trackingId}</div>}
-                    </Td>
-                    <Td>
-                      <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'—'}</div>
+        {orders.length === 0 ? <Empty text="No orders match your filters" /> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {orders.map(o => {
+              const isExpanded = expandedId === o._id;
+              return (
+                <div key={o._id} style={{ border:`1px solid ${C.line}`, borderRadius:10, marginBottom:0, overflow:'hidden' }}>
+                  <div
+                    onClick={() => setExpandedId(expandedId === o._id ? null : o._id)}
+                    style={{
+                      background: C.card2,
+                      padding: '10px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      borderRadius: isExpanded ? '10px 10px 0 0' : 10,
+                      transition: 'background .15s',
+                    }}
+                  >
+                    <div style={{ flexShrink:0 }}>
+                      <span style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:C.accent }}>{o.orderNumber}</span>
+                      {o.trackingId && <div style={{ fontSize:10, color:C.mute, marginTop:1 }}>Track: {o.trackingId}</div>}
+                    </div>
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontWeight:600, fontSize:13, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.name||'—'}</div>
                       <div style={{ fontSize:11, color:C.mute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.user?.email}</div>
-                      <div style={{ fontSize:11, color:C.mute }}>{o.user?.phone}</div>
-                    </Td>
-                    <Td>
-                      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                        {o.orderItems?.slice(0,2).map(item=>(
-                          <div key={item._id} style={{ display:'flex', alignItems:'center', gap:7 }}>
-                            <div style={{ width:28, height:28, borderRadius:5, background:C.card2, overflow:'hidden', flexShrink:0, border:`1px solid ${C.line}` }}>
-                              {item.image
-                                ? <img src={item.image} style={{ width:'100%', height:'100%', objectFit:'contain' }} alt="" />
-                                : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:C.mute }}><SvgAt el={Icon.bag} size={13}/></div>}
-                            </div>
-                            <div style={{ minWidth:0 }}>
-                              <div style={{ fontSize:12, color:C.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.title}</div>
-                              <div style={{ fontSize:11, color:C.mute }}>Qty: {item.quantity}</div>
+                    </div>
+                    <span style={{ fontSize:12, color:C.mute, flexShrink:0 }}>{o.orderItems?.length || 0} item{(o.orderItems?.length||0)!==1?'s':''}</span>
+                    <span style={{ fontWeight:700, fontSize:13, color:C.text, flexShrink:0 }}>{fmtRs(o.totalPrice)}</span>
+                    <Badge text={o.paymentStatus} color={o.paymentStatus==='PAID'?C.green:o.paymentStatus==='FAILED'?C.red:C.yellow} />
+                    <Badge text={o.orderStatus} color={STATUS_COLORS[o.orderStatus]||C.mute} />
+                    <span style={{ fontSize:11, color:C.mute, flexShrink:0 }}>
+                      {new Date(o.createdAt).toLocaleDateString('en-IN',{ day:'numeric', month:'short' })}
+                    </span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" style={{ width:16, height:16, transition:'transform .2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', color:C.mute, flexShrink:0 }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </div>
+                  {isExpanded && (
+                    <div style={{ background:C.card, borderTop:`1px solid ${C.line}`, padding:16 }}>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:14 }}>
+                        <div>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Customer</div>
+                          <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{o.user?.name||'—'}</div>
+                          <div style={{ fontSize:12, color:C.mute }}>{o.user?.email}</div>
+                          <div style={{ fontSize:12, color:C.mute }}>{o.user?.phone}</div>
+                        </div>
+                        {o.shippingAddress && (
+                          <div>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>Shipping Address</div>
+                            <div style={{ fontSize:12, color:C.sub, lineHeight:1.6 }}>
+                              {o.shippingAddress.name && <div style={{ fontWeight:600, color:C.text }}>{o.shippingAddress.name}</div>}
+                              {o.shippingAddress.line1 && <div>{o.shippingAddress.line1}</div>}
+                              {o.shippingAddress.line2 && <div>{o.shippingAddress.line2}</div>}
+                              {(o.shippingAddress.city||o.shippingAddress.state||o.shippingAddress.pincode) && (
+                                <div>{[o.shippingAddress.city,o.shippingAddress.state,o.shippingAddress.pincode].filter(Boolean).join(', ')}</div>
+                              )}
+                              {o.shippingAddress.phone && <div style={{ color:C.mute }}>{o.shippingAddress.phone}</div>}
                             </div>
                           </div>
-                        ))}
-                        {o.orderItems?.length > 2 && <span style={{ fontSize:11, color:C.mute }}>+{o.orderItems.length-2} more</span>}
+                        )}
                       </div>
-                    </Td>
-                    <Td>
-                      <div style={{ fontWeight:700, color:C.text, fontSize:13 }}>{fmtRs(o.totalPrice)}</div>
-                      <div style={{ marginTop:4 }}>
+                      <div style={{ marginBottom:14 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:8 }}>Order Items</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                          {o.orderItems?.map(item => (
+                            <div key={item._id} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                              <div style={{ width:28, height:28, borderRadius:5, background:C.card2, overflow:'hidden', flexShrink:0, border:`1px solid ${C.line}` }}>
+                                {item.image
+                                  ? <img src={item.image} style={{ width:'100%', height:'100%', objectFit:'contain' }} alt="" />
+                                  : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:C.mute }}><SvgAt el={Icon.bag} size={13}/></div>}
+                              </div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:12, color:C.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.title}</div>
+                                <div style={{ fontSize:11, color:C.mute }}>Qty: {item.quantity}</div>
+                              </div>
+                              <span style={{ fontSize:13, fontWeight:700, color:C.text, flexShrink:0 }}>{fmtRs(item.price)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', marginBottom:14, padding:'10px 14px', background:C.bg, borderRadius:8, border:`1px solid ${C.line}` }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em' }}>Payment</div>
+                        <Badge text={o.paymentMethod} color={o.paymentMethod==='COD'?C.yellow:C.blue} />
                         <Badge text={o.paymentStatus} color={o.paymentStatus==='PAID'?C.green:o.paymentStatus==='FAILED'?C.red:C.yellow} />
+                        <span style={{ fontWeight:700, fontSize:13, color:C.text, marginLeft:'auto' }}>{fmtRs(o.totalPrice)}</span>
                       </div>
-                    </Td>
-                    <Td>
-                      <Badge text={o.paymentMethod} color={o.paymentMethod==='COD'?C.yellow:C.blue} />
-                    </Td>
-                    <Td style={{ color:C.mute, fontSize:12 }}>
-                      {new Date(o.createdAt).toLocaleDateString('en-IN',{ day:'numeric', month:'short' })}
-                    </Td>
-                    <Td><OrderStatusCell order={o} onUpdated={handleStatusUpdated} onViewReturns={onViewReturns} /></Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <OrderStatusCell order={o} onUpdated={handleStatusUpdated} onViewReturns={onViewReturns} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        }
+        )}
         <PagBar page={page} pagination={pagination} loading={loading} setPage={setPage} label={`${pagination.total} total`} />
       </Card>
     </div>
@@ -880,7 +922,7 @@ function ProductForm({ initial, onSave, onCancel }) {
           <KpiCard label="MRP"         value={fmtRs(mrp)}                               sub="Original price"  colorKey="blue"   iconEl={Icon.tag} />
           <KpiCard label="Sale Price"  value={fmtRs(profit)}                            sub="Customer pays"   colorKey="green"  iconEl={Icon.dollar} />
           <KpiCard label="Discount"    value={disc>0?`${disc}%`:'—'}                    sub="Off MRP"         colorKey="orange" iconEl={Icon.tag} />
-          <KpiCard label="Stock Value" value={fmtShort(profit*(Number(form.stock)||0))} sub="At sale price"   colorKey="purple" iconEl={Icon.box} />
+          <KpiCard label="Stock Value" value={fmtShort(profit*(Number(form.stock)||0))} sub="At sale price"   colorKey="purple" iconEl={Icon.box} rawValue={profit*(Number(form.stock)||0)} />
         </div>
       )}
 
@@ -1187,6 +1229,7 @@ function EmployeeReturnsTab() {
   const [advanceId, setAdvanceId]   = useState(null); // id of return showing proof upload panel
   const [advanceNote, setAdvanceNote] = useState('');
   const [proofFiles, setProofFiles] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -1209,6 +1252,10 @@ function EmployeeReturnsTab() {
   };
 
   const doAdvance = async (id, withProof = false) => {
+    if (withProof && proofFiles.length === 0) {
+      alert('Please upload at least 1 refund proof screenshot before proceeding.');
+      return;
+    }
     setSaving(true);
     try {
       await returnsApi.employeeAdvance(id, {
@@ -1289,248 +1336,291 @@ function EmployeeReturnsTab() {
               const adv        = ADVANCE_LABELS[req.status];
               const pipelineIdx = PIPELINE.indexOf(req.status);
 
+              const isExpanded = expandedId === req._id;
+
               return (
                 <div key={req._id} style={{ border:`1px solid ${C.line}`, borderRadius:12, overflow:'hidden' }}>
-                  {/* Header */}
-                  <div style={{ background:C.card2, padding:'12px 18px', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:C.text }}>Return #{req._id?.slice(-8).toUpperCase()}</div>
-                      <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>{req.user?.name} · {req.user?.email}</div>
-                    </div>
+                  {/* Collapsed header — always visible */}
+                  <div
+                    onClick={() => setExpandedId(expandedId === req._id ? null : req._id)}
+                    style={{
+                      background: C.card2,
+                      padding: '10px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:C.accent, flexShrink:0 }}>
+                      #{req._id?.slice(-8).toUpperCase()}
+                    </span>
+                    <span style={{ fontSize:13, fontWeight:600, color:C.text, minWidth:100, flexShrink:0 }}>
+                      {req.user?.name}
+                    </span>
+                    <span style={{ fontSize:12, color:C.mute, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {(req.product?.title || '').slice(0, 30)}{(req.product?.title || '').length > 30 ? '…' : ''}
+                    </span>
                     <ReturnBadge status={req.status} />
-                    <span style={{ fontSize:14, fontWeight:800, color:C.accent }}>{fmtRs(req.refundAmount || 0)}</span>
-                    {canAct && (
-                      <button onClick={() => setActionId(isOpen ? null : req._id)}
-                        style={{ padding:'6px 14px', borderRadius:8, background:isOpen?C.card:C.accent, color:isOpen?C.sub:'white',
-                          border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
-                        {isOpen ? 'Close' : 'Take Action'}
-                      </button>
-                    )}
+                    <span style={{ fontWeight:700, fontSize:13, color:C.accent, flexShrink:0 }}>
+                      {fmtRs(req.refundAmount || 0)}
+                    </span>
+                    <span style={{ fontSize:11, color:C.mute, flexShrink:0 }}>
+                      {new Date(req.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}
+                    </span>
+                    <span style={{ fontSize:16, color:C.mute, transition:'transform .2s', transform: isExpanded ? 'rotate(180deg)' : 'none', flexShrink:0 }}>▾</span>
                   </div>
 
-                  {/* Item info */}
-                  <div style={{ padding:'12px 18px', display:'flex', gap:12, alignItems:'center' }}>
-                    {req.product?.images?.[0]
-                      ? <img src={req.product.images[0]} alt="" style={{ width:52, height:52, objectFit:'contain', border:`1px solid ${C.line}`, borderRadius:6 }} />
-                      : <div style={{ width:52, height:52, background:C.card2, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', color:C.mute }}><SvgAt el={Icon.box} size={24} /></div>
-                    }
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
-                      <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
-                        Reason: <strong style={{color:C.text}}>{REASON_LABEL[req.reason] || req.reason?.replace(/_/g,' ')}</strong>
-                        {' · '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
-                      </div>
-                      {req.description && <div style={{ fontSize:12, color:C.sub, marginTop:3, fontStyle:'italic' }}>"{req.description}"</div>}
-                    </div>
-                    <div style={{ textAlign:'right', flexShrink:0, fontSize:12, color:C.mute }}>
-                      {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}
-                    </div>
-                  </div>
-
-                  {/* Customer evidence — photos & video */}
-                  {req.evidence?.length > 0 && (
-                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:C.accent, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:10 }}>
-                        📸 Return Evidence ({req.evidence.filter(e=>e.type==='image').length} photo{req.evidence.filter(e=>e.type==='image').length!==1?'s':''}
-                        {req.evidence.some(e=>e.type==='video') ? ', 1 video' : ''})
-                      </div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-start' }}>
-                        {req.evidence.filter(e=>e.type==='image').map((ev, i) => (
-                          <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
-                            <img src={ev.url} alt={`Evidence ${i+1}`}
-                              style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:`2px solid ${C.line}`, cursor:'zoom-in', display:'block', transition:'all .15s' }}
-                              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform='scale(1.06)';}}
-                              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.line;e.currentTarget.style.transform='scale(1)';}}
-                            />
-                          </a>
-                        ))}
-                        {req.evidence.filter(e=>e.type==='video').map((ev, i) => (
-                          <a key={`v${i}`} href={ev.url} target="_blank" rel="noopener noreferrer"
-                            style={{ width:80, height:80, borderRadius:8, border:`2px solid ${C.blue}55`, background:C.blue+'12', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, textDecoration:'none', cursor:'pointer', transition:'all .15s' }}
-                            onMouseEnter={e=>e.currentTarget.style.borderColor=C.blue}
-                            onMouseLeave={e=>e.currentTarget.style.borderColor=C.blue+'55'}>
-                            <span style={{ fontSize:28 }}>🎬</span>
-                            <span style={{ fontSize:9, fontWeight:700, color:C.blue, letterSpacing:'.04em' }}>VIEW VIDEO</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bank / UPI details — always visible for refund returns */}
-                  {req.resolution === 'refund' && (
-                    <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.card2+'99', fontSize:12 }}>
-                      <div style={{ fontWeight:700, color:C.blue, marginBottom:5, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em' }}>💳 Refund Details</div>
-                      {req.refundMethod === 'bank_transfer' && req.bankDetails?.accountNumber ? (
-                        <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 18px', color:C.text }}>
-                          <span><span style={{ color:C.mute }}>Bank: </span><strong>{req.bankDetails.bankName}</strong></span>
-                          <span><span style={{ color:C.mute }}>A/C: </span>···{req.bankDetails.accountNumber.slice(-4)}</span>
-                          <span><span style={{ color:C.mute }}>Name: </span>{req.bankDetails.accountName}</span>
-                          <span><span style={{ color:C.mute }}>IFSC: </span>{req.bankDetails.ifscCode}</span>
+                  {/* Expanded body */}
+                  {isExpanded && (
+                    <>
+                      {/* Item info */}
+                      <div style={{ padding:'12px 18px', display:'flex', gap:12, alignItems:'center', borderTop:`1px solid ${C.line}` }}>
+                        {req.product?.images?.[0]
+                          ? <img src={req.product.images[0]} alt="" style={{ width:52, height:52, objectFit:'contain', border:`1px solid ${C.line}`, borderRadius:6 }} />
+                          : <div style={{ width:52, height:52, background:C.card2, borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', color:C.mute }}><SvgAt el={Icon.box} size={24} /></div>
+                        }
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:13, color:C.text }}>{req.product?.title || 'Product'}</div>
+                          <div style={{ fontSize:12, color:C.mute, marginTop:2 }}>
+                            Reason: <strong style={{color:C.text}}>{REASON_LABEL[req.reason] || req.reason?.replace(/_/g,' ')}</strong>
+                            {' · '}Resolution: <strong style={{color:C.sub}}>{req.resolution || 'refund'}</strong>
+                          </div>
+                          {req.description && <div style={{ fontSize:12, color:C.sub, marginTop:3, fontStyle:'italic' }}>"{req.description}"</div>}
                         </div>
-                      ) : req.refundMethod === 'upi' && req.bankDetails?.upiId ? (
-                        <div style={{ color:C.text }}>
-                          <span style={{ color:C.mute }}>UPI ID: </span><strong>{req.bankDetails.upiId}</strong>
+                        <div style={{ textAlign:'right', flexShrink:0, fontSize:12, color:C.mute }}>
+                          {req.order?.orderNumber || req.order?._id?.slice(-6)?.toUpperCase() || '—'}
                         </div>
-                      ) : req.refundMethod === 'original_payment' ? (
-                        <div style={{ color:C.mute }}>Back to original payment method</div>
-                      ) : (
-                        <div style={{ color:C.yellow, fontWeight:600 }}>
-                          ⚠ {req.order?.paymentMethod === 'COD'
-                            ? 'COD order — customer has not provided bank/UPI details yet'
-                            : 'Customer has not selected a refund method yet'}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
 
-                  {/* Pipeline tracker */}
-                  {pipelineIdx >= 0 && (
-                    <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
-                      <div style={{ display:'flex', alignItems:'center' }}>
-                        {PIPELINE.map((step, i) => {
-                          const done   = i < pipelineIdx;
-                          const active = i === pipelineIdx;
-                          const col    = done ? C.green : active ? C.accent : C.line;
-                          return (
-                            <div key={step} style={{ display:'flex', alignItems:'center', flex: i < PIPELINE.length-1 ? 1 : 'none' }}>
-                              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-                                <div style={{ width:22, height:22, borderRadius:'50%', background: done?C.green:active?C.accent:C.card2, border:`2px solid ${col}`,
-                                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color: done||active?'white':C.mute, fontWeight:800 }}>
-                                  {done ? <SvgAt el={Icon.check} size={11} /> : i+1}
-                                </div>
-                                <div style={{ fontSize:9, fontWeight:700, color: active?C.accent:done?C.green:C.mute, whiteSpace:'nowrap' }}>
-                                  {PIPELINE_LABELS[step]}
-                                </div>
-                              </div>
-                              {i < PIPELINE.length-1 && (
-                                <div style={{ flex:1, height:2, background: done?C.green:C.line, margin:'0 4px', marginBottom:14 }} />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Approve/Reject panel */}
-                  {isOpen && canAct && (
-                    <div style={{ padding:'14px 18px', background:C.bg, borderTop:`1px solid ${C.line}` }}>
-                      <div style={{ fontSize:13, fontWeight:700, marginBottom:10, color:C.text }}>Your response to customer:</div>
-                      <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
-                        placeholder="Optional note to customer…"
-                        style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10, background:C.card2, color:C.text }} />
-                      <div style={{ display:'flex', gap:10 }}>
-                        <button onClick={() => doAction(req._id, 'approve')} disabled={saving}
-                          style={{ flex:1, padding:'9px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                          <SvgAt el={Icon.check} size={14} /> Approve & Start Pickup
-                        </button>
-                        <button onClick={() => doAction(req._id, 'reject')} disabled={saving}
-                          style={{ flex:1, padding:'9px', borderRadius:8, background:C.red, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                          <SvgAt el={Icon.x} size={14} /> Reject Return
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Refund proof photos */}
-                  {req.refundProof?.length > 0 && (
-                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:C.green, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
-                        🧾 Refund Proof ({req.refundProof.length})
-                      </div>
-                      <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                        {req.refundProof.map((p,i) => (
-                          <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
-                            <img src={p.url} alt={`proof ${i+1}`}
-                              style={{ width:72, height:72, objectFit:'cover', borderRadius:8, border:`2px solid ${C.green}55`, cursor:'zoom-in', display:'block' }} />
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Advance button */}
-                  {canAdvance && adv && advanceId !== req._id && (
-                    <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:C.bg }}>
-                      <div style={{ fontSize:12, color:C.mute }}>
-                        Next step: <strong style={{color:C.text}}>{adv.next.replace(/_/g,' ')}</strong>
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (['ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status)) {
-                            setAdvanceId(req._id); setAdvanceNote(''); setProofFiles([]);
-                          } else {
-                            doAdvance(req._id, false);
-                          }
-                        }}
-                        disabled={saving}
-                        style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none',
-                          fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, whiteSpace:'nowrap', fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
-                        <SvgAt el={adv.iconEl} size={14} />
-                        {saving ? '…' : adv.label}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Proof upload panel for refund steps */}
-                  {canAdvance && adv && advanceId === req._id && (
-                    <div style={{ padding:'14px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
-                      <div style={{ fontWeight:700, fontSize:13, marginBottom:10, color:C.text }}>
-                        {adv.label} — Add Refund Proof
-                      </div>
-                      <div style={{ marginBottom:10 }}>
-                        <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>
-                          Upload Screenshot / Photo <span style={{ fontWeight:400, textTransform:'none' }}>(optional, up to 5)</span>
-                        </label>
-                        <input type="file" accept="image/*" multiple
-                          onChange={e => setProofFiles(Array.from(e.target.files || []))}
-                          style={{ fontSize:12, color:C.text }} />
-                        {proofFiles.length > 0 && (
-                          <div style={{ display:'flex', gap:6, marginTop:6, flexWrap:'wrap' }}>
-                            {proofFiles.map((f,i) => (
-                              <span key={i} style={{ fontSize:11, background:C.card2, borderRadius:6, padding:'2px 8px', color:C.sub }}>
-                                🖼 {f.name}
-                              </span>
+                      {/* Customer evidence — photos & video */}
+                      {req.evidence?.length > 0 && (
+                        <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.accent, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:10 }}>
+                            📸 Return Evidence ({req.evidence.filter(e=>e.type==='image').length} photo{req.evidence.filter(e=>e.type==='image').length!==1?'s':''}
+                            {req.evidence.some(e=>e.type==='video') ? ', 1 video' : ''})
+                          </div>
+                          <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'flex-start' }}>
+                            {req.evidence.filter(e=>e.type==='image').map((ev, i) => (
+                              <a key={i} href={ev.url} target="_blank" rel="noopener noreferrer" title="Click to view full size">
+                                <img src={ev.url} alt={`Evidence ${i+1}`}
+                                  style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:`2px solid ${C.line}`, cursor:'zoom-in', display:'block', transition:'all .15s' }}
+                                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform='scale(1.06)';}}
+                                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.line;e.currentTarget.style.transform='scale(1)';}}
+                                />
+                              </a>
+                            ))}
+                            {req.evidence.filter(e=>e.type==='video').map((ev, i) => (
+                              <a key={`v${i}`} href={ev.url} target="_blank" rel="noopener noreferrer"
+                                style={{ width:80, height:80, borderRadius:8, border:`2px solid ${C.blue}55`, background:C.blue+'12', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, textDecoration:'none', cursor:'pointer', transition:'all .15s' }}
+                                onMouseEnter={e=>e.currentTarget.style.borderColor=C.blue}
+                                onMouseLeave={e=>e.currentTarget.style.borderColor=C.blue+'55'}>
+                                <span style={{ fontSize:28 }}>🎬</span>
+                                <span style={{ fontSize:9, fontWeight:700, color:C.blue, letterSpacing:'.04em' }}>VIEW VIDEO</span>
+                              </a>
                             ))}
                           </div>
-                        )}
-                      </div>
-                      <div style={{ marginBottom:10 }}>
-                        <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>Note to Customer</label>
-                        <textarea rows={2} value={advanceNote} onChange={e=>setAdvanceNote(e.target.value)}
-                          placeholder="Optional message about refund…"
-                          style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', background:C.card2, color:C.text }} />
-                      </div>
-                      <div style={{ display:'flex', gap:8 }}>
-                        <button onClick={() => doAdvance(req._id, true)} disabled={saving}
-                          style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
-                          <SvgAt el={adv.iconEl} size={14} /> {saving ? 'Saving…' : 'Confirm & ' + adv.label}
-                        </button>
-                        <button onClick={() => { setAdvanceId(null); setProofFiles([]); setAdvanceNote(''); }}
-                          style={{ padding:'8px 16px', borderRadius:8, background:C.card2, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                        </div>
+                      )}
 
-                  {req.status === 'REFUND_COMPLETED' && (
-                    <div style={{ padding:'10px 18px', background:C.green+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.green, fontWeight:700, display:'flex', alignItems:'center', gap:8 }}>
-                      <SvgAt el={Icon.check} size={14} /> Refund completed — this return is closed
-                    </div>
-                  )}
-                  {req.status === 'EMPLOYEE_REJECTED' && (
-                    <div style={{ padding:'10px 18px', background:C.red+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.red }}>
-                      Return rejected. Admin may review and override.
-                    </div>
-                  )}
+                      {/* Bank / UPI details — always visible for refund returns */}
+                      {req.resolution === 'refund' && (
+                        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.card2+'99', fontSize:12 }}>
+                          <div style={{ fontWeight:700, color:C.blue, marginBottom:5, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em' }}>💳 Refund Details</div>
+                          {req.refundMethod === 'bank_transfer' && req.bankDetails?.accountNumber ? (
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 18px', color:C.text }}>
+                              <span><span style={{ color:C.mute }}>Bank: </span><strong>{req.bankDetails.bankName}</strong></span>
+                              <span><span style={{ color:C.mute }}>A/C: </span>···{req.bankDetails.accountNumber.slice(-4)}</span>
+                              <span><span style={{ color:C.mute }}>Name: </span>{req.bankDetails.accountName}</span>
+                              <span><span style={{ color:C.mute }}>IFSC: </span>{req.bankDetails.ifscCode}</span>
+                            </div>
+                          ) : req.refundMethod === 'upi' && req.bankDetails?.upiId ? (
+                            <div style={{ color:C.text }}>
+                              <span style={{ color:C.mute }}>UPI ID: </span><strong>{req.bankDetails.upiId}</strong>
+                            </div>
+                          ) : req.refundMethod === 'original_payment' ? (
+                            <div style={{ color:C.mute }}>Back to original payment method</div>
+                          ) : (
+                            <div style={{ color:C.yellow, fontWeight:600 }}>
+                              ⚠ {req.order?.paymentMethod === 'COD'
+                                ? 'COD order — customer has not provided bank/UPI details yet'
+                                : 'Customer has not selected a refund method yet'}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                  {(req.employeeNote || req.adminNote) && (
-                    <div style={{ padding:'10px 18px', background:C.card2, borderTop:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
-                      {req.employeeNote && <div><strong style={{color:C.sub}}>Your note:</strong> {req.employeeNote}</div>}
-                      {req.adminNote  && <div style={{ marginTop:4 }}><strong style={{color:C.sub}}>Admin note:</strong> {req.adminNote}</div>}
-                    </div>
+                      {/* Pipeline tracker */}
+                      {pipelineIdx >= 0 && (
+                        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                          <div style={{ display:'flex', alignItems:'center' }}>
+                            {PIPELINE.map((step, i) => {
+                              const done   = i < pipelineIdx;
+                              const active = i === pipelineIdx;
+                              const col    = done ? C.green : active ? C.accent : C.line;
+                              return (
+                                <div key={step} style={{ display:'flex', alignItems:'center', flex: i < PIPELINE.length-1 ? 1 : 'none' }}>
+                                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                                    <div style={{ width:22, height:22, borderRadius:'50%', background: done?C.green:active?C.accent:C.card2, border:`2px solid ${col}`,
+                                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color: done||active?'white':C.mute, fontWeight:800 }}>
+                                      {done ? <SvgAt el={Icon.check} size={11} /> : i+1}
+                                    </div>
+                                    <div style={{ fontSize:9, fontWeight:700, color: active?C.accent:done?C.green:C.mute, whiteSpace:'nowrap' }}>
+                                      {PIPELINE_LABELS[step]}
+                                    </div>
+                                  </div>
+                                  {i < PIPELINE.length-1 && (
+                                    <div style={{ flex:1, height:2, background: done?C.green:C.line, margin:'0 4px', marginBottom:14 }} />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Approve/Reject panel — only when card is expanded AND action panel is open */}
+                      {isExpanded && isOpen && canAct && (
+                        <div style={{ padding:'14px 18px', background:C.bg, borderTop:`1px solid ${C.line}` }}>
+                          <div style={{ fontSize:13, fontWeight:700, marginBottom:10, color:C.text }}>Your response to customer:</div>
+                          <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)}
+                            placeholder="Optional note to customer…"
+                            style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', marginBottom:10, background:C.card2, color:C.text }} />
+                          <div style={{ display:'flex', gap:10 }}>
+                            <button onClick={() => doAction(req._id, 'approve')} disabled={saving}
+                              style={{ flex:1, padding:'9px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                              <SvgAt el={Icon.check} size={14} /> Approve & Start Pickup
+                            </button>
+                            <button onClick={() => doAction(req._id, 'reject')} disabled={saving}
+                              style={{ flex:1, padding:'9px', borderRadius:8, background:C.red, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                              <SvgAt el={Icon.x} size={14} /> Reject Return
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Take Action button (only in expanded view, for REQUESTED status) */}
+                      {canAct && !isOpen && (
+                        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.bg, display:'flex', justifyContent:'flex-end' }}>
+                          <button onClick={e => { e.stopPropagation(); setActionId(req._id); }}
+                            style={{ padding:'6px 14px', borderRadius:8, background:C.accent, color:'white',
+                              border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                            Take Action
+                          </button>
+                        </div>
+                      )}
+                      {canAct && isOpen && (
+                        <div style={{ padding:'10px 18px', borderTop:`1px solid ${C.line}`, background:C.bg, display:'flex', justifyContent:'flex-end' }}>
+                          <button onClick={e => { e.stopPropagation(); setActionId(null); setNote(''); }}
+                            style={{ padding:'6px 14px', borderRadius:8, background:C.card, color:C.sub,
+                              border:`1px solid ${C.line}`, fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                            Close Action
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Refund proof photos */}
+                      {req.refundProof?.length > 0 && (
+                        <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.green, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:8 }}>
+                            🧾 Refund Proof ({req.refundProof.length})
+                          </div>
+                          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                            {req.refundProof.map((p,i) => (
+                              <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
+                                <img src={p.url} alt={`proof ${i+1}`}
+                                  style={{ width:72, height:72, objectFit:'cover', borderRadius:8, border:`2px solid ${C.green}55`, cursor:'zoom-in', display:'block' }} />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Advance button */}
+                      {canAdvance && adv && advanceId !== req._id && (
+                        <div style={{ padding:'12px 18px', borderTop:`1px solid ${C.line}`, display:'flex', alignItems:'center', justifyContent:'space-between', background:C.bg }}>
+                          <div style={{ fontSize:12, color:C.mute }}>
+                            Next step: <strong style={{color:C.text}}>{adv.next.replace(/_/g,' ')}</strong>
+                          </div>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (['ITEM_RECEIVED','REFUND_INITIATED'].includes(req.status)) {
+                                setAdvanceId(req._id); setAdvanceNote(''); setProofFiles([]);
+                              } else {
+                                doAdvance(req._id, false);
+                              }
+                            }}
+                            disabled={saving}
+                            style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none',
+                              fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, whiteSpace:'nowrap', fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
+                            <SvgAt el={adv.iconEl} size={14} />
+                            {saving ? '…' : adv.label}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Proof upload panel for refund steps */}
+                      {canAdvance && adv && advanceId === req._id && (
+                        <div style={{ padding:'14px 18px', borderTop:`1px solid ${C.line}`, background:C.bg }}>
+                          <div style={{ fontWeight:700, fontSize:13, marginBottom:10, color:C.text }}>
+                            {adv.label} — Add Refund Proof
+                          </div>
+                          <div style={{ marginBottom:10 }}>
+                            <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>
+                              Upload Refund Screenshot / Photo <span style={{ color:C.red }}>*</span> <span style={{ fontWeight:400, textTransform:'none' }}>(required, up to 5)</span>
+                            </label>
+                            <input type="file" accept="image/*" multiple
+                              onChange={e => setProofFiles(Array.from(e.target.files || []))}
+                              style={{ fontSize:12, color:C.text }} />
+                            {proofFiles.length > 0 && (
+                              <div style={{ display:'flex', gap:6, marginTop:6, flexWrap:'wrap' }}>
+                                {proofFiles.map((f,i) => (
+                                  <span key={i} style={{ fontSize:11, background:C.card2, borderRadius:6, padding:'2px 8px', color:C.sub }}>
+                                    🖼 {f.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ marginBottom:10 }}>
+                            <label style={{ fontSize:11, fontWeight:700, color:C.mute, display:'block', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>Note to Customer</label>
+                            <textarea rows={2} value={advanceNote} onChange={e=>setAdvanceNote(e.target.value)}
+                              placeholder="Optional message about refund…"
+                              style={{ width:'100%', border:`1px solid ${C.line}`, borderRadius:8, padding:'8px 12px', fontSize:13, resize:'none', outline:'none', fontFamily:'inherit', boxSizing:'border-box', background:C.card2, color:C.text }} />
+                          </div>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <button onClick={() => doAdvance(req._id, true)} disabled={saving}
+                              style={{ padding:'8px 20px', borderRadius:8, background:C.green, color:'white', border:'none', fontWeight:700, fontSize:13, cursor:'pointer', opacity:saving?0.6:1, fontFamily:'inherit', display:'flex', alignItems:'center', gap:7 }}>
+                              <SvgAt el={adv.iconEl} size={14} /> {saving ? 'Saving…' : 'Confirm & ' + adv.label}
+                            </button>
+                            <button onClick={e => { e.stopPropagation(); setAdvanceId(null); setProofFiles([]); setAdvanceNote(''); }}
+                              style={{ padding:'8px 16px', borderRadius:8, background:C.card2, border:`1px solid ${C.line}`, fontWeight:600, fontSize:13, cursor:'pointer', color:C.mute }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {req.status === 'REFUND_COMPLETED' && (
+                        <div style={{ padding:'10px 18px', background:C.green+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.green, fontWeight:700, display:'flex', alignItems:'center', gap:8 }}>
+                          <SvgAt el={Icon.check} size={14} /> Refund completed — this return is closed
+                        </div>
+                      )}
+                      {req.status === 'EMPLOYEE_REJECTED' && (
+                        <div style={{ padding:'10px 18px', background:C.red+'14', borderTop:`1px solid ${C.line}`, fontSize:12, color:C.red }}>
+                          Return rejected. Admin may review and override.
+                        </div>
+                      )}
+
+                      {(req.employeeNote || req.adminNote) && (
+                        <div style={{ padding:'10px 18px', background:C.card2, borderTop:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
+                          {req.employeeNote && <div><strong style={{color:C.sub}}>Your note:</strong> {req.employeeNote}</div>}
+                          {req.adminNote  && <div style={{ marginTop:4 }}><strong style={{color:C.sub}}>Admin note:</strong> {req.adminNote}</div>}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               );
@@ -2304,67 +2394,98 @@ function EmployeeCouponsTab() {
 }
 
 /* ══════════════════════════════════════════════════════
-   CANCELLATIONS TAB (employee — read-only refund view)
+   CANCELLATIONS TAB (employee — process refunds)
 ══════════════════════════════════════════════════════ */
+function ProofViewModalEmp({ proofs, onClose }) {
+  const [idx, setIdx] = useState(0);
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'#000c', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'white', borderRadius:12, padding:24, maxWidth:500, width:'90vw' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15 }}>🧾 Refund Proof</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#888' }}>×</button>
+        </div>
+        <img src={proofs[idx]?.url} alt="" style={{ width:'100%', maxHeight:340, objectFit:'contain', borderRadius:8, border:'1px solid #ddd', display:'block' }} />
+        {proofs.length > 1 && (
+          <div style={{ display:'flex', gap:8, marginTop:12, justifyContent:'center' }}>
+            {proofs.map((p, i) => (
+              <img key={i} src={p.url} alt="" onClick={() => setIdx(i)}
+                style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border: i===idx ? '2px solid #FF5A1F' : '2px solid #ddd', cursor:'pointer' }} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EmployeeCancellationsTab() {
   const { isMobile } = useResponsive();
-  const [all, setAll]         = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState('');
-  const [payF, setPayF]       = useState('');
+  const [all, setAll]           = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [payF, setPayF]         = useState('');
+  const [expandId, setExpandId] = useState(null);
+  const [proofFiles, setProofFiles] = useState({});
+  const [processing, setProcessing] = useState(null);
+  const [proofModal, setProofModal] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
     employeeApi.getMyOrders({ limit: 500 }).then(r => {
       const orders = r.data?.data?.data || [];
       setAll(orders.filter(o => o.orderStatus === 'CANCELLED'));
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+
   const filtered = all.filter(o => {
     const q = search.toLowerCase();
-    const mQ = !q ||
-      o.orderNumber?.toLowerCase().includes(q) ||
-      o._id?.toLowerCase().includes(q) ||
-      o.user?.name?.toLowerCase().includes(q) ||
-      o.user?.email?.toLowerCase().includes(q) ||
-      o.user?.phone?.includes(q) ||
-      o.shippingAddress?.phone?.includes(q) ||
-      o.shippingAddress?.name?.toLowerCase().includes(q) ||
-      o.items?.some(i => i.product?.title?.toLowerCase().includes(q));
+    const mQ = !q || o.orderNumber?.toLowerCase().includes(q) || o.user?.name?.toLowerCase().includes(q) || o.user?.email?.toLowerCase().includes(q);
     const mP = !payF || o.paymentMethod === payF;
     return mQ && mP;
   });
 
-  const onlineOrders   = all.filter(o => o.paymentMethod === 'ONLINE');
-  const refundedCount  = onlineOrders.filter(o => o.refundStatus === 'COMPLETED').length;
-  const pendingCount   = onlineOrders.filter(o => o.refundStatus !== 'COMPLETED').length;
-  const totalRefunded  = all.reduce((s, o) => s + (o.refundAmount || 0), 0);
+  const onlineOrders  = all.filter(o => o.paymentMethod === 'ONLINE');
+  const refundedCount = onlineOrders.filter(o => o.refundStatus === 'COMPLETED').length;
+  const pendingCount  = onlineOrders.filter(o => o.refundStatus !== 'COMPLETED').length;
+  const totalRefunded = all.reduce((s, o) => s + (o.refundAmount || 0), 0);
+
+  const handleProcessRefund = async (orderId) => {
+    const files = proofFiles[orderId] || [];
+    if (files.length === 0) {
+      alert('Please upload at least 1 refund proof screenshot before marking as refunded.');
+      return;
+    }
+    setProcessing(orderId);
+    try {
+      const form = new FormData();
+      [...files].forEach(f => form.append('refundProof', f));
+      await ordersApi.processRefund(orderId, form);
+      setAll(prev => prev.map(o => o._id === orderId ? { ...o, refundStatus: 'COMPLETED', paymentStatus: 'REFUNDED' } : o));
+      setExpandId(null);
+      setProofFiles(p => { const n = {...p}; delete n[orderId]; return n; });
+    } catch(e) { alert(e?.response?.data?.message || 'Failed'); }
+    finally { setProcessing(null); }
+  };
 
   if (loading) return <Loader />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12 }}>
-        <KpiCard label="Cancelled Orders" value={fmt(all.length)}       sub="Your products" colorKey="red"    iconEl={Icon.orders} />
-        <KpiCard label="Refund Pending"   value={fmt(pendingCount)}     sub="Online orders" colorKey="yellow" iconEl={Icon.refund} />
-        <KpiCard label="Refunds Done"     value={fmt(refundedCount)}    sub="Via Razorpay"  colorKey="green"  iconEl={Icon.refund} />
-        <KpiCard label="Total Refunded"   value={fmtShort(totalRefunded)} sub="Amount returned" colorKey="blue" iconEl={Icon.dollar} />
+        <KpiCard label="Cancelled Orders" value={fmt(all.length)}          sub="All orders"             colorKey="red"    iconEl={Icon.orders} />
+        <KpiCard label="Refund Pending"   value={fmt(pendingCount)}        sub="Online — action needed" colorKey="yellow" iconEl={Icon.refund} />
+        <KpiCard label="Refunds Done"     value={fmt(refundedCount)}       sub="Manually processed"     colorKey="green"  iconEl={Icon.refund} />
+        <KpiCard label="Total Refunded"   value={fmtShort(totalRefunded)}  sub="Amount returned"        colorKey="blue"   iconEl={Icon.dollar} rawValue={totalRefunded} />
       </div>
 
-      {/* Info */}
-      <div style={{ padding: '12px 16px', borderRadius: 10, background: C.blue + '14', border: `1px solid ${C.blue}33`, fontSize: 13, color: C.blue, display: 'flex', gap: 10, alignItems: 'center' }}>
-        <SvgAt el={Icon.refund} size={16} />
-        <span>For UPI / online orders, Razorpay refunds are triggered automatically when an order is cancelled. If a refund shows "PENDING", contact the admin — they can process it manually.</span>
-      </div>
-
-      {/* Filters */}
       <Card>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, padding: '0 12px', height: 36, flex: 1, minWidth: 200 }}>
             <span style={{ color: C.mute, display: 'flex' }}><SvgAt el={Icon.search} size={14} /></span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email, phone, product…"
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Order #, name, email…"
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: C.text, fontFamily: 'inherit' }} />
           </div>
           <Sel value={payF} onChange={e => setPayF(e.target.value)} style={{ width: 160 }}>
@@ -2373,73 +2494,138 @@ function EmployeeCancellationsTab() {
             <option value="COD">COD</option>
           </Sel>
           {(search || payF) && <Btn onClick={() => { setSearch(''); setPayF(''); }}>Clear</Btn>}
-          <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}>
-            <strong style={{ color: C.text }}>{filtered.length}</strong> of <strong style={{ color: C.text }}>{all.length}</strong>
-          </span>
+          <span style={{ fontSize: 13, color: C.mute, marginLeft: 'auto' }}><strong style={{ color: C.text }}>{filtered.length}</strong> of <strong style={{ color: C.text }}>{all.length}</strong></span>
         </div>
       </Card>
 
-      {/* Table */}
       <Card title={`Cancelled Orders (${filtered.length})`}>
-        {filtered.length === 0
-          ? <Empty text="No cancelled orders for your products" />
-          : <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead><tr>
-                  <Th>Order #</Th>
-                  <Th>Customer</Th>
-                  <Th>Amount</Th>
-                  <Th>Payment</Th>
-                  <Th>Refund Status</Th>
-                  <Th>Refunded Amt</Th>
-                  <Th>Cancelled On</Th>
-                </tr></thead>
-                <tbody>
-                  {filtered.map(o => {
-                    const isPaid     = o.paymentMethod === 'ONLINE';
-                    const refundDone = o.refundStatus === 'COMPLETED';
-                    return (
-                      <tr key={o._id}>
-                        <Td>
-                          <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: C.accent }}>{o.orderNumber}</span>
-                        </Td>
-                        <Td>
-                          <div style={{ fontWeight: 600, color: C.text }}>{o.user?.name || '—'}</div>
-                          <div style={{ fontSize: 11, color: C.mute }}>{o.user?.email}</div>
-                        </Td>
-                        <Td><span style={{ fontWeight: 700, color: C.text }}>{fmtRs(o.totalPrice)}</span></Td>
-                        <Td><Badge text={o.paymentMethod} color={o.paymentMethod === 'ONLINE' ? C.blue : C.yellow} /></Td>
-                        <Td>
-                          {!isPaid
-                            ? <Badge text="N/A (COD)" color={C.mute} />
-                            : refundDone
-                              ? <Badge text="REFUNDED" color={C.green} />
-                              : <Badge text="PENDING" color={C.yellow} />
-                          }
-                        </Td>
-                        <Td>
-                          {o.refundAmount
-                            ? <span style={{ fontWeight: 700, color: C.green }}>{fmtRs(o.refundAmount)}</span>
-                            : <span style={{ color: C.mute }}>—</span>}
-                        </Td>
-                        <Td style={{ color: C.mute, fontSize: 12 }}>
-                          {new Date(o.updatedAt || o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-        }
+        {filtered.length === 0 ? <Empty text="No cancelled orders" /> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {filtered.map(o => {
+              const isPaid      = o.paymentMethod === 'ONLINE';
+              const refundDone  = o.refundStatus === 'COMPLETED';
+              const needsRefund = isPaid && !refundDone;
+              const isOpen      = expandId === o._id;
+              const bd          = o.cancellationBankDetails || {};
+
+              return (
+                <div key={o._id} style={{ border: `1px solid ${needsRefund ? C.yellow+'66' : C.line}`, borderRadius: 10, overflow: 'hidden' }}>
+                  {/* Collapsed header — always visible */}
+                  <div
+                    onClick={() => setExpandId(expandId === o._id ? null : o._id)}
+                    style={{
+                      background: C.card2,
+                      padding: '10px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: C.accent, flexShrink: 0 }}>{o.orderNumber}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text, minWidth: 100, flexShrink: 0 }}>{o.user?.name}</span>
+                    <span style={{ fontSize: 12, color: C.mute, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {(o.items?.[0]?.product?.title || '').slice(0, 30)}{(o.items?.[0]?.product?.title || '').length > 30 ? '…' : ''}
+                    </span>
+                    <Badge text={o.paymentMethod} color={o.paymentMethod === 'ONLINE' ? C.blue : C.yellow} />
+                    {isPaid && <Badge text={refundDone ? 'REFUNDED' : 'PENDING'} color={refundDone ? C.green : C.yellow} />}
+                    <span style={{ fontWeight: 700, fontSize: 13, color: C.accent, flexShrink: 0 }}>{fmtRs(o.totalPrice)}</span>
+                    <span style={{ fontSize: 11, color: C.mute, flexShrink: 0 }}>
+                      {new Date(o.updatedAt || o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
+                    <span style={{ fontSize: 16, color: C.mute, transition: 'transform .2s', transform: isOpen ? 'rotate(180deg)' : 'none', flexShrink: 0 }}>▾</span>
+                  </div>
+
+                  {/* Expanded body */}
+                  {isOpen && (
+                    <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.line}` }}>
+                      {o.cancellationReason && (
+                        <div style={{ fontSize: 13, color: C.mute, marginBottom: 10 }}>
+                          <strong style={{ color: C.text }}>Reason:</strong> {o.cancellationReason}
+                        </div>
+                      )}
+
+                      {/* Refund details customer provided */}
+                      {isPaid && o.cancellationRefundMethod && (
+                        <div style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+                          <div style={{ fontWeight: 700, marginBottom: 6, color: C.text }}>
+                            {o.cancellationRefundMethod === 'upi' ? '📱 UPI Refund' : '🏦 Bank Transfer Refund'}
+                          </div>
+                          {o.cancellationRefundMethod === 'upi' && (
+                            <div style={{ color: C.mute }}>UPI ID: <strong style={{ color: C.text }}>{bd.upiId || '—'}</strong></div>
+                          )}
+                          {o.cancellationRefundMethod === 'bank_transfer' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                              {[['Name', bd.accountName],['Bank', bd.bankName],['Account #', bd.accountNumber],['IFSC', bd.ifscCode]].map(([l, v]) => (
+                                <div key={l} style={{ color: C.mute }}>{l}: <strong style={{ color: C.text }}>{v || '—'}</strong></div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Proof thumbnails */}
+                      {o.cancellationRefundProof?.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                          {o.cancellationRefundProof.map((p, i) => (
+                            <img key={i} src={p.url} alt="" onClick={() => setProofModal(o.cancellationRefundProof)}
+                              style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${C.line}`, cursor: 'pointer' }} />
+                          ))}
+                          <button onClick={() => setProofModal(o.cancellationRefundProof)} style={{ fontSize: 11, color: C.blue, background: C.blue+'14', border: `1px solid ${C.blue}33`, borderRadius: 20, padding: '4px 10px', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M1 12C1 12 5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg> View
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Process refund panel */}
+                      {needsRefund && (
+                        <div style={{ border: `1px solid ${C.yellow}44`, borderRadius: 8, padding: 14, background: C.yellow+'08' }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: C.text }}>Process Refund</div>
+                          {proofFiles[o._id]?.length > 0 && (
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                              {Array.from(proofFiles[o._id]).map((f, i) => (
+                                <img key={i} src={URL.createObjectURL(f)} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: `1px solid ${C.line}` }} />
+                              ))}
+                            </div>
+                          )}
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px dashed ${C.line}`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', marginBottom: 10, background: C.bg }}>
+                            <input type="file" accept="image/*" multiple style={{ display: 'none' }}
+                              onChange={e => setProofFiles(p => ({ ...p, [o._id]: e.target.files }))} />
+                            <span style={{ fontSize: 18 }}>📷</span>
+                            <span style={{ fontSize: 12, color: C.mute }}>Upload proof screenshot <span style={{ color: C.red }}>*</span> (required, up to 5)</span>
+                          </label>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <Btn variant="success" disabled={processing === o._id} onClick={() => handleProcessRefund(o._id)}>
+                              {processing === o._id ? 'Saving…' : '✓ Mark as Refunded'}
+                            </Btn>
+                            <Btn onClick={e => { e.stopPropagation(); setExpandId(null); }}>Cancel</Btn>
+                          </div>
+                        </div>
+                      )}
+                      {refundDone && (
+                        <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Refund completed</span>
+                      )}
+                      {!isPaid && (
+                        <span style={{ fontSize: 12, color: C.mute }}>COD order — no refund required</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
+
+      {proofModal && <ProofViewModalEmp proofs={proofModal} onClose={() => setProofModal(null)} />}
     </div>
   );
 }
 
 const NAV_TABS = [
   { id:'Overview',        iconEl: Icon.grid    },
-  { id:'My Products',     iconEl: Icon.bag     },
+  { id:'Products',     iconEl: Icon.bag     },
   { id:'Orders',          iconEl: Icon.orders  },
   { id:'Returns',         iconEl: Icon.refund  },
   { id:'Cancellations',   iconEl: Icon.refund  },
@@ -2453,7 +2639,7 @@ const NAV_TABS = [
 
 const TAB_SUBTITLES = {
   Overview:         'Your shop performance and key metrics',
-  'My Products':    'Manage your product listings',
+  'Products':    'Manage your product listings',
   Orders:           'Track and fulfil orders containing your products',
   Returns:          'Review and respond to return requests from customers',
   Cancellations:    'Cancelled orders and their refund status',
@@ -2483,6 +2669,19 @@ export default function SellerDashboard() {
   const [loading, setLoading]   = useState(true);
   const navigate                = useNavigate();
   const { user, logout }        = useAuth();
+  const { notifications, unreadCount, markRead, markAllRead, remove } = useNotifications();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    if (unreadCount > 0) markAllRead();
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
 
   const loadProfile = useCallback(() => {
     setLoading(true);
@@ -2502,16 +2701,16 @@ export default function SellerDashboard() {
 
   const handleAddProduct = async (data) => {
     await employeeApi.createProduct(data);
-    handleTabClick('My Products');
+    handleTabClick('Products');
   };
 
   const handleEditSave = async (data) => {
     await employeeApi.updateProduct(editProduct._id, data);
     setEdit(null);
-    handleTabClick('My Products');
+    handleTabClick('Products');
   };
 
-  const activeTab = editProduct ? 'My Products' : tab;
+  const activeTab = editProduct ? 'Products' : tab;
   const pageTitle = editProduct ? 'Edit Product' : tab;
   const pageSub   = editProduct ? `Editing: ${editProduct.title}` : TAB_SUBTITLES[tab];
 
@@ -2543,8 +2742,8 @@ export default function SellerDashboard() {
         {/* Nav */}
         <nav style={{ flex:1, padding:'8px 10px', overflowY:'auto' }}>
           {profile && NAV_TABS.map(t => {
-            const active = activeTab === t.id && !editProduct || (editProduct && t.id === 'My Products');
-            const isEdit = editProduct && t.id === 'My Products';
+            const active = activeTab === t.id && !editProduct || (editProduct && t.id === 'Products');
+            const isEdit = editProduct && t.id === 'Products';
             return (
               <button key={t.id} onClick={() => handleTabClick(t.id)}
                 style={{ width:'100%', textAlign:'left', padding:'9px 12px',
@@ -2586,23 +2785,92 @@ export default function SellerDashboard() {
 
         {/* Topbar */}
         <div style={{ position:'sticky', top:0, zIndex:90, background:C.sidebar, borderBottom:`1px solid ${C.line}`, padding: isMobile ? '0 14px' : '0 24px', height:58, display:'flex', alignItems:'center', gap: isMobile ? 10 : 14 }}>
-          <div onClick={() => setSidebarOpen(s=>!s)}
-            style={{ color:C.mute, cursor:'pointer', display:'flex', alignItems:'center' }}>
-            <SvgAt el={Icon.menu} size={20} />
-          </div>
-
-          {isMobile ? (
-            <div style={{ flex:1, fontFamily:"'Syne',sans-serif", fontSize:16, fontWeight:700, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {pageTitle}
-            </div>
-          ) : (
-            <div style={{ flex:1, maxWidth:380, display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36 }}>
-              <span style={{ color:C.mute, display:'flex' }}><SvgAt el={Icon.search} size={15} /></span>
-              <input placeholder="Search orders, products…" style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:13, color:C.text, fontFamily:"'DM Sans',sans-serif" }} />
+          {isMobile && (
+            <div onClick={() => setSidebarOpen(s=>!s)}
+              style={{ color:C.mute, cursor:'pointer', display:'flex', alignItems:'center' }}>
+              <SvgAt el={Icon.menu} size={20} />
             </div>
           )}
 
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginLeft:'auto', cursor:'pointer' }}>
+          {isMobile && (
+            <div style={{ flex:1, fontFamily:"'Syne',sans-serif", fontSize:16, fontWeight:700, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {pageTitle}
+            </div>
+          )}
+
+          {/* Notification bell */}
+          <div ref={notifRef} style={{ position:'relative', marginLeft:'auto' }}>
+            <button
+              onClick={() => setNotifOpen(o => !o)}
+              style={{ position:'relative', background:'none', border:'none', cursor:'pointer', color: notifOpen ? C.accent : C.mute, display:'flex', alignItems:'center', padding:4 }}>
+              <SvgAt el={Icon.bell} size={20} />
+              {unreadCount > 0 && (
+                <span style={{ position:'absolute', top:-3, right:-3, background:C.red, color:'white', fontSize:9, fontWeight:800, minWidth:16, height:16, borderRadius:99, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 3px' }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown panel */}
+            {notifOpen && (
+              <div style={{ position:'fixed', top:62, right: isMobile ? 8 : 24, width: isMobile ? 'calc(100vw - 16px)' : 380, maxWidth:380, background:C.card, border:`1px solid ${C.line}`, borderRadius:14, boxShadow:'0 20px 50px rgba(0,0,0,.55)', zIndex:999, display:'flex', flexDirection:'column', maxHeight:520, overflow:'hidden' }}>
+                {/* Panel header */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px 12px', borderBottom:`1px solid ${C.line}`, flexShrink:0 }}>
+                  <div style={{ fontWeight:700, fontSize:15, color:C.text }}>
+                    Notifications
+                    {unreadCount > 0 && <span style={{ marginLeft:8, background:C.red+'22', color:C.red, fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:99 }}>{unreadCount} new</span>}
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} style={{ fontSize:11, fontWeight:600, color:C.accent, background:'none', border:'none', cursor:'pointer', padding:0 }}>
+                        Mark all read
+                      </button>
+                    )}
+                    <button onClick={() => setNotifOpen(false)} style={{ background:'none', border:'none', color:C.mute, cursor:'pointer', fontSize:18, lineHeight:1, padding:0 }}>✕</button>
+                  </div>
+                </div>
+
+                {/* Notification list */}
+                <div style={{ overflowY:'auto', flex:1 }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding:'40px 16px', textAlign:'center', color:C.mute, fontSize:13 }}>
+                      <div style={{ fontSize:28, marginBottom:8 }}>🔔</div>
+                      No notifications yet
+                    </div>
+                  ) : notifications.map(n => (
+                    <div key={n._id}
+                      onClick={() => { if (!n.isRead) markRead(n._id); }}
+                      style={{ display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.line}`, background: n.isRead ? 'transparent' : C.accent+'0a', cursor: n.isRead ? 'default' : 'pointer', transition:'background .15s', alignItems:'flex-start' }}>
+                      {/* Unread dot */}
+                      <div style={{ flexShrink:0, marginTop:5 }}>
+                        {n.isRead
+                          ? <div style={{ width:8, height:8, borderRadius:'50%', background:C.line }} />
+                          : <div style={{ width:8, height:8, borderRadius:'50%', background:C.accent }} />
+                        }
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight: n.isRead ? 500 : 700, fontSize:13, color: n.isRead ? C.sub : C.text, marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {n.title}
+                        </div>
+                        <div style={{ fontSize:12, color:C.mute, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                          {n.message}
+                        </div>
+                        <div style={{ fontSize:10, color:C.line, marginTop:4, color:'#666' }}>
+                          {new Date(n.createdAt).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
+                        </div>
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); remove(n._id); }}
+                        style={{ flexShrink:0, background:'none', border:'none', color:C.mute, cursor:'pointer', fontSize:14, lineHeight:1, padding:'2px 4px', borderRadius:4, opacity:.6 }}
+                        title="Delete">✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
             <div style={{ width:32, height:32, borderRadius:'50%', background:C.accent, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Syne',sans-serif", fontWeight:800, color:'white', fontSize:13, flexShrink:0 }}>
               {user?.name?.[0]?.toUpperCase()}
             </div>
@@ -2669,7 +2937,7 @@ export default function SellerDashboard() {
               {editProduct && <ProductForm initial={editProduct} onSave={handleEditSave} onCancel={()=>setEdit(null)} />}
               {!editProduct && (<>
                 <div style={{ display: tab==='Overview'      ? '' : 'none' }}>{mountedTabs.has('Overview')      && <OverviewTab          key={refreshKeys['Overview']       || 0} profile={profile} />}</div>
-                <div style={{ display: tab==='My Products'   ? '' : 'none' }}>{mountedTabs.has('My Products')   && <ProductsTab          key={refreshKeys['My Products']    || 0} onEdit={p=>setEdit(p)} />}</div>
+                <div style={{ display: tab==='Products'   ? '' : 'none' }}>{mountedTabs.has('Products')   && <ProductsTab          key={refreshKeys['Products']    || 0} onEdit={p=>setEdit(p)} />}</div>
                 <div style={{ display: tab==='Orders'        ? '' : 'none' }}>{mountedTabs.has('Orders')        && <OrdersTab            key={refreshKeys['Orders']         || 0} onViewReturns={() => navTo('Returns')} />}</div>
                 <div style={{ display: tab==='Returns'       ? '' : 'none' }}>{mountedTabs.has('Returns')       && <EmployeeReturnsTab   key={refreshKeys['Returns']        || 0} />}</div>
                 <div style={{ display: tab==='Cancellations' ? '' : 'none' }}>{mountedTabs.has('Cancellations') && <EmployeeCancellationsTab key={refreshKeys['Cancellations'] || 0} />}</div>

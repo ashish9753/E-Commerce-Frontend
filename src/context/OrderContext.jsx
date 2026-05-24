@@ -32,10 +32,10 @@ export function OrderProvider({ children }) {
     }
   };
 
-  const cancelOrder = async (id) => {
+  const cancelOrder = async (id, data = {}) => {
     try {
-      const { data } = await ordersApi.cancel(id);
-      return { success: true, order: data.data.order };
+      const { data: res } = await ordersApi.cancel(id, data);
+      return { success: true, order: res.data.order };
     } catch (err) {
       return { success: false, error: getErrorMessage(err) };
     }

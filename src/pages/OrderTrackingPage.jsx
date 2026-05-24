@@ -1,6 +1,7 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
+import { usersApi } from '../api/users';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 import { useState, useEffect } from 'react';
 
@@ -73,10 +74,34 @@ export default function OrderTrackingPage() {
   const [searched, setSearched]   = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
+  // Cancel modal state
+  const [cancelModal, setCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelRefundMethod, setCancelRefundMethod] = useState('bank_transfer');
+  const [cancelBankDetails, setCancelBankDetails] = useState({});
+  const [cancelUpiConfirm, setCancelUpiConfirm] = useState('');
+  const [cancelUpiMismatch, setCancelUpiMismatch] = useState(false);
+  const [savedRefund, setSavedRefund] = useState({});
+
   useEffect(() => {
     const id = searchParams.get('id');
     if (id) { setTrackId(id); fetchOrder(id); }
   }, []);
+
+  // Load saved refund details when cancel modal opens
+  useEffect(() => {
+    if (!cancelModal) return;
+    usersApi.getRefundDetails()
+      .then(({ data }) => {
+        const s = data.data?.savedRefundDetails || {};
+        setSavedRefund(s);
+        const method = s.lastRefundMethod === 'upi' ? 'upi' : 'bank_transfer';
+        setCancelRefundMethod(method);
+        setCancelBankDetails(method === 'upi' ? (s.upi || {}) : (s.bankTransfer || {}));
+        if (method === 'upi' && s.upi?.upiId) setCancelUpiConfirm(s.upi.upiId);
+      })
+      .catch(() => {});
+  }, [cancelModal]);
 
   const fetchOrder = async (id) => {
     if (!id?.trim()) return;
@@ -88,11 +113,28 @@ export default function OrderTrackingPage() {
   };
 
   const handleCancel = async () => {
-    if (!order || !window.confirm('Cancel this order?')) return;
+    if (!order) return;
+    const isPaidOnline = order.paymentStatus === 'PAID' && order.paymentMethod === 'ONLINE';
+    if (!cancelReason.trim()) return;
+    if (isPaidOnline) {
+      if (cancelRefundMethod === 'bank_transfer') {
+        const b = cancelBankDetails;
+        if (!b.accountName || !b.accountNumber || !b.ifscCode || !b.bankName) return;
+      }
+      if (cancelRefundMethod === 'upi') {
+        if (!cancelBankDetails.upiId) return;
+        if (cancelBankDetails.upiId !== cancelUpiConfirm) { setCancelUpiMismatch(true); return; }
+      }
+    }
     setCancelling(true);
-    const r = await cancelOrder(order._id);
+    const payload = { reason: cancelReason };
+    if (isPaidOnline) {
+      payload.refundMethod = cancelRefundMethod;
+      payload.bankDetails = JSON.stringify(cancelBankDetails);
+    }
+    const r = await cancelOrder(order._id, payload);
     setCancelling(false);
-    if (r.success) setOrder(r.order);
+    if (r.success) { setOrder(r.order); setCancelModal(false); }
   };
 
   const isCancelled = order?.orderStatus === 'CANCELLED';
@@ -287,9 +329,9 @@ export default function OrderTrackingPage() {
                 {/* Actions */}
                 <div style={{ display:'flex', gap:10 }}>
                   {canCancel && (
-                    <button disabled={cancelling} onClick={handleCancel}
+                    <button onClick={() => setCancelModal(true)}
                       style={{ padding:'10px 20px',borderRadius:20,border:'1px solid #c0392b',background:'white',color:'#c0392b',fontWeight:700,fontSize:13,cursor:'pointer' }}>
-                      {cancelling ? 'Cancelling…' : 'Cancel Order'}
+                      Cancel Order
                     </button>
                   )}
                   {isDelivered && (() => {
@@ -414,6 +456,213 @@ export default function OrderTrackingPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Cancel Order Modal */}
+      {cancelModal && order && (
+        <CancelOrderModal
+          order={order}
+          cancelReason={cancelReason}
+          setCancelReason={setCancelReason}
+          cancelRefundMethod={cancelRefundMethod}
+          setCancelRefundMethod={setCancelRefundMethod}
+          cancelBankDetails={cancelBankDetails}
+          setCancelBankDetails={setCancelBankDetails}
+          cancelUpiConfirm={cancelUpiConfirm}
+          setCancelUpiConfirm={setCancelUpiConfirm}
+          cancelUpiMismatch={cancelUpiMismatch}
+          setCancelUpiMismatch={setCancelUpiMismatch}
+          savedRefund={savedRefund}
+          cancelling={cancelling}
+          onClose={() => setCancelModal(false)}
+          onConfirm={handleCancel}
+        />
+      )}
+    </div>
+  );
+}
+
+function CancelOrderModal({
+  order,
+  cancelReason, setCancelReason,
+  cancelRefundMethod, setCancelRefundMethod,
+  cancelBankDetails, setCancelBankDetails,
+  cancelUpiConfirm, setCancelUpiConfirm,
+  cancelUpiMismatch, setCancelUpiMismatch,
+  savedRefund,
+  cancelling,
+  onClose,
+  onConfirm,
+}) {
+  const isPaidOnline = order.paymentStatus === 'PAID' && order.paymentMethod === 'ONLINE';
+
+  const setB = (k, v) => setCancelBankDetails(b => ({ ...b, [k]: v }));
+
+  const fieldStyle = {
+    width: '100%', height: 36, border: '1px solid #ddd', borderRadius: 6,
+    padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+  };
+  const labelStyle = {
+    display: 'block', fontSize: 11, fontWeight: 700, color: '#888',
+    marginBottom: 4, textTransform: 'uppercase',
+  };
+
+  const inputValid = () => {
+    if (!cancelReason.trim()) return false;
+    if (!isPaidOnline) return true;
+    if (cancelRefundMethod === 'bank_transfer') {
+      const b = cancelBankDetails;
+      return !!(b.accountName && b.accountNumber && b.ifscCode && b.bankName);
+    }
+    if (cancelRefundMethod === 'upi') {
+      return !!(cancelBankDetails.upiId && cancelBankDetails.upiId === cancelUpiConfirm);
+    }
+    return true;
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position:'fixed', inset:0, background:'#0008', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background:'white', borderRadius:12, padding:28, maxWidth:520, width:'100%', maxHeight:'90vh', overflowY:'auto' }}
+      >
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <div style={{ fontWeight:800, fontSize:17 }}>❌ Cancel Order</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#888', lineHeight:1 }}>×</button>
+        </div>
+
+        {/* Reason */}
+        <div style={{ marginBottom:16 }}>
+          <label style={labelStyle}>Reason for cancellation *</label>
+          <select value={cancelReason} onChange={e => setCancelReason(e.target.value)} style={fieldStyle}>
+            <option value="">— Select a reason —</option>
+            <option value="Ordered by mistake">Ordered by mistake</option>
+            <option value="Found a better price">Found a better price</option>
+            <option value="Changed my mind">Changed my mind</option>
+            <option value="Shipping too slow">Shipping too slow</option>
+            <option value="Duplicate order">Duplicate order</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        {/* Refund details — only for paid online orders */}
+        {isPaidOnline && (
+          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:16, marginBottom:16 }}>
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#333' }}>
+              💳 Refund details — ₹{order.refundAmount || order.totalPrice}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
+              {[
+                ['bank_transfer', '🏦', 'Bank Transfer', '3–5 business days'],
+                ['upi', '📱', 'UPI Transfer', 'Within 24 hours'],
+              ].map(([id, icon, label, time]) => (
+                <div
+                  key={id}
+                  onClick={() => {
+                    setCancelRefundMethod(id);
+                    setCancelUpiMismatch(false);
+                    const s = id === 'upi' ? (savedRefund.upi || {}) : (savedRefund.bankTransfer || {});
+                    setCancelBankDetails(s);
+                    if (id === 'upi') setCancelUpiConfirm(s.upiId || '');
+                  }}
+                  style={{
+                    border: `2px solid ${cancelRefundMethod === id ? '#FF5A1F' : '#ddd'}`,
+                    borderRadius: 8, padding: '10px 14px', cursor: 'pointer',
+                    background: cancelRefundMethod === id ? '#fff8f0' : 'white',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                  }}
+                >
+                  <span style={{ fontSize:20 }}>{icon}</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:13 }}>{label}</div>
+                    <div style={{ fontSize:12, color:'#888' }}>{time}</div>
+                  </div>
+                  <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${cancelRefundMethod===id?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {cancelRefundMethod === id && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {cancelRefundMethod === 'bank_transfer' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div style={{ display:'flex', gap:10 }}>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>Account Holder Name *</label>
+                    <input value={cancelBankDetails.accountName||''} onChange={e=>setB('accountName',e.target.value)} placeholder="As per bank records" style={fieldStyle} />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>Bank Name *</label>
+                    <input value={cancelBankDetails.bankName||''} onChange={e=>setB('bankName',e.target.value)} placeholder="SBI" style={fieldStyle} />
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>Account Number *</label>
+                    <input value={cancelBankDetails.accountNumber||''} onChange={e=>setB('accountNumber',e.target.value)} placeholder="1234567890" style={fieldStyle} />
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <label style={labelStyle}>IFSC Code *</label>
+                    <input value={cancelBankDetails.ifscCode||''} onChange={e=>setB('ifscCode',e.target.value)} placeholder="SBIN0001234" style={fieldStyle} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {cancelRefundMethod === 'upi' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <div>
+                  <label style={labelStyle}>UPI ID *</label>
+                  <input
+                    value={cancelBankDetails.upiId||''}
+                    onChange={e=>{ setB('upiId',e.target.value); setCancelUpiMismatch(false); }}
+                    placeholder="yourname@paytm"
+                    style={{ ...fieldStyle, borderColor: cancelUpiMismatch ? '#dc2626' : '#ddd' }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Confirm UPI ID *</label>
+                  <input
+                    value={cancelUpiConfirm}
+                    onChange={e=>{ setCancelUpiConfirm(e.target.value); setCancelUpiMismatch(false); }}
+                    placeholder="Re-enter UPI ID"
+                    style={{ ...fieldStyle, borderColor: cancelUpiMismatch ? '#dc2626' : '#ddd' }}
+                  />
+                </div>
+                {cancelUpiMismatch && (
+                  <div style={{ fontSize:12, color:'#dc2626', fontWeight:600 }}>⚠ UPI IDs do not match</div>
+                )}
+                {!cancelUpiMismatch && cancelBankDetails.upiId && cancelUpiConfirm && cancelBankDetails.upiId === cancelUpiConfirm && (
+                  <div style={{ fontSize:12, color:'#16a34a', fontWeight:600 }}>✓ UPI IDs match</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+          <button
+            onClick={onClose}
+            style={{ padding:'10px 20px', borderRadius:8, border:'1px solid #ddd', background:'white', fontSize:13, fontWeight:600, cursor:'pointer' }}
+          >
+            Keep Order
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={cancelling || !inputValid()}
+            style={{
+              padding:'10px 20px', borderRadius:8, border:'none',
+              background: (!inputValid() || cancelling) ? '#ccc' : '#dc2626',
+              color:'white', fontSize:13, fontWeight:700,
+              cursor: (!inputValid() || cancelling) ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {cancelling ? 'Cancelling…' : 'Confirm Cancellation'}
+          </button>
+        </div>
       </div>
     </div>
   );

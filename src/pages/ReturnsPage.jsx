@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrderContext';
 import { useToast } from '../context/ToastContext';
 import { returnsApi } from '../api/returns';
+import { usersApi } from '../api/users';
 import { getErrorMessage } from '../api/client';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 
@@ -18,9 +19,8 @@ const REASONS = [
 ];
 
 const RESOLUTIONS = [
-  { id: 'refund',       icon: '💳', label: 'Refund',       desc: 'Back to original payment method', time: '5–7 business days' },
+  { id: 'refund',       icon: '💳', label: 'Refund',       desc: 'Receive money by bank or UPI', time: 'Within 24 hours to 5 business days' },
   { id: 'replacement',  icon: '🔄', label: 'Replacement',  desc: 'Send me the same item again',     time: '3–5 business days' },
-  { id: 'store_credit', icon: '🎁', label: 'Store Credit', desc: 'Add balance to my account',       time: 'Instant on approval' },
 ];
 
 const STEPS = ['Select Order', 'Choose Item', 'Reason', 'Resolution'];
@@ -303,8 +303,11 @@ export default function ReturnsPage() {
   const [selectedItem, setSelItem]  = useState(null);
   const [reason, setReason]         = useState('');
   const [resolution, setResolution] = useState('refund');
-  const [refundMethod, setRefundMethod] = useState('');   // '' means use default
+  const [refundMethod, setRefundMethod] = useState('bank_transfer');
   const [bankDetails, setBankDetails]   = useState({});
+  const [upiConfirm, setUpiConfirm]     = useState('');
+  const [upiMismatch, setUpiMismatch]   = useState(false);
+  const [savedRefundDetails, setSavedRefundDetails] = useState({});
   const [description, setDesc]      = useState('');
   const [photos, setPhotos]         = useState([]);
   const [video, setVideo]           = useState(null);
@@ -323,6 +326,20 @@ export default function ReturnsPage() {
     }).finally(() => setFetch(false));
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    usersApi.getRefundDetails()
+      .then(({ data }) => {
+        const saved = data.data?.savedRefundDetails || {};
+        setSavedRefundDetails(saved);
+        const method = saved.lastRefundMethod === 'upi' ? 'upi' : 'bank_transfer';
+        setRefundMethod(method);
+        setBankDetails(method === 'upi' ? (saved.upi || {}) : (saved.bankTransfer || {}));
+        if (method === 'upi' && saved.upi?.upiId) setUpiConfirm(saved.upi.upiId);
+      })
+      .catch(() => {});
+  }, [user]);
+
   if (!user) { navigate('/login'); return null; }
 
   const selectedOrder = orders.find(o => o._id === orderId);
@@ -336,9 +353,24 @@ export default function ReturnsPage() {
       if (pid) fd.append('productId', typeof pid === 'object' ? pid.toString() : pid);
       fd.append('reason', reason);
       fd.append('resolution', resolution);
-      if (resolution === 'refund' && refundMethod) {
+      if (resolution === 'refund') {
+        if (refundMethod === 'bank_transfer' && (!bankDetails.accountName || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.ifscCode)) {
+          toast('Please enter complete bank details.', 'error');
+          return;
+        }
+        if (refundMethod === 'upi') {
+          if (!bankDetails.upiId) {
+            toast('Please enter your UPI ID.', 'error');
+            return;
+          }
+          if (bankDetails.upiId !== upiConfirm) {
+            setUpiMismatch(true);
+            toast('UPI IDs do not match. Please re-enter.', 'error');
+            return;
+          }
+        }
         fd.append('refundMethod', refundMethod);
-        if (refundMethod !== 'original_payment') fd.append('bankDetails', JSON.stringify(bankDetails));
+        fd.append('bankDetails', JSON.stringify(bankDetails));
       }
       if (description) fd.append('description', description);
       photos.forEach(file => fd.append('photos', file));
@@ -742,9 +774,15 @@ export default function ReturnsPage() {
 
                     {/* Refund method — shown only when Refund is selected */}
                     {resolution === 'refund' && (() => {
-                      const isCOD = selectedOrder?.paymentMethod === 'COD';
-                      const effectiveMethod = refundMethod || (isCOD ? 'bank_transfer' : 'original_payment');
+                      const effectiveMethod = refundMethod || 'bank_transfer';
                       const setB = (k, v) => setBankDetails(b => ({ ...b, [k]: v }));
+                      const chooseMethod = (method) => {
+                        setRefundMethod(method);
+                        setUpiMismatch(false);
+                        const saved = method === 'upi' ? (savedRefundDetails.upi || {}) : (savedRefundDetails.bankTransfer || {});
+                        setBankDetails(saved);
+                        if (method === 'upi') setUpiConfirm(saved.upiId || '');
+                      };
                       const inp = (label, key, placeholder) => (
                         <div>
                           <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>{label}</label>
@@ -755,26 +793,8 @@ export default function ReturnsPage() {
                       return (
                         <div style={{ marginBottom:20, padding:'16px', background:'#f8fafc', borderRadius:8, border:'1px solid #e2e8f0' }}>
                           <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#333' }}>💳 How would you like to receive your refund?</div>
-                          {isCOD && (
-                            <div style={{ background:'#fef9c3', border:'1px solid #fde047', borderRadius:6, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#854d0e' }}>
-                              ℹ️ <strong>COD order</strong> — refund can only be sent to bank account or UPI (no original digital payment to return to).
-                            </div>
-                          )}
                           <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
-                            {!isCOD && (
-                              <div onClick={()=>{ setRefundMethod('original_payment'); setBankDetails({}); }}
-                                style={{ border:`2px solid ${effectiveMethod==='original_payment'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='original_payment'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
-                                <span style={{ fontSize:20 }}>💳</span>
-                                <div style={{ flex:1 }}>
-                                  <div style={{ fontWeight:700, fontSize:13 }}>Back to Original Payment</div>
-                                  <div style={{ fontSize:12, color:'#888' }}>Returned to {selectedOrder?.paymentMethod} · 5–7 business days</div>
-                                </div>
-                                <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${effectiveMethod==='original_payment'?'#FF5A1F':'#ccc'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                                  {effectiveMethod==='original_payment' && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
-                                </div>
-                              </div>
-                            )}
-                            <div onClick={()=>setRefundMethod('bank_transfer')}
+                            <div onClick={()=>chooseMethod('bank_transfer')}
                               style={{ border:`2px solid ${effectiveMethod==='bank_transfer'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='bank_transfer'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
                               <span style={{ fontSize:20 }}>🏦</span>
                               <div style={{ flex:1 }}>
@@ -785,7 +805,7 @@ export default function ReturnsPage() {
                                 {effectiveMethod==='bank_transfer' && <div style={{ width:9, height:9, borderRadius:'50%', background:'#FF5A1F' }} />}
                               </div>
                             </div>
-                            <div onClick={()=>setRefundMethod('upi')}
+                            <div onClick={()=>chooseMethod('upi')}
                               style={{ border:`2px solid ${effectiveMethod==='upi'?'#FF5A1F':'#ddd'}`, borderRadius:8, padding:'10px 14px', cursor:'pointer', background:effectiveMethod==='upi'?'#fff8f0':'white', display:'flex', alignItems:'center', gap:10 }}>
                               <span style={{ fontSize:20 }}>📱</span>
                               <div style={{ flex:1 }}>
@@ -810,8 +830,23 @@ export default function ReturnsPage() {
                             </div>
                           )}
                           {effectiveMethod === 'upi' && (
-                            <div>
-                              {inp('UPI ID *', 'upiId', 'yourname@paytm / @gpay / @ybl')}
+                            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                              <div>
+                                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>UPI ID *</label>
+                                <input value={bankDetails.upiId||''} onChange={e=>{ setB('upiId',e.target.value); setUpiMismatch(false); }} placeholder="yourname@paytm / @gpay / @ybl"
+                                  style={{ width:'100%', height:36, border:`1px solid ${upiMismatch?'#dc2626':'#ddd'}`, borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                              </div>
+                              <div>
+                                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>Confirm UPI ID *</label>
+                                <input value={upiConfirm} onChange={e=>{ setUpiConfirm(e.target.value); setUpiMismatch(false); }} placeholder="Re-enter UPI ID to confirm"
+                                  style={{ width:'100%', height:36, border:`1px solid ${upiMismatch?'#dc2626':'#ddd'}`, borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                              </div>
+                              {upiMismatch && (
+                                <div style={{ fontSize:12, color:'#dc2626', fontWeight:600 }}>⚠ UPI IDs do not match</div>
+                              )}
+                              {!upiMismatch && bankDetails.upiId && upiConfirm && bankDetails.upiId === upiConfirm && (
+                                <div style={{ fontSize:12, color:'#16a34a', fontWeight:600 }}>✓ UPI IDs match</div>
+                              )}
                             </div>
                           )}
                         </div>

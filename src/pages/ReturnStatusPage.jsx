@@ -62,20 +62,14 @@ const BankInp = ({ label, value, onChange, placeholder, disabled }) => (
 
 /* ── Refund Method Selector ── */
 function RefundMethodCard({ ret, onUpdate }) {
-  const isCOD = ret.order?.paymentMethod === 'COD';
-
-  const defaultMode = isCOD
-    ? (ret.refundMethod === 'original_payment' ? 'bank_transfer' : (ret.refundMethod || 'bank_transfer'))
-    : (ret.refundMethod || 'original_payment');
+  const defaultMode = ret.refundMethod === 'upi' ? 'upi' : 'bank_transfer';
 
   const [mode, setMode]     = useState(defaultMode);
   const [bank, setBank]     = useState(ret.bankDetails || {});
   const [saving, setSaving] = useState(false);
 
   const alreadySaved = ret.refundMethod && (
-    ret.refundMethod === 'original_payment'
-      ? !isCOD
-      : ret.refundMethod === 'bank_transfer'
+    ret.refundMethod === 'bank_transfer'
         ? !!ret.bankDetails?.accountNumber
         : !!ret.bankDetails?.upiId
   );
@@ -85,7 +79,6 @@ function RefundMethodCard({ ret, onUpdate }) {
   const setB = (k, v) => setBank(b => ({ ...b, [k]: v }));
 
   const canSave =
-    (!isCOD && mode === 'original_payment') ||
     (mode === 'bank_transfer' && bank.accountName && bank.accountNumber && bank.ifscCode) ||
     (mode === 'upi' && bank.upiId);
 
@@ -127,16 +120,12 @@ function RefundMethodCard({ ret, onUpdate }) {
         <span style={{ fontSize: 11, color: '#888', fontStyle: 'italic' }}>Locked after submission</span>
       </div>
       <div style={{ fontSize: 13, color: '#333' }}>
-        {mode === 'original_payment' && !isCOD && <span>✅ Back to <strong>original payment method</strong></span>}
         {mode === 'bank_transfer' && <span>🏦 Bank Transfer — <strong>{bank.bankName} ···{bank.accountNumber?.slice(-4)}</strong> ({bank.accountName})</span>}
         {mode === 'upi' && <span>📱 UPI — <strong>{bank.upiId}</strong></span>}
-        {isCOD && mode === 'original_payment' && (
-          <span style={{ color: '#dc2626' }}>⚠️ COD order — please provide bank/UPI details</span>
-        )}
       </div>
       <div style={{ fontSize: 12, color: '#007600', marginTop: 6 }}>
         Refund amount: <strong>{formatPriceShort(ret.refundAmount)}</strong>
-        {mode === 'upi' ? ' · Within 24 hours' : mode === 'bank_transfer' ? ' · 3–5 business days' : ' · 5–7 business days'}
+        {mode === 'upi' ? ' · Within 24 hours' : ' · 3–5 business days'}
       </div>
     </div>
   );
@@ -148,19 +137,7 @@ function RefundMethodCard({ ret, onUpdate }) {
         Refund amount: <strong style={{ color: '#FF5A1F' }}>{formatPriceShort(ret.refundAmount)}</strong>
       </div>
 
-      {/* COD notice */}
-      {isCOD && (
-        <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#854d0e', display: 'flex', gap: 8 }}>
-          <span>ℹ️</span>
-          <span><strong>Cash on Delivery order</strong> — refund cannot be sent to the original payment method. Please provide your bank account or UPI details to receive the refund.</span>
-        </div>
-      )}
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-        {/* Original payment — only for non-COD orders */}
-        {!isCOD && (
-          <OPT id="original_payment" icon="💳" title="Original Payment Method" sub={`Back to your ${ret.order?.paymentMethod} · 5–7 business days`} />
-        )}
         <OPT id="bank_transfer" icon="🏦" title="Bank Transfer" sub="Direct transfer to your bank account · 3–5 business days" />
         <OPT id="upi" icon="📱" title="UPI Transfer" sub="Instant transfer to your UPI ID · Within 24 hours" />
       </div>
@@ -498,7 +475,6 @@ export default function ReturnStatusPage() {
               <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 8, padding: '18px 20px' }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>💳 Refund To</div>
                 <div style={{ fontSize: 13, color: '#333', lineHeight: 1.6 }}>
-                  {ret.refundMethod === 'original_payment' && <div>Original payment method (COD refund via NEFT)</div>}
                   {ret.refundMethod === 'bank_transfer' && (
                     <>
                       <div style={{ color: '#888' }}>Bank Account</div>

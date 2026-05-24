@@ -9,4 +9,6 @@ export const usersApi = {
   addAddress: (data) => client.post('/users/addresses', data),
   updateAddress: (id, data) => client.patch(`/users/addresses/${id}`, data),
   deleteAddress: (id) => client.delete(`/users/addresses/${id}`),
+  getRefundDetails: () => client.get('/users/refund-details'),
+  updateRefundDetails: (data) => client.patch('/users/refund-details', data),
 };

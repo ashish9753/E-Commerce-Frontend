@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Check } from 'lucide-react';
+import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Check, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usersApi } from '../api/users';
@@ -111,6 +111,56 @@ export default function ProfilePage() {
     }
   }, [activeTab]);
 
+  // Refund details
+  const [refundTab, setRefundTab]       = useState('bank'); // 'bank' | 'upi'
+  const [bankForm, setBankForm]         = useState({ accountName:'', accountNumber:'', ifscCode:'', bankName:'' });
+  const [upiForm, setUpiForm]           = useState({ upiId:'' });
+  const [upiConfirm, setUpiConfirm]     = useState('');
+  const [upiMismatch, setUpiMismatch]   = useState(false);
+  const [refundSaving, setRefundSaving] = useState(false);
+  const [refundLoading, setRefundLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'refund-details') {
+      setRefundLoading(true);
+      usersApi.getRefundDetails()
+        .then(({ data }) => {
+          const s = data.data?.savedRefundDetails || {};
+          const bt = s.bankTransfer || {};
+          const up = s.upi || {};
+          setBankForm({ accountName: bt.accountName||'', accountNumber: bt.accountNumber||'', ifscCode: bt.ifscCode||'', bankName: bt.bankName||'' });
+          setUpiForm({ upiId: up.upiId||'' });
+          setUpiConfirm(up.upiId||'');
+          if (s.lastRefundMethod === 'upi') setRefundTab('upi');
+        })
+        .catch(() => {})
+        .finally(() => setRefundLoading(false));
+    }
+  }, [activeTab]);
+
+  const handleSaveBank = async () => {
+    if (!bankForm.accountName || !bankForm.accountNumber || !bankForm.ifscCode || !bankForm.bankName) {
+      toast('Please fill in all bank details.', 'error'); return;
+    }
+    setRefundSaving(true);
+    try {
+      await usersApi.updateRefundDetails({ method: 'bank_transfer', bankTransfer: bankForm });
+      toast('Bank details saved!');
+    } catch { toast('Failed to save bank details', 'error'); }
+    finally { setRefundSaving(false); }
+  };
+
+  const handleSaveUpi = async () => {
+    if (!upiForm.upiId) { toast('Please enter your UPI ID.', 'error'); return; }
+    if (upiForm.upiId !== upiConfirm) { setUpiMismatch(true); toast('UPI IDs do not match.', 'error'); return; }
+    setRefundSaving(true);
+    try {
+      await usersApi.updateRefundDetails({ method: 'upi', upi: { upiId: upiForm.upiId } });
+      toast('UPI ID saved!');
+    } catch { toast('Failed to save UPI ID', 'error'); }
+    finally { setRefundSaving(false); }
+  };
+
   if (!user) { navigate('/login'); return null; }
 
   const handleLogout = () => { logout(); toast('Signed out successfully'); navigate('/'); };
@@ -179,12 +229,13 @@ export default function ProfilePage() {
   };
 
   const navItems = [
-    { id: 'profile',   icon: <User size={16} />,    label: 'My Profile' },
-    { id: 'addresses', icon: <MapPin size={16} />,   label: 'My Addresses' },
-    { id: 'orders',    icon: <Package size={16} />,  label: 'My Orders',        action: () => navigate('/orders') },
-    { id: 'wishlist',  icon: <Heart size={16} />,    label: 'Wishlist',         action: () => navigate('/wishlist') },
-    { id: 'password',  icon: <Lock size={16} />,     label: 'Change Password' },
-    { id: 'logout',    icon: <LogOut size={16} />,   label: 'Sign Out',         action: handleLogout, danger: true },
+    { id: 'profile',        icon: <User size={16} />,        label: 'My Profile' },
+    { id: 'addresses',      icon: <MapPin size={16} />,       label: 'My Addresses' },
+    { id: 'refund-details', icon: <CreditCard size={16} />,  label: 'Refund Details' },
+    { id: 'orders',         icon: <Package size={16} />,      label: 'My Orders',    action: () => navigate('/orders') },
+    { id: 'wishlist',       icon: <Heart size={16} />,        label: 'Wishlist',     action: () => navigate('/wishlist') },
+    { id: 'password',       icon: <Lock size={16} />,         label: 'Change Password' },
+    { id: 'logout',         icon: <LogOut size={16} />,       label: 'Sign Out',     action: handleLogout, danger: true },
   ];
 
   return (
@@ -330,6 +381,75 @@ export default function ProfilePage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </>
+          )}
+
+          {/* ── Refund Details ─────────────────────────────── */}
+          {activeTab === 'refund-details' && (
+            <>
+              <h2 className="text-lg font-bold mb-2 pb-4 border-b border-line">Refund Details</h2>
+              <p className="text-sm text-mute mb-6">Saved bank or UPI details used for processing refunds on your return requests.</p>
+              {refundLoading ? (
+                <div className="text-center py-16 text-mute"><span className="spinner" /></div>
+              ) : (
+                <>
+                  {/* Tab switcher */}
+                  <div className="flex gap-2 mb-6">
+                    {[{id:'bank', label:'🏦 Bank Transfer'}, {id:'upi', label:'📱 UPI'}].map(t => (
+                      <button key={t.id} onClick={() => setRefundTab(t.id)}
+                        className={`px-5 py-2 rounded-full text-sm font-semibold border transition-colors ${refundTab===t.id ? 'bg-ink text-white border-ink' : 'bg-transparent text-mute border-line hover:bg-surface'}`}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {refundTab === 'bank' && (
+                    <>
+                      <div className="grid grid-cols-2 gap-5 mb-5 max-md:grid-cols-1">
+                        {[
+                          { k:'accountName',   label:'Account Holder Name *', placeholder:'As per bank records' },
+                          { k:'bankName',      label:'Bank Name *',            placeholder:'State Bank of India' },
+                          { k:'accountNumber', label:'Account Number *',       placeholder:'1234567890' },
+                          { k:'ifscCode',      label:'IFSC Code *',            placeholder:'SBIN0001234' },
+                        ].map(({ k, label, placeholder }) => (
+                          <div key={k} className="field">
+                            <label>{label}</label>
+                            <input className="input" value={bankForm[k]} placeholder={placeholder}
+                              onChange={e => setBankForm(f => ({ ...f, [k]: e.target.value }))} />
+                          </div>
+                        ))}
+                      </div>
+                      <button className="btn btn-primary" onClick={handleSaveBank} disabled={refundSaving}>
+                        {refundSaving ? <span className="spinner" /> : 'Save Bank Details'}
+                      </button>
+                    </>
+                  )}
+
+                  {refundTab === 'upi' && (
+                    <>
+                      <div className="flex flex-col gap-5 mb-5" style={{ maxWidth:420 }}>
+                        <div className="field">
+                          <label>UPI ID *</label>
+                          <input className={`input ${upiMismatch ? 'error' : ''}`} value={upiForm.upiId} placeholder="yourname@paytm / @gpay / @ybl"
+                            onChange={e => { setUpiForm({ upiId: e.target.value }); setUpiMismatch(false); }} />
+                        </div>
+                        <div className="field">
+                          <label>Confirm UPI ID *</label>
+                          <input className={`input ${upiMismatch ? 'error' : ''}`} value={upiConfirm} placeholder="Re-enter UPI ID to confirm"
+                            onChange={e => { setUpiConfirm(e.target.value); setUpiMismatch(false); }} />
+                          {upiMismatch && <div className="field-error">UPI IDs do not match</div>}
+                          {!upiMismatch && upiForm.upiId && upiConfirm && upiForm.upiId === upiConfirm && (
+                            <div className="text-[12px] text-green-600 font-semibold mt-1">✓ UPI IDs match</div>
+                          )}
+                        </div>
+                      </div>
+                      <button className="btn btn-primary" onClick={handleSaveUpi} disabled={refundSaving}>
+                        {refundSaving ? <span className="spinner" /> : 'Save UPI ID'}
+                      </button>
+                    </>
+                  )}
+                </>
               )}
             </>
           )}

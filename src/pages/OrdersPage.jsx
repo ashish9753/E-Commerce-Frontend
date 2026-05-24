@@ -106,6 +106,34 @@ function ReviewModal({ item, orderId, onClose, onDone }) {
   );
 }
 
+function RefundProofModal({ proof, onClose }) {
+  const [idx, setIdx] = useState(0);
+  if (!proof?.length) return null;
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'#000c', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'white', borderRadius:12, padding:24, maxWidth:500, width:'100%' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <div style={{ fontWeight:700, fontSize:15 }}>🧾 Refund Proof</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#888', lineHeight:1 }}>×</button>
+        </div>
+        <img src={proof[idx].url} alt={`Proof ${idx + 1}`}
+          style={{ width:'100%', maxHeight:340, objectFit:'contain', borderRadius:8, border:'1px solid #ddd', display:'block' }} />
+        {proof.length > 1 && (
+          <div style={{ display:'flex', gap:8, marginTop:12, justifyContent:'center', flexWrap:'wrap' }}>
+            {proof.map((p, i) => (
+              <img key={i} src={p.url} alt="" onClick={() => setIdx(i)}
+                style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border: i===idx ? '2px solid #FF5A1F' : '2px solid #ddd', cursor:'pointer' }} />
+            ))}
+          </div>
+        )}
+        <div style={{ fontSize:11, color:'#aaa', marginTop:10, textAlign:'center' }}>
+          {proof.length} screenshot{proof.length !== 1 ? 's' : ''} uploaded by our team as refund proof
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const STATUS_META = {
   PLACED:           { label: 'Order Placed',       color: '#f59e0b', bg: '#fef3c7' },
   CONFIRMED:        { label: 'Confirmed',           color: '#3b82f6', bg: '#dbeafe' },
@@ -139,6 +167,7 @@ export default function OrdersPage() {
   const [filter, setFilter]       = useState('All Orders');
   const [search, setSearch]       = useState('');
   const [reviewTarget, setReview] = useState(null); // { item, orderId }
+  const [proofModal, setProofModal] = useState(null); // proof array to display
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -174,6 +203,7 @@ export default function OrdersPage() {
           onDone={() => setReview(null)}
         />
       )}
+      {proofModal && <RefundProofModal proof={proofModal} onClose={() => setProofModal(null)} />}
       <div style={{ maxWidth:1000, margin:'0 auto', padding:'0 16px' }}>
 
         {/* Header */}
@@ -376,6 +406,15 @@ export default function OrdersPage() {
                           onClick={() => setReview({ item: order.orderItems[0], orderId: order._id })}
                           style={{ fontSize:12,fontWeight:600,padding:'6px 16px',borderRadius:20,border:'1px solid #FF5A1F',background:'linear-gradient(to bottom,#fff8f5,#ffe8d6)',color:'#FF5A1F',cursor:'pointer' }}>
                           ✍️ Write a Review
+                        </button>
+                      )}
+                      {isCancelled && order.cancellationRefundProof?.length > 0 && (
+                        <button onClick={() => setProofModal(order.cancellationRefundProof)}
+                          style={{ fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,border:'1px solid #0369a1',background:'linear-gradient(to bottom,#f0f9ff,#dbeafe)',color:'#0369a1',cursor:'pointer',display:'flex',alignItems:'center',gap:5 }}>
+                          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path d="M1 12C1 12 5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+                          </svg>
+                          Refund Proof
                         </button>
                       )}
                       <button onClick={() => navigate(`/support?orderId=${order._id}`)}

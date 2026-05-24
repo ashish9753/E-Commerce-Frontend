@@ -54,7 +54,6 @@ function AnnouncementBar() {
 export default function Layout({ children }) {
   return (
     <>
-      <AnnouncementBar />
       <Header />
       <main>{children}</main>
       <Footer />
