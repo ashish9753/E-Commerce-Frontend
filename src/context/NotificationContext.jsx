@@ -24,43 +24,53 @@ export function NotificationProvider({ children }) {
   // Initial load
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // SSE connection — one persistent connection, zero polling
+  // SSE connection — one persistent connection, zero polling.
+  // We exchange the access token for a short-lived single-use ticket so the
+  // JWT never appears in the EventSource URL (where it would leak to logs/proxies).
   useEffect(() => {
     if (!user) { esRef.current?.close(); esRef.current = null; return; }
+    let cancelled = false;
 
-    const token = localStorage.getItem('accessToken');
-    if (!token) return;
+    const connect = async () => {
+      if (cancelled) return;
+      try {
+        const { data } = await notificationsApi.streamTicket();
+        const ticket = data?.data?.ticket;
+        if (!ticket || cancelled) return;
 
-    const connect = () => {
-      esRef.current?.close();
-      const es = new EventSource(`/api/v1/notifications/stream?token=${encodeURIComponent(token)}`);
-      esRef.current = es;
+        esRef.current?.close();
+        const es = new EventSource(`/api/v1/notifications/stream?ticket=${encodeURIComponent(ticket)}`);
+        esRef.current = es;
 
-      es.onmessage = (e) => {
-        try {
-          const payload = JSON.parse(e.data);
-          if (payload.type === 'notification') {
-            setNotifications(prev => [payload.notification, ...prev]);
-            setUnreadCount(prev => prev + 1);
-          } else if (payload.type === 'support_message') {
-            setLastSupportMsg(payload);
-          }
-        } catch { /* ignore malformed */ }
-      };
+        es.onmessage = (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload.type === 'notification') {
+              setNotifications(prev => [payload.notification, ...prev]);
+              setUnreadCount(prev => prev + 1);
+            } else if (payload.type === 'support_message') {
+              setLastSupportMsg(payload);
+            }
+          } catch { /* ignore malformed */ }
+        };
 
-      es.onerror = () => {
-        es.close();
-        setTimeout(() => {
-          if (localStorage.getItem('accessToken')) {
-            setSseReconnect(c => c + 1); // signal consumers to re-sync
-            connect();
-          }
-        }, 5_000);
-      };
+        es.onerror = () => {
+          es.close();
+          setTimeout(() => {
+            if (!cancelled && localStorage.getItem('accessToken')) {
+              setSseReconnect(c => c + 1);
+              connect();
+            }
+          }, 5_000);
+        };
+      } catch {
+        // ticket request failed — retry shortly
+        setTimeout(() => { if (!cancelled) connect(); }, 5_000);
+      }
     };
 
     connect();
-    return () => { esRef.current?.close(); esRef.current = null; };
+    return () => { cancelled = true; esRef.current?.close(); esRef.current = null; };
   }, [user]);
 
   const markRead = async (id) => {
