@@ -1473,8 +1473,15 @@ function OrdersTab({ globalSearch = '' }) {
   const fetchOrders = useCallback(() => {
     setLoading(true);
     const params = { limit: 100, page };
-    if (statusF)        params.status        = statusF;
-    if (paymentF)       params.paymentStatus = paymentF;
+    // PENDING_PAYMENT is a synthetic filter — orders awaiting customer payment.
+    // It maps to: orderStatus=PLACED AND paymentStatus=PENDING (regardless of paymentF).
+    if (statusF === 'PENDING_PAYMENT') {
+      params.status        = 'PLACED';
+      params.paymentStatus = 'PENDING';
+    } else {
+      if (statusF)  params.status        = statusF;
+      if (paymentF) params.paymentStatus = paymentF;
+    }
     if (appliedSearch)  params.search        = appliedSearch;
     adminApi.getOrders(params)
       .then(r => {
@@ -1495,6 +1502,13 @@ function OrdersTab({ globalSearch = '' }) {
   });
 
   const handleStatusChange = async (orderId, status) => {
+    // CANCELLED must route through cancelOrder so stock is restored and the
+    // customer gets a proper cancellation notification — the admin status PATCH
+    // only writes the field and skips the restock/refund flow.
+    if (status === 'CANCELLED') {
+      handleCancel(orderId);
+      return;
+    }
     setUpd(orderId);
     await adminApi.updateOrderStatus(orderId, { status }).catch(() => {});
     setAll(prev =>
@@ -1503,6 +1517,25 @@ function OrdersTab({ globalSearch = '' }) {
         : prev.map(x => x._id === orderId ? { ...x, orderStatus: status } : x)
     );
     setUpd(null);
+  };
+
+  const handleCancel = async (orderId) => {
+    const order = all.find(x => x._id === orderId);
+    const reason = window.prompt(`Cancel order ${order?.orderNumber || ''}?\n\nReason (shown to customer):`, 'Cancelled by admin');
+    if (!reason) return;
+    setUpd(orderId);
+    try {
+      await ordersApi.cancel(orderId, { reason });
+      setAll(prev =>
+        statusF && 'CANCELLED' !== statusF
+          ? prev.filter(x => x._id !== orderId)
+          : prev.map(x => x._id === orderId ? { ...x, orderStatus: 'CANCELLED', cancellationReason: reason } : x)
+      );
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Cancel failed');
+    } finally {
+      setUpd(null);
+    }
   };
 
   const openRefund = (o) => {
@@ -1619,6 +1652,7 @@ function OrdersTab({ globalSearch = '' }) {
           </div>
           <Select value={statusF} onChange={e => setStatusF(e.target.value)}>
             <option value="">All Status</option>
+            <option value="PENDING_PAYMENT">⏳ PENDING PAYMENT</option>
             {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </Select>
           <Select value={paymentF} onChange={e => setPayF(e.target.value)}>
@@ -1752,6 +1786,15 @@ function OrdersTab({ globalSearch = '' }) {
                             }}>
                             {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
+                          {['PLACED','CONFIRMED'].includes(o.orderStatus) && (
+                            <button onClick={() => handleCancel(o._id)} disabled={updating === o._id}
+                              style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
+                                border: `1px solid ${C.red}55`, background: C.red+'18', color: C.red,
+                                cursor: updating === o._id ? 'not-allowed' : 'pointer',
+                                whiteSpace: 'nowrap', fontFamily: 'inherit', opacity: updating === o._id ? 0.6 : 1 }}>
+                              {updating === o._id ? '…' : '✕ Cancel Order'}
+                            </button>
+                          )}
                           {canRefund && (
                             <button onClick={() => openRefund(o)}
                               style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6,

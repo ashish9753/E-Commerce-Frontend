@@ -299,13 +299,33 @@ export default function CheckoutPage() {
   if (!buyNow && items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
 
   const checkDelivery = async (pin) => {
-    if (!pin || pin.length !== 6) { setDeliveryCheck(null); return; }
+    // Surface a clear, actionable state instead of leaving the user with a
+    // permanently-disabled "Use this address" button and no explanation.
+    if (!pin) {
+      setDeliveryCheck({ available: false, reason: 'no_pincode', message: 'This address has no pincode. Please edit it.' });
+      return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+      setDeliveryCheck({
+        available: false,
+        reason: 'invalid_pincode',
+        message: `"${pin}" is not a valid pincode. Indian pincodes are 6 digits. Please edit this address.`,
+      });
+      return;
+    }
     setDeliveryChecking(true);
     try {
       const { data } = await deliveryAreasApi.check(pin);
       setDeliveryCheck(data.data);
-    } catch { setDeliveryCheck({ available: false }); }
-    finally { setDeliveryChecking(false); }
+    } catch (err) {
+      setDeliveryCheck({
+        available: false,
+        reason: 'check_failed',
+        message: getErrorMessage(err) || 'Could not check delivery availability. Please try again.',
+      });
+    } finally {
+      setDeliveryChecking(false);
+    }
   };
 
   // Check delivery whenever selected address changes
@@ -599,12 +619,23 @@ export default function CheckoutPage() {
                           ) : (
                             <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
                               <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 14, marginBottom: 4 }}>
-                                🚫 Delivery not available in this area
+                                {deliveryCheck.reason === 'invalid_pincode' ? '⚠ Invalid pincode'
+                                  : deliveryCheck.reason === 'no_pincode' ? '⚠ Missing pincode'
+                                  : deliveryCheck.reason === 'check_failed' ? '⚠ Could not verify delivery'
+                                  : '🚫 Delivery not available in this area'}
                               </div>
                               <div style={{ fontSize: 13, color: '#b91c1c' }}>
-                                We currently do not deliver to pincode <strong>{addresses.find(a => a._id === selectedAddressId)?.pincode}</strong>.
-                                Please use a different address or contact support.
+                                {deliveryCheck.message || (
+                                  <>We currently do not deliver to pincode <strong>{addresses.find(a => a._id === selectedAddressId)?.pincode}</strong>. Please use a different address or contact support.</>
+                                )}
                               </div>
+                              {(deliveryCheck.reason === 'invalid_pincode' || deliveryCheck.reason === 'no_pincode') && (
+                                <button
+                                  onClick={() => { setEditingAddrId(selectedAddressId); setShowAddForm(false); }}
+                                  style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#dc2626', background: 'white', border: '1px solid #fca5a5', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>
+                                  Edit this address →
+                                </button>
+                              )}
                             </div>
                           )
                         ) : null}
@@ -614,26 +645,36 @@ export default function CheckoutPage() {
                     {selectedAddressId && !showAddForm && (
                       <button
                         onClick={() => {
-                          if (!deliveryCheck?.available) {
-                            toast('Delivery is not available at your selected address pincode.', 'error');
+                          if (deliveryChecking) {
+                            toast('Still checking delivery — please wait a moment.', 'warn');
+                            return;
+                          }
+                          if (deliveryCheck === null) {
+                            toast('Could not verify delivery. Please reload the page.', 'error');
+                            return;
+                          }
+                          if (!deliveryCheck.available) {
+                            toast(deliveryCheck.message || 'Delivery is not available at this address.', 'error');
                             return;
                           }
                           setStep(2);
                         }}
-                        disabled={deliveryChecking || deliveryCheck === null}
+                        disabled={deliveryChecking}
                         style={{
                           marginTop: 16, width: '100%', padding: '12px',
-                          background: (!deliveryCheck?.available || deliveryChecking) ? '#e5e7eb' : '#FFD814',
-                          border: `1px solid ${(!deliveryCheck?.available || deliveryChecking) ? '#d1d5db' : '#FBA131'}`,
+                          background: (deliveryCheck?.available === true && !deliveryChecking) ? '#FFD814' : '#e5e7eb',
+                          border: `1px solid ${(deliveryCheck?.available === true && !deliveryChecking) ? '#FBA131' : '#d1d5db'}`,
                           borderRadius: 6, fontWeight: 700, fontSize: 15,
-                          cursor: (!deliveryCheck?.available || deliveryChecking) ? 'not-allowed' : 'pointer',
-                          color: (!deliveryCheck?.available || deliveryChecking) ? '#9ca3af' : '#000',
+                          cursor: deliveryChecking ? 'wait' : (deliveryCheck?.available === true ? 'pointer' : 'pointer'),
+                          color: (deliveryCheck?.available === true && !deliveryChecking) ? '#000' : '#6b7280',
                         }}>
                         {deliveryChecking
                           ? 'Checking delivery...'
-                          : deliveryCheck?.available === false
-                            ? 'Delivery not available — choose another address'
-                            : 'Use this address'}
+                          : deliveryCheck?.available === true
+                            ? 'Use this address'
+                            : deliveryCheck?.reason === 'invalid_pincode' || deliveryCheck?.reason === 'no_pincode'
+                              ? 'Fix the pincode to continue'
+                              : 'Delivery not available — choose another address'}
                       </button>
                     )}
                   </>

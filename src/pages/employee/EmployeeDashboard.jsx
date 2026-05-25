@@ -485,12 +485,14 @@ const STATUS_NEXT = {
 
 function OrderStatusCell({ order, onUpdated, onViewReturns }) {
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const current     = order.orderStatus;
   const isFinal     = ['RETURNED','CANCELLED','DELIVERED'].includes(current);
   const isReturned  = current === 'RETURNED';
   const isCancelled = current === 'CANCELLED';
   const isDelivered = current === 'DELIVERED';
   const nextStatus  = STATUS_NEXT[current];
+  const canCancel   = ['PLACED','CONFIRMED'].includes(current);
   const sm = STATUS_COLORS[current] || C.mute;
 
   const doUpdate = async (status) => {
@@ -501,6 +503,18 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
     } catch(e) {
       alert(e?.response?.data?.message || 'Update failed');
     } finally { setSaving(false); }
+  };
+
+  const doCancel = async () => {
+    const reason = window.prompt(`Cancel order ${order.orderNumber || ''}?\n\nReason (shown to customer):`, 'Cancelled by store');
+    if (!reason) return;
+    setCancelling(true);
+    try {
+      await ordersApi.cancel(order._id, { reason });
+      onUpdated(order._id, 'CANCELLED', reason);
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Cancel failed');
+    } finally { setCancelling(false); }
   };
 
   return (
@@ -514,14 +528,25 @@ function OrderStatusCell({ order, onUpdated, onViewReturns }) {
       </div>
 
       {!isFinal && nextStatus && (
-        <button onClick={() => doUpdate(nextStatus)} disabled={saving}
-          style={{ fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:6,
-            background: STATUS_COLORS[nextStatus]+'22', color: STATUS_COLORS[nextStatus],
-            border:`1px solid ${STATUS_COLORS[nextStatus]}44`, cursor:'pointer',
-            opacity: saving ? 0.6 : 1, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
-          <SvgAt el={Icon.arrow} size={11} />
-          {saving ? '…' : nextStatus === 'DELIVERED' ? 'Mark as Delivered' : `Mark ${nextStatus.replace(/_/g,' ')}`}
-        </button>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+          <button onClick={() => doUpdate(nextStatus)} disabled={saving || cancelling}
+            style={{ fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:6,
+              background: STATUS_COLORS[nextStatus]+'22', color: STATUS_COLORS[nextStatus],
+              border:`1px solid ${STATUS_COLORS[nextStatus]}44`, cursor:'pointer',
+              opacity: saving ? 0.6 : 1, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
+            <SvgAt el={Icon.arrow} size={11} />
+            {saving ? '…' : nextStatus === 'DELIVERED' ? 'Mark as Delivered' : `Mark ${nextStatus.replace(/_/g,' ')}`}
+          </button>
+          {canCancel && (
+            <button onClick={doCancel} disabled={saving || cancelling}
+              style={{ fontSize:11, fontWeight:700, padding:'5px 10px', borderRadius:6,
+                background: C.red+'18', color: C.red,
+                border:`1px solid ${C.red}44`, cursor:'pointer',
+                opacity: cancelling ? 0.6 : 1, whiteSpace:'nowrap' }}>
+              {cancelling ? '…' : '✕ Cancel'}
+            </button>
+          )}
+        </div>
       )}
 
       {isReturned && (
@@ -566,9 +591,15 @@ function OrdersTab({ onViewReturns }) {
   const fetchOrders = useCallback(() => {
     setLoading(true);
     const params = { limit: 100, page };
-    if (statusF)       params.status        = statusF;
-    if (payF)          params.paymentStatus = payF;
-    if (appliedSearch) params.search        = appliedSearch;
+    // PENDING_PAYMENT — synthetic option that means "PLACED + paymentStatus=PENDING".
+    if (statusF === 'PENDING_PAYMENT') {
+      params.status        = 'PLACED';
+      params.paymentStatus = 'PENDING';
+    } else {
+      if (statusF) params.status        = statusF;
+      if (payF)    params.paymentStatus = payF;
+    }
+    if (appliedSearch) params.search    = appliedSearch;
     employeeApi.getMyOrders(params).then(r => {
       const d = r.data?.data || {};
       setAll(d.data || []);
@@ -639,8 +670,9 @@ function OrdersTab({ onViewReturns }) {
               <SvgAt el={Icon.search} size={14} /> Search
             </Btn>
           </div>
-          <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:170 }}>
+          <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:200 }}>
             <option value="">All Status</option>
+            <option value="PENDING_PAYMENT">⏳ PENDING PAYMENT</option>
             {['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED','CANCELLED','RETURNED'].map(s=><option key={s} value={s}>{s}</option>)}
           </Sel>
           <Sel value={payF} onChange={e=>setPayF(e.target.value)} style={{ width:140 }}>
