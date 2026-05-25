@@ -16,6 +16,17 @@ const STATES = [
 
 const EMPTY_ADDR = { fullName:'', phone:'', houseNo:'', area:'', city:'', state:'', pincode:'', landmark:'' };
 
+function AddrField({ k, label, placeholder, type = 'text', half, form, errs, onSet }) {
+  return (
+    <div className={`field${half ? ' col-span-1' : ''}`}>
+      <label>{label}</label>
+      <input className={`input${errs[k] ? ' error' : ''}`} type={type}
+        value={form[k]} onChange={e => onSet(k, e.target.value)} placeholder={placeholder} />
+      {errs[k] && <div className="field-error">{errs[k]}</div>}
+    </div>
+  );
+}
+
 function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial);
   const [errs, setErrs] = useState({});
@@ -40,23 +51,14 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
     onSave(form);
   };
 
-  const Field = ({ k, label, placeholder, type = 'text', half }) => (
-    <div className={`field${half ? ' col-span-1' : ''}`}>
-      <label>{label}</label>
-      <input className={`input${errs[k] ? ' error' : ''}`} type={type}
-        value={form[k]} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
-      {errs[k] && <div className="field-error">{errs[k]}</div>}
-    </div>
-  );
-
   return (
     <div className="border border-line rounded-xl p-5 bg-surface mt-4">
       <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
-        <Field k="fullName" label="Full Name *" placeholder="Recipient name" half />
-        <Field k="phone"    label="Phone *"     placeholder="10-digit mobile" half />
-        <Field k="houseNo"  label="House / Flat / Block *" placeholder="e.g. 12B, 3rd Floor" half />
-        <Field k="area"     label="Street / Area / Locality *" placeholder="Colony or area name" half />
-        <Field k="city"     label="City *" placeholder="City" half />
+        <AddrField k="fullName" label="Full Name *" placeholder="Recipient name" half form={form} errs={errs} onSet={set} />
+        <AddrField k="phone"    label="Phone *"     placeholder="10-digit mobile" half form={form} errs={errs} onSet={set} />
+        <AddrField k="houseNo"  label="House / Flat / Block *" placeholder="e.g. 12B, 3rd Floor" half form={form} errs={errs} onSet={set} />
+        <AddrField k="area"     label="Street / Area / Locality *" placeholder="Colony or area name" half form={form} errs={errs} onSet={set} />
+        <AddrField k="city"     label="City *" placeholder="City" half form={form} errs={errs} onSet={set} />
         <div className="field col-span-1">
           <label>State *</label>
           <select className={`input${errs.state ? ' error' : ''}`} value={form.state} onChange={e => set('state', e.target.value)}>
@@ -65,8 +67,8 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
           </select>
           {errs.state && <div className="field-error">{errs.state}</div>}
         </div>
-        <Field k="pincode"  label="Pincode *" placeholder="6-digit code" half />
-        <Field k="landmark" label="Landmark (optional)" placeholder="Near school, temple…" half />
+        <AddrField k="pincode"  label="Pincode *" placeholder="6-digit code" half form={form} errs={errs} onSet={set} />
+        <AddrField k="landmark" label="Landmark (optional)" placeholder="Near school, temple…" half form={form} errs={errs} onSet={set} />
       </div>
       <div className="flex gap-3 mt-5">
         <button className="btn btn-primary flex items-center gap-2" onClick={submit} disabled={saving}>

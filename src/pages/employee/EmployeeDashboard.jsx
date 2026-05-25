@@ -2084,7 +2084,7 @@ function MySalaryTab() {
 const EMPTY_COUPON_EMP = {
   code: '', discountType: 'PERCENTAGE', discountValue: '',
   minimumAmount: '', maximumDiscount: '', expiryDate: '',
-  usageLimit: '', isActive: true, visibility: 'everyone',
+  usageLimit: '', isActive: true, visibility: 'hidden',
   applicableBrands: [], applicableCategories: [], applicableSubcategories: [],
 };
 
@@ -2129,7 +2129,7 @@ function EmployeeCouponsTab() {
       minimumAmount: c.minimumAmount || '', maximumDiscount: c.maximumDiscount || '',
       expiryDate: c.expiryDate ? c.expiryDate.slice(0, 10) : '',
       usageLimit: c.usageLimit || '', isActive: c.isActive,
-      visibility: c.visibility || 'everyone',
+      visibility: c.visibility || 'hidden',
       applicableBrands:        (c.applicableBrands        || []).map(x => x?._id || x),
       applicableCategories:    (c.applicableCategories    || []).map(x => x?._id || x),
       applicableSubcategories: (c.applicableSubcategories || []).map(x => x?._id || x),
@@ -2152,7 +2152,7 @@ function EmployeeCouponsTab() {
         expiryDate: form.expiryDate,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
         isActive: form.isActive,
-        visibility: form.visibility || 'everyone',
+        visibility: form.visibility || 'hidden',
         applicableBrands:        form.applicableBrands.length        ? form.applicableBrands        : [],
         applicableCategories:    form.applicableCategories.length    ? form.applicableCategories    : [],
         applicableSubcategories: form.applicableSubcategories.length ? form.applicableSubcategories : [],
@@ -2259,9 +2259,9 @@ function EmployeeCouponsTab() {
               <label style={LabelStyle}>Visibility</label>
               <select value={form.visibility} onChange={e => set('visibility', e.target.value)}
                 style={{ ...InpStyle, cursor: 'pointer' }}>
-                <option value="everyone">Everyone — show on home page</option>
+                <option value="hidden">Hidden — manual apply only (default)</option>
                 <option value="new_users">First-order users only — show to new users</option>
-                <option value="hidden">Hidden — manual apply only</option>
+                <option value="everyone">Everyone — show on home page</option>
               </select>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Share2, ShieldCheck, RefreshCw, Truck, Star, ChevronRight } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { couponsApi } from '../api/coupons';
 import { useWishlist } from '../context/WishlistContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,8 +25,9 @@ export default function ProductDetailPage() {
   const toast = useToast();
 
   const [product, setProduct]     = useState(null);
-  const [related, setRelated]     = useState([]);
-  const [reviews, setReviews]     = useState([]);
+  const [related, setRelated]         = useState([]);
+  const [otherProducts, setOther]     = useState([]);
+  const [reviews, setReviews]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [qty, setQty]             = useState(1);
   const [activeTab, setActiveTab]     = useState('description');
@@ -33,6 +35,12 @@ export default function ProductDetailPage() {
   const [pincode, setPincode]         = useState('');
   const [pinResult, setPinResult]     = useState(null); // { available, city, deliveryCharge } | null
   const [pinChecking, setPinChecking] = useState(false);
+
+  const [couponCode, setCouponCode]   = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  // Coupon validated for THIS product (independent of cart). Carried into the
+  // Buy Now flow via navigation state.
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discount }
 
   const [reviewRating, setReviewRating]       = useState(0);
   const [reviewHover, setReviewHover]         = useState(0);
@@ -67,12 +75,29 @@ export default function ProductDetailPage() {
       .then(({ data }) => {
         const p = normalizeProduct(data.data.product);
         setProduct(p);
-        if (p.categoryObj?._id || p.category) {
-          productsApi.getAll({ category: p.categoryObj?._id || p.category, limit: 4 })
+        const catId = p.categoryObj?._id || p.category;
+        if (catId) {
+          productsApi.getAll({ category: catId, limit: 9 })
             .then(({ data: rData }) => {
               const prods = normalizeProducts(rData.data?.products || rData.data?.data || [])
-                .filter(r => r._id !== p._id).slice(0, 4);
+                .filter(r => r._id !== p._id).slice(0, 8);
               setRelated(prods);
+              // Fetch popular products outside this category
+              productsApi.getAll({ sort: 'popular', limit: 16 })
+                .then(({ data: oData }) => {
+                  const seen = new Set([p._id, ...prods.map(r => r._id)]);
+                  const others = normalizeProducts(oData.data?.products || oData.data?.data || [])
+                    .filter(r => !seen.has(r._id)).slice(0, 8);
+                  setOther(others);
+                }).catch(() => {});
+            }).catch(() => {});
+        } else {
+          // No category — just fetch popular products
+          productsApi.getAll({ sort: 'popular', limit: 9 })
+            .then(({ data: oData }) => {
+              const others = normalizeProducts(oData.data?.products || oData.data?.data || [])
+                .filter(r => r._id !== p._id).slice(0, 8);
+              setOther(others);
             }).catch(() => {});
         }
         reviewsApi.getForProduct(p._id)
@@ -124,12 +149,13 @@ export default function ProductDetailPage() {
     navigate('/checkout', {
       state: {
         buyNow: {
-          productId: product._id,
-          title:     product.name || product.title,
-          price:     product.discountPrice || product.price,
-          image:     product.images?.[0],
-          stock:     product.stock,
-          quantity:  qty,
+          productId:  product._id,
+          title:      product.name || product.title,
+          price:      product.discountPrice || product.price,
+          image:      product.images?.[0],
+          stock:      product.stock,
+          quantity:   qty,
+          couponCode: appliedCoupon?.code || null,
         },
       },
     });
@@ -138,6 +164,36 @@ export default function ProductDetailPage() {
     if (!user) { toast('Please sign in to save items', 'error'); navigate('/login'); return; }
     await toggle(product);
     toast(wished ? 'Removed from wishlist' : 'Added to wishlist');
+  };
+
+  const appliedCouponCode = appliedCoupon?.code || null;
+
+  const handleApplyCoupon = async () => {
+    if (!user) { toast('Please sign in to apply coupons', 'error'); navigate('/login'); return; }
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setCouponLoading(true);
+    try {
+      const { data } = await couponsApi.validate({
+        code,
+        directItem: { productId: product._id, quantity: qty },
+      });
+      const discount = Number(data?.data?.discount) || 0;
+      setAppliedCoupon({ code, discount });
+      setCouponCode('');
+      toast(`Coupon applied! You saved ${formatPriceShort(discount)}`);
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Could not apply coupon';
+      toast(msg, 'error');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    toast('Coupon removed');
   };
 
   const handleReviewImageChange = (e) => {
@@ -480,6 +536,41 @@ export default function ProductDetailPage() {
                 {inStock ? 'Buy Now' : 'Out of Stock'}
               </button>
 
+              {/* Coupon */}
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:12, fontWeight:600, color:'#555', marginBottom:6 }}>Have a coupon?</div>
+                {appliedCouponCode ? (
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                    background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:6, padding:'8px 12px' }}>
+                    <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
+                      ✓ <span style={{ fontFamily:'monospace', letterSpacing:'.05em' }}>{appliedCouponCode}</span> applied · saved {formatPriceShort(appliedCoupon?.discount || 0)}
+                    </span>
+                    <button onClick={handleRemoveCoupon}
+                      style={{ fontSize:11, color:'#CC0C39', background:'none', border:'none', cursor:'pointer', fontWeight:700, padding:0 }}>
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', gap:6 }}>
+                    <input
+                      value={couponCode}
+                      onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                      placeholder="Enter coupon code"
+                      style={{ flex:1, height:34, border:'1px solid #ddd', borderRadius:4,
+                        padding:'0 10px', fontSize:12, outline:'none', fontFamily:'monospace',
+                        textTransform:'uppercase', letterSpacing:'.05em' }}
+                    />
+                    <button onClick={handleApplyCoupon} disabled={couponLoading || !couponCode.trim()}
+                      style={{ padding:'0 12px', height:34, borderRadius:4, border:'1px solid #ddd',
+                        background:'#f0f2f2', fontSize:12, fontWeight:700,
+                        cursor: couponCode.trim() ? 'pointer' : 'not-allowed', color:'#0F1111', whiteSpace:'nowrap' }}>
+                      {couponLoading ? '...' : 'Apply'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Seller info */}
               <div style={{ fontSize:12, color:'#555', display:'flex', flexDirection:'column', gap:5 }}>
                 <div><span style={{ display:'inline-block', width:80 }}>Ships from</span><span style={{ color:'#0F1111', fontWeight:500 }}>TradeEngine</span></div>
@@ -500,13 +591,30 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* ── Related Products (before reviews, like Amazon) ── */}
+        {/* ── Related Products ── */}
         {related.length > 0 && (
           <section style={{ paddingBottom:32 }}>
             <div style={{ height:1, background:'#e7e7e7', marginBottom:24 }} />
-            <div style={{ fontSize:22, fontWeight:700, color:'#0F1111', marginBottom:16 }}>Related Products</div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+              <div style={{ fontSize:22, fontWeight:700, color:'#0F1111' }}>Related Products</div>
+              <span style={{ fontSize:13, color:'#007185' }}>{related.length} items</span>
+            </div>
             <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2">
               {related.map(p => <ProductCard key={p._id} product={p} />)}
+            </div>
+          </section>
+        )}
+
+        {/* ── You May Also Like ── */}
+        {otherProducts.length > 0 && (
+          <section style={{ paddingBottom:32 }}>
+            <div style={{ height:1, background:'#e7e7e7', marginBottom:24 }} />
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+              <div style={{ fontSize:22, fontWeight:700, color:'#0F1111' }}>You May Also Like</div>
+              <span style={{ fontSize:13, color:'#007185' }}>{otherProducts.length} items</span>
+            </div>
+            <div className="grid grid-cols-4 gap-5 max-lg:grid-cols-3 max-md:grid-cols-2">
+              {otherProducts.map(p => <ProductCard key={p._id} product={p} />)}
             </div>
           </section>
         )}

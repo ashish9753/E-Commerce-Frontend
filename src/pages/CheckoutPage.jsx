@@ -8,6 +8,7 @@ import { usersApi } from '../api/users';
 import { settingsApi } from '../api/settings';
 import { paymentsApi } from '../api/payments';
 import { deliveryAreasApi } from '../api/deliveryAreas';
+import { couponsApi } from '../api/coupons';
 import { formatPriceShort } from '../utils/formatters';
 import { getErrorMessage } from '../api/client';
 
@@ -197,7 +198,25 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const buyNow   = location.state?.buyNow || null;          // set when coming from "Buy Now"
-  const { items, subtotal, total, deliveryCharge, discountAmount, clearCart } = useCart();
+  const { items, subtotal, total, deliveryCharge, discountAmount, clearCart, cart } = useCart();
+
+  // For Buy Now, the coupon may come from either the PDP "Have a coupon?"
+  // (passed via navigation state) or the user's cart-level coupon. We ask the
+  // backend to compute the actual discount for this single product — the
+  // server is the source of truth for coupon math.
+  const [buyNowDiscount, setBuyNowDiscount] = useState(0);
+  const buyNowCouponCode = buyNow ? (buyNow.couponCode || cart?.coupon?.code || null) : null;
+  useEffect(() => {
+    if (!buyNow || !buyNowCouponCode) { setBuyNowDiscount(0); return; }
+    let cancelled = false;
+    couponsApi.validate({
+      code: buyNowCouponCode,
+      directItem: { productId: buyNow.productId, quantity: buyNow.quantity },
+    })
+      .then(({ data }) => { if (!cancelled) setBuyNowDiscount(Number(data?.data?.discount) || 0); })
+      .catch(() => { if (!cancelled) setBuyNowDiscount(0); });
+    return () => { cancelled = true; };
+  }, [buyNow, buyNowCouponCode, buyNow?.productId, buyNow?.quantity]);
 
   // Buy-now: synthetic display items + totals (bypasses cart entirely)
   const checkoutItems    = buyNow
@@ -205,10 +224,14 @@ export default function CheckoutPage() {
     : items;
   const checkoutSubtotal = buyNow ? buyNow.price * buyNow.quantity : subtotal;
   const checkoutDelivery = buyNow ? (checkoutSubtotal >= 5000 ? 0 : 120) : deliveryCharge;
-  const checkoutDiscount = buyNow ? 0 : discountAmount;
-  const checkoutTotal    = buyNow ? checkoutSubtotal + checkoutDelivery : total;
+  const checkoutDiscount = buyNow ? buyNowDiscount : discountAmount;
+  const checkoutTotal    = buyNow
+    ? Math.max(0, checkoutSubtotal + checkoutDelivery - buyNowDiscount)
+    : total;
   // Extra payload fields forwarded to every placeOrder call when buy-now
-  const buyNowExtra      = buyNow ? { useCart: false, directItem: { productId: buyNow.productId, quantity: buyNow.quantity } } : {};
+  const buyNowExtra      = buyNow
+    ? { useCart: false, directItem: { productId: buyNow.productId, quantity: buyNow.quantity }, couponCode: buyNowCouponCode || undefined }
+    : {};
   const { user } = useAuth();
   const { placeOrder } = useOrders();
   const toast = useToast();
@@ -217,6 +240,7 @@ export default function CheckoutPage() {
   const [addresses, setAddresses]             = useState([]);
   const [selectedAddressId, setSelectedId]    = useState(null);
   const [showAddForm, setShowAddForm]          = useState(false);
+  const [editingAddrId, setEditingAddrId]      = useState(null);
   const [loading, setLoading]                 = useState(false);
   const [addrLoading, setAddrLoading]         = useState(true);
   const [codCfg, setCodCfg]                   = useState(null);
@@ -300,6 +324,18 @@ export default function CheckoutPage() {
       if (newest) setSelectedId(newest._id);
       setShowAddForm(false);
       toast('Address saved!');
+    } catch (err) {
+      toast(getErrorMessage(err), 'error');
+    }
+  };
+
+  const handleUpdateAddress = async (id, formData) => {
+    try {
+      const { data } = await usersApi.updateAddress(id, formData);
+      const addrs = data.data?.addresses || data.data?.user?.addresses || [];
+      setAddresses(addrs);
+      setEditingAddrId(null);
+      toast('Address updated!');
     } catch (err) {
       toast(getErrorMessage(err), 'error');
     }
@@ -485,32 +521,46 @@ export default function CheckoutPage() {
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#333', marginBottom: 12 }}>Your saved addresses:</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           {addresses.map(addr => (
-                            <div key={addr._id} onClick={() => { setSelectedId(addr._id); setShowAddForm(false); }}
-                              style={{ display: 'flex', gap: 12, padding: '14px 16px', border: `2px solid ${selectedAddressId === addr._id ? '#FF9900' : '#ddd'}`,
-                                borderRadius: 6, cursor: 'pointer', background: selectedAddressId === addr._id ? '#fffbf0' : 'white',
-                                transition: 'all .15s' }}>
-                              <div style={{ marginTop: 2, flexShrink: 0 }}>
-                                <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selectedAddressId === addr._id ? '#FF9900' : '#ccc'}`,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  {selectedAddressId === addr._id && <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#FF9900' }} />}
-                                </div>
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 700, fontSize: 14 }}>{addr.fullName}</div>
-                                <div style={{ fontSize: 13, color: '#555', marginTop: 3, lineHeight: 1.5 }}>
-                                  {addr.houseNo && `${addr.houseNo}, `}{addr.area && `${addr.area}, `}
-                                  {addr.city}, {addr.state} {addr.pincode}
-                                </div>
-                                <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>📱 {addr.phone}</div>
-                                {addr.landmark && <div style={{ fontSize: 12, color: '#888' }}>Near: {addr.landmark}</div>}
-                                {selectedAddressId === addr._id && (
-                                  <div style={{ marginTop: 8 }}>
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#007600', background: '#f0fff4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: 4 }}>
-                                      ✓ Deliver to this address
-                                    </span>
+                            <div key={addr._id}>
+                              {editingAddrId === addr._id ? (
+                                <AddressForm
+                                  initial={addr}
+                                  onSave={d => handleUpdateAddress(addr._id, d)}
+                                  onCancel={() => setEditingAddrId(null)}
+                                />
+                              ) : (
+                                <div onClick={() => { setSelectedId(addr._id); setShowAddForm(false); setEditingAddrId(null); }}
+                                  style={{ display: 'flex', gap: 12, padding: '14px 16px', border: `2px solid ${selectedAddressId === addr._id ? '#FF9900' : '#ddd'}`,
+                                    borderRadius: 6, cursor: 'pointer', background: selectedAddressId === addr._id ? '#fffbf0' : 'white',
+                                    transition: 'all .15s' }}>
+                                  <div style={{ marginTop: 2, flexShrink: 0 }}>
+                                    <div style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selectedAddressId === addr._id ? '#FF9900' : '#ccc'}`,
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      {selectedAddressId === addr._id && <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#FF9900' }} />}
+                                    </div>
                                   </div>
-                                )}
-                              </div>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 14 }}>{addr.fullName}</div>
+                                    <div style={{ fontSize: 13, color: '#555', marginTop: 3, lineHeight: 1.5 }}>
+                                      {addr.houseNo && `${addr.houseNo}, `}{addr.area && `${addr.area}, `}
+                                      {addr.city}, {addr.state} {addr.pincode}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>📱 {addr.phone}</div>
+                                    {addr.landmark && <div style={{ fontSize: 12, color: '#888' }}>Near: {addr.landmark}</div>}
+                                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                      {selectedAddressId === addr._id && (
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#007600', background: '#f0fff4', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: 4 }}>
+                                          ✓ Deliver to this address
+                                        </span>
+                                      )}
+                                      <button onClick={e => { e.stopPropagation(); setEditingAddrId(addr._id); setShowAddForm(false); }}
+                                        style={{ fontSize: 11, fontWeight: 600, color: '#007185', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                                        Edit
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
