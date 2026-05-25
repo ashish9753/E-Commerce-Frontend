@@ -104,29 +104,69 @@ function BrandsSection({ onMutate }) {
   const [brands, setBrands] = useState([]);
   const [draft, setDraft, clearDraft] = useFormDraft('catalog-brand', { name: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const load = () => brandsApi.getAll().then(r => setBrands(r.data?.data?.brands || [])).catch(() => {});
+  // Admin view includes hidden (isActive=false) brands so they can be restored
+  // instead of confusing the admin with "duplicate" errors when re-adding.
+  const load = () => brandsApi.getAllAdmin().then(r => setBrands(r.data?.data?.brands || [])).catch(err => {
+    console.error('Failed to load brands:', err);
+    setError('Failed to load brands');
+  });
   useEffect(() => { load(); }, []);
+
+  const restore = async (id) => {
+    setError('');
+    try {
+      await brandsApi.restore(id);
+      load();
+      onMutate?.();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to restore brand');
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     if (!draft.name.trim()) return;
     setSaving(true);
-    await brandsApi.create({ name: draft.name.trim() }).catch(() => {});
-    clearDraft();
-    setSaving(false);
-    load(); onMutate?.();
+    setError('');
+    try {
+      await brandsApi.create({ name: draft.name.trim() });
+      clearDraft();
+      load(); 
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to create brand';
+      setError(msg);
+      console.error('Brand creation error:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id) => {
-    await brandsApi.remove(id).catch(() => {});
-    load(); onMutate?.();
+    setError('');
+    try {
+      await brandsApi.remove(id);
+      load(); 
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete brand';
+      setError(msg);
+      console.error('Brand deletion error:', err);
+    }
   };
 
   return (
     <>
       <Card>
         <SectionTitle>Add Brand</SectionTitle>
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, 
+            padding: '10px 12px', marginBottom: 12, fontSize: 13, color: C.red, fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={submit} style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}><Input label="Brand Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Samsung" required /></div>
           <Btn type="submit" disabled={saving}>{saving ? 'Saving…' : '+ Add Brand'}</Btn>
@@ -140,11 +180,20 @@ function BrandsSection({ onMutate }) {
           <tbody>
             {brands.length === 0 ? <EmptyRow cols={3} text="No brands yet" /> :
               brands.map(b => (
-                <tr key={b._id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text }}>{b.name}</td>
+                <tr key={b._id} style={{ borderBottom: `1px solid ${C.border}`, opacity: b.isActive === false ? 0.6 : 1 }}>
+                  <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13, color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {b.name}
+                    {b.isActive === false && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(234,179,8,.15)', color: '#eab308', border: '1px solid rgba(234,179,8,.35)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                        Hidden
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px 14px', fontSize: 12, color: C.mute, fontFamily: 'monospace' }}>{b.slug}</td>
                   <td style={{ padding: '12px 14px' }}>
-                    <Btn variant="danger" onClick={() => remove(b._id)}>Delete</Btn>
+                    {b.isActive === false
+                      ? <Btn variant="primary" onClick={() => restore(b._id)}>Restore</Btn>
+                      : <Btn variant="danger" onClick={() => remove(b._id)}>Delete</Btn>}
                   </td>
                 </tr>
               ))}
@@ -160,30 +209,57 @@ function CategoriesSection({ onMutate }) {
   const [cats, setCats] = useState([]);
   const [draft, setDraft, clearDraft] = useFormDraft('catalog-category', { name: '', desc: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const topLevel = cats.filter(c => !c.parent);
-  const load = () => categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(() => {});
+  const load = () => categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(err => {
+    console.error('Failed to load categories:', err);
+    setError('Failed to load categories');
+  });
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!draft.name.trim()) return;
     setSaving(true);
-    await categoriesApi.create({ name: draft.name.trim(), description: draft.desc }).catch(() => {});
-    clearDraft();
-    setSaving(false);
-    load(); onMutate?.();
+    setError('');
+    try {
+      await categoriesApi.create({ name: draft.name.trim(), description: draft.desc });
+      clearDraft();
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to create category';
+      setError(msg);
+      console.error('Category creation error:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id) => {
-    await categoriesApi.remove(id).catch(() => {});
-    load(); onMutate?.();
+    setError('');
+    try {
+      await categoriesApi.remove(id);
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete category';
+      setError(msg);
+      console.error('Category deletion error:', err);
+    }
   };
 
   return (
     <>
       <Card>
         <SectionTitle>Add Category</SectionTitle>
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, 
+            padding: '10px 12px', marginBottom: 12, fontSize: 13, color: C.red, fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
           <Input label="Category Name" value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="e.g. Washing Machines" required />
           <Input label="Description (optional)" value={draft.desc} onChange={e => setDraft(d => ({ ...d, desc: e.target.value }))} placeholder="Short description" />
@@ -219,31 +295,58 @@ function SubCategoriesSection({ onMutate }) {
   const [cats, setCats] = useState([]);
   const [draft, setDraft, clearDraft] = useFormDraft('catalog-subcat', { name: '', parent: '', desc: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const topLevel = cats.filter(c => !c.parent);
   const subCats  = cats.filter(c => c.parent);
-  const load = () => categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(() => {});
+  const load = () => categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(err => {
+    console.error('Failed to load categories:', err);
+    setError('Failed to load categories');
+  });
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!draft.name.trim() || !draft.parent) return;
     setSaving(true);
-    await categoriesApi.create({ name: draft.name.trim(), description: draft.desc, parent: draft.parent }).catch(() => {});
-    clearDraft();
-    setSaving(false);
-    load(); onMutate?.();
+    setError('');
+    try {
+      await categoriesApi.create({ name: draft.name.trim(), description: draft.desc, parent: draft.parent });
+      clearDraft();
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to create sub-category';
+      setError(msg);
+      console.error('Sub-category creation error:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id) => {
-    await categoriesApi.remove(id).catch(() => {});
-    load(); onMutate?.();
+    setError('');
+    try {
+      await categoriesApi.remove(id);
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete sub-category';
+      setError(msg);
+      console.error('Sub-category deletion error:', err);
+    }
   };
 
   return (
     <>
       <Card>
         <SectionTitle>Add Sub-category</SectionTitle>
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, 
+            padding: '10px 12px', marginBottom: 12, fontSize: 13, color: C.red, fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'flex-end' }}>
           <Select label="Parent Category" value={draft.parent} onChange={e => setDraft(d => ({ ...d, parent: e.target.value }))} required>
             <option value="">Select parent…</option>
@@ -285,12 +388,18 @@ function AttributesSection({ onMutate }) {
   const [draft, setDraft, clearDraft] = useFormDraft('catalog-attr', { name: '', unit: '', subcat: '', options: [] });
   const [optInput, setOptInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const subCats = cats.filter(c => c.parent);
 
   const load = () => {
-    attributesApi.getAll().then(r => setAttrs(r.data?.data?.attributes || [])).catch(() => {});
-    categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(() => {});
+    attributesApi.getAll().then(r => setAttrs(r.data?.data?.attributes || [])).catch(err => {
+      console.error('Failed to load attributes:', err);
+      setError('Failed to load attributes');
+    });
+    categoriesApi.getAll().then(r => setCats(r.data?.data?.categories || [])).catch(err => {
+      console.error('Failed to load categories:', err);
+    });
   };
   useEffect(() => { load(); }, []);
 
@@ -304,21 +413,44 @@ function AttributesSection({ onMutate }) {
     e.preventDefault();
     if (!draft.name.trim() || !draft.subcat) return;
     setSaving(true);
-    await attributesApi.create({ name: draft.name.trim(), unit: draft.unit.trim(), subcategory: draft.subcat, options: draft.options }).catch(() => {});
-    clearDraft();
-    setSaving(false);
-    load(); onMutate?.();
+    setError('');
+    try {
+      await attributesApi.create({ name: draft.name.trim(), unit: draft.unit.trim(), subcategory: draft.subcat, options: draft.options });
+      clearDraft();
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to create attribute';
+      setError(msg);
+      console.error('Attribute creation error:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id) => {
-    await attributesApi.remove(id).catch(() => {});
-    load(); onMutate?.();
+    setError('');
+    try {
+      await attributesApi.remove(id);
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete attribute';
+      setError(msg);
+      console.error('Attribute deletion error:', err);
+    }
   };
 
   return (
     <>
       <Card>
         <SectionTitle>Add Attribute</SectionTitle>
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, 
+            padding: '10px 12px', marginBottom: 12, fontSize: 13, color: C.red, fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 14 }}>
             <Select label="Sub-category" value={draft.subcat} onChange={e => setDraft(d => ({ ...d, subcat: e.target.value }))} required>
@@ -386,15 +518,20 @@ function EventsSection({ onMutate }) {
   const [events, setEvents] = useState([]);
   const [draft, setDraft, clearDraft] = useFormDraft('catalog-event', { name: '', badge: '', desc: '', discount: '', startDate: '', endDate: '' });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
 
-  const load = () => eventsApi.getAll().then(r => setEvents(r.data?.data?.events || [])).catch(() => {});
+  const load = () => eventsApi.getAll().then(r => setEvents(r.data?.data?.events || [])).catch(err => {
+    console.error('Failed to load events:', err);
+    setError('Failed to load events');
+  });
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!draft.name.trim() || !draft.startDate || !draft.endDate) return;
     setSaving(true);
+    setError('');
     const fd = new FormData();
     fd.append('name', draft.name.trim());
     fd.append('badge', draft.badge.trim());
@@ -402,22 +539,46 @@ function EventsSection({ onMutate }) {
     fd.append('discountPercent', draft.discount || 0);
     fd.append('startDate', draft.startDate);
     fd.append('endDate', draft.endDate);
-    await eventsApi.create(fd).catch(() => {});
-    clearDraft();
-    setSaving(false);
-    load(); onMutate?.();
+    try {
+      await eventsApi.create(fd);
+      clearDraft();
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to create event';
+      setError(msg);
+      console.error('Event creation error:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id) => {
-    await eventsApi.remove(id).catch(() => {});
-    load(); onMutate?.();
+    setError('');
+    try {
+      await eventsApi.remove(id);
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete event';
+      setError(msg);
+      console.error('Event deletion error:', err);
+    }
   };
 
   const toggleActive = async (ev) => {
+    setError('');
     const fd = new FormData();
     fd.append('isActive', !ev.isActive);
-    await eventsApi.update(ev._id, fd).catch(() => {});
-    load(); onMutate?.();
+    try {
+      await eventsApi.update(ev._id, fd);
+      load();
+      onMutate?.();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to toggle event';
+      setError(msg);
+      console.error('Event toggle error:', err);
+    }
   };
 
   const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -430,6 +591,12 @@ function EventsSection({ onMutate }) {
     <>
       <Card>
         <SectionTitle>Create Event / Scheme</SectionTitle>
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 6, 
+            padding: '10px 12px', marginBottom: 12, fontSize: 13, color: C.red, fontWeight: 500 }}>
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Input label="Event Name *" value={draft.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dashain Mega Sale" required />

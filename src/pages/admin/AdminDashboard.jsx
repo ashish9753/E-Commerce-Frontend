@@ -14,6 +14,7 @@ import {
   LineChart, Line, AreaChart, Area,
 } from 'recharts';
 import SupportIcon from '../../components/icons/SupportIcon';
+import OrderPipeline from '../../components/orders/OrderPipeline';
 import AdminCatalogTab from './AdminCatalogTab';
 import { settingsApi } from '../../api/settings';
 import { paymentsApi } from '../../api/payments';
@@ -1459,6 +1460,11 @@ function OrdersTab({ globalSearch = '' }) {
   const [refundForm, setRefundForm]   = useState({ reason: '', adminNote: '', refundAmount: '' });
   const [refunding, setRefunding]     = useState(false);
   const [expandedId, setExpandedId]   = useState(null);
+  // Absolute tab counts (independent of active status filter). Backend returns
+  // statusBreakdown array + pendingPaymentCount so all tabs stay populated.
+  const [statusCounts, setStatusCounts] = useState({});
+  const [pendingPayCount, setPendingPay] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => { setSearch(globalSearch); }, [globalSearch]);
 
@@ -1485,8 +1491,16 @@ function OrdersTab({ globalSearch = '' }) {
     if (appliedSearch)  params.search        = appliedSearch;
     adminApi.getOrders(params)
       .then(r => {
-        setAll(r.data?.data?.data || []);
-        setPag(r.data?.data?.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+        const data = r.data?.data || {};
+        setAll(data.data || []);
+        setPag(data.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
+        // Build a map { PLACED: 4, DELIVERED: 12, ... } from the breakdown array.
+        const counts = {};
+        let totalAcross = 0;
+        (data.statusBreakdown || []).forEach(b => { counts[b._id] = b.count; totalAcross += b.count; });
+        setStatusCounts(counts);
+        setPendingPay(data.pendingPaymentCount || 0);
+        setTotalCount(totalAcross);
       })
       .catch(() => {}).finally(() => { setLoading(false); hasLoadedRef.current = true; });
   }, [page, statusF, paymentF, appliedSearch]);
@@ -1641,6 +1655,48 @@ function OrdersTab({ globalSearch = '' }) {
 
       {/* Filter bar */}
       <Card>
+        {/* Quick status tabs — matches Return Requests UX so admins can hop
+            between statuses with one click instead of opening a dropdown. */}
+        <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+          {[
+            { key:'',                label:'All' },
+            { key:'PENDING_PAYMENT', label:'⏳ Pending Pay' },
+            { key:'PLACED',          label:'Placed' },
+            { key:'CONFIRMED',       label:'Confirmed' },
+            { key:'PACKED',          label:'Packed' },
+            { key:'SHIPPED',         label:'Shipped' },
+            { key:'OUT_FOR_DELIVERY',label:'Out for Delivery' },
+            { key:'DELIVERED',       label:'Delivered' },
+            { key:'CANCELLED',       label:'Cancelled' },
+            { key:'RETURNED',        label:'Returned' },
+          ].map(f => {
+            const active = statusF === f.key;
+            // Counts come from the backend breakdown so every tab stays populated
+            // regardless of which one is currently selected.
+            const count = f.key === ''
+              ? totalCount
+              : f.key === 'PENDING_PAYMENT'
+                ? pendingPayCount
+                : (statusCounts[f.key] || 0);
+            return (
+              <button key={f.key || 'ALL'} onClick={() => { setStatusF(f.key); setPage(1); }}
+                style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6,
+                  border: active ? `1px solid ${C.accent}` : `1px solid ${C.line}`,
+                  background: active ? C.accent : C.card2 || C.bg,
+                  color: active ? 'white' : C.mute }}>
+                {f.label}
+                {count > 0 && (
+                  <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:8,
+                    background: active ? 'rgba(255,255,255,.22)' : C.bg,
+                    color: active ? 'white' : C.mute }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: 6, flex: 1, minWidth: 240 }}>
             <Input value={search} onChange={e => setSearch(e.target.value)}
@@ -1650,11 +1706,6 @@ function OrdersTab({ globalSearch = '' }) {
               <SvgAt el={Icon.search} size={14} /> Search
             </Btn>
           </div>
-          <Select value={statusF} onChange={e => setStatusF(e.target.value)}>
-            <option value="">All Status</option>
-            <option value="PENDING_PAYMENT">⏳ PENDING PAYMENT</option>
-            {ORDER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </Select>
           <Select value={paymentF} onChange={e => setPayF(e.target.value)}>
             <option value="">All Payments</option>
             <option value="PENDING">Pending</option>
@@ -1766,6 +1817,17 @@ function OrdersTab({ globalSearch = '' }) {
                             ))}
                           </div>
                         </div>
+
+                        {/* Visual fulfilment pipeline — click the next step to advance the order */}
+                        <div style={{ marginBottom:14, border:`1px solid ${C.line}`, borderRadius:8, overflow:'hidden' }}>
+                          <OrderPipeline
+                            status={o.orderStatus}
+                            busy={updating === o._id}
+                            onAdvance={(nextStatus) => handleStatusChange(o._id, nextStatus)}
+                            theme={{ line:C.line, accent:C.accent, green:C.green, red:C.red, mute:C.mute, text:C.text, bg:C.bg, card2:C.card2 || C.surf }}
+                          />
+                        </div>
+
                         <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', marginBottom:14, padding:'10px 14px', background:C.bg, borderRadius:8, border:`1px solid ${C.line}` }}>
                           <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em' }}>Payment</div>
                           <Badge text={o.paymentMethod} color={o.paymentMethod==='COD'?C.yellow:C.blue} />
@@ -2979,7 +3041,7 @@ function TicketStatusBadge({ status }) {
   );
 }
 
-function AdminSupportTab({ globalSearch = '' }) {
+export function AdminSupportTab({ globalSearch = '' }) {
   const { user }                              = useAuth();
   const { lastSupportMsg, sseReconnectCount } = useNotifications();
   const [tickets, setTickets]       = useState([]);

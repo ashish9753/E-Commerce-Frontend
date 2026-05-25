@@ -1,10 +1,12 @@
 import client from './client';
 
 export const brandsApi = {
-  getAll:   ()           => client.get('/brands'),
-  create:   (data)       => client.post('/brands', data),
-  update:   (id, data)   => client.patch(`/brands/${id}`, data),
-  remove:   (id)         => client.delete(`/brands/${id}`),
+  getAll:      ()         => client.get('/brands'),
+  getAllAdmin: ()         => client.get('/brands/all'),
+  create:      (data)     => client.post('/brands', data),
+  update:      (id, data) => client.patch(`/brands/${id}`, data),
+  restore:     (id)       => client.patch(`/brands/${id}/restore`),
+  remove:      (id)       => client.delete(`/brands/${id}`),
 };
 
 export const categoriesApi = {

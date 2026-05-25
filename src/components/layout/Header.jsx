@@ -183,6 +183,12 @@ export default function Header() {
   const [hidden, setHidden] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 769);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const navTo = (path) => {
+    setMobileOpen(false);
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
   const searchRef = useRef(null);
   const bellRef   = useRef(null);
   const lastScrollY = useRef(0);
@@ -560,7 +566,7 @@ export default function Header() {
                 )}
               </div>
             ) : (
-              <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+              <button onClick={() => navTo('/login')}
                 style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 Sign In
               </button>
@@ -577,7 +583,7 @@ export default function Header() {
               { label: '🔥  Top Selling', path: '/products?sort=popular' },
               { label: '🏷️  Brands', path: '/products?sort=brand' },
             ].map(item => (
-              <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+              <button key={item.label} onClick={() => navTo(item.path)}
                 style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                   textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
                 onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
@@ -590,7 +596,7 @@ export default function Header() {
                 <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
                 <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Categories</div>
                 {navCats.slice(0, 8).map(c => (
-                  <button key={c.id || c.name} onClick={() => { navigate(`/products?category=${encodeURIComponent(c.name)}`); setMobileOpen(false); }}
+                  <button key={c.id || c.name} onClick={() => navTo(`/products?category=${encodeURIComponent(c.name)}`)}
                     style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                       textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
                     onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
@@ -612,7 +618,7 @@ export default function Header() {
                   ...(user.role === 'admin' ? [{ label: '⚙️  Admin Panel', path: '/admin' }] : []),
                   ...(user.role === 'employee' ? [{ label: '🖥️  Employee Panel', path: '/employee' }] : []),
                 ].map(item => (
-                  <button key={item.label} onClick={() => { navigate(item.path); setMobileOpen(false); }}
+                  <button key={item.label} onClick={() => navTo(item.path)}
                     style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                       textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
                     onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
@@ -625,7 +631,7 @@ export default function Header() {
             {!user && (
               <>
                 <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                <button onClick={() => { navigate('/login'); setMobileOpen(false); }}
+                <button onClick={() => navTo('/login')}
                   style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
                     textAlign: 'left', color: '#FF5A1F', fontSize: 14, cursor: 'pointer', fontWeight: 700, boxSizing: 'border-box' }}>
                   Sign In / Register →

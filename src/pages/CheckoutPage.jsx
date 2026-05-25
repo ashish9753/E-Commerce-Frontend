@@ -73,6 +73,10 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
 
 /* ── Order summary sidebar ── */
 function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, onPlace, loading, canPlace, step, codBookingAmount, bookingConfirmed, paymentMethod }) {
+  // `total` is the order grand total — also used by the COD-booking breakdown
+  // below to compute "Pay on delivery" = total − booking. Kept as a local alias
+  // so the markup reads clearly; the parent doesn't pass `checkoutTotal`.
+  const checkoutTotal = total;
   return (
     <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden', position: 'sticky', top: 20 }}>
       {step === 3 && (
@@ -296,8 +300,6 @@ export default function CheckoutPage() {
         : codCfg.bookingValue)
     : 0;
 
-  if (!buyNow && items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
-
   const checkDelivery = async (pin) => {
     // Surface a clear, actionable state instead of leaving the user with a
     // permanently-disabled "Use this address" button and no explanation.
@@ -334,6 +336,10 @@ export default function CheckoutPage() {
     if (addr?.pincode) checkDelivery(addr.pincode);
     else setDeliveryCheck(null);
   }, [selectedAddressId, addresses]);
+
+  // Empty-cart redirect — MUST be after all hooks above so the hook count is
+  // consistent across renders (Rules of Hooks).
+  if (!buyNow && items.length === 0 && !orderSubmitted) { navigate('/cart'); return null; }
 
   const handleSaveAddress = async (formData) => {
     try {

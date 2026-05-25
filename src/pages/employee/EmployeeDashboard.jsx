@@ -12,6 +12,8 @@ import { settingsApi } from '../../api/settings';
 import { couponsApi } from '../../api/coupons';
 import { useCatalog } from '../../context/CatalogContext';
 import AdminCatalogTab from '../admin/AdminCatalogTab';
+import { AdminSupportTab } from '../admin/AdminDashboard';
+import OrderPipeline from '../../components/orders/OrderPipeline';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -578,6 +580,7 @@ function OrdersTab({ onViewReturns }) {
   const [page, setPage]         = useState(1);
   const [pagination, setPag]    = useState({ total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
   const [expandedId, setExpandedId] = useState(null);
+  const [pendingPayCount, setPendingPay] = useState(0);
 
 
   // appliedSearch only updates on Enter / Search button — no API calls while typing
@@ -605,18 +608,28 @@ function OrdersTab({ onViewReturns }) {
       setAll(d.data || []);
       setRev(d.employeeRevenue || 0);
       setBD(d.statusBreakdown || []);
+      setPendingPay(d.pendingPaymentCount || 0);
       setPag(d.pagination || { total: 0, totalPages: 1, hasNextPage: false, hasPrevPage: false });
     }).catch(()=>{}).finally(()=>{ setLoading(false); hasLoadedRef.current = true; });
   }, [page, statusF, payF, appliedSearch]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  // Local-only update — don't refetch the entire list. The user can refresh by
+  // re-applying a filter / search if they want fresh aggregate stats.
   const handleStatusUpdated = useCallback((orderId, newStatus) => {
-    if (statusF && newStatus !== statusF) {
-      setAll(prev => prev.filter(o => o._id !== orderId));
-    }
-    fetchOrders();
-  }, [fetchOrders, statusF]);
+    setAll(prev => {
+      // If the active tab no longer matches, drop the row so it doesn't sit there stale.
+      const stillMatchesFilter =
+        !statusF ||
+        statusF === newStatus ||
+        (statusF === 'PENDING_PAYMENT' && newStatus === 'PLACED');
+      if (!stillMatchesFilter) {
+        return prev.filter(o => o._id !== orderId);
+      }
+      return prev.map(o => o._id === orderId ? { ...o, orderStatus: newStatus } : o);
+    });
+  }, [statusF]);
 
   // date filter is client-side (no backend support); text/status/payment are server-side
   const orders = all.filter(o => {
@@ -657,6 +670,49 @@ function OrdersTab({ onViewReturns }) {
       )}
 
       <Card>
+        {/* Quick status tabs — matches Return Requests UX so staff can hop between
+            statuses with one click instead of opening a dropdown. */}
+        <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+          {[
+            { key:'',                label:'All' },
+            { key:'PENDING_PAYMENT', label:'⏳ Pending Pay' },
+            { key:'PLACED',          label:'Placed' },
+            { key:'CONFIRMED',       label:'Confirmed' },
+            { key:'PACKED',          label:'Packed' },
+            { key:'SHIPPED',         label:'Shipped' },
+            { key:'OUT_FOR_DELIVERY',label:'Out for Delivery' },
+            { key:'DELIVERED',       label:'Delivered' },
+            { key:'CANCELLED',       label:'Cancelled' },
+            { key:'RETURNED',        label:'Returned' },
+          ].map(f => {
+            const active = statusF === f.key;
+            // Counts come from the backend breakdown so every tab stays populated
+            // regardless of which one is currently selected.
+            const totalAcross = breakdown.reduce((a, b) => a + b.count, 0);
+            const count = f.key === ''
+              ? totalAcross
+              : f.key === 'PENDING_PAYMENT'
+                ? pendingPayCount
+                : (breakdown.find(b => b._id === f.key)?.count || 0);
+            return (
+              <button key={f.key || 'ALL'} onClick={() => { setStatF(f.key); setPage(1); }}
+                style={{ padding:'5px 14px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6,
+                  border: active ? `1px solid ${C.accent}` : `1px solid ${C.line}`,
+                  background: active ? C.accent : C.card2,
+                  color: active ? 'white' : C.sub }}>
+                {f.label}
+                {count > 0 && (
+                  <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:8,
+                    background: active ? 'rgba(255,255,255,.22)' : C.bg,
+                    color: active ? 'white' : C.mute }}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
           <div style={{ display:'flex', gap:6, flex:1, minWidth:200 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, background:C.bg, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', height:36, flex:1 }}>
@@ -670,11 +726,6 @@ function OrdersTab({ onViewReturns }) {
               <SvgAt el={Icon.search} size={14} /> Search
             </Btn>
           </div>
-          <Sel value={statusF} onChange={e=>setStatF(e.target.value)} style={{ width:200 }}>
-            <option value="">All Status</option>
-            <option value="PENDING_PAYMENT">⏳ PENDING PAYMENT</option>
-            {['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DELIVERED','CANCELLED','RETURNED'].map(s=><option key={s} value={s}>{s}</option>)}
-          </Sel>
           <Sel value={payF} onChange={e=>setPayF(e.target.value)} style={{ width:140 }}>
             <option value="">All Payments</option>
             <option value="PENDING">Pending</option>
@@ -779,6 +830,22 @@ function OrdersTab({ onViewReturns }) {
                           ))}
                         </div>
                       </div>
+                      {/* Visual fulfilment pipeline — click the next step to advance */}
+                      <div style={{ marginBottom:14, border:`1px solid ${C.line}`, borderRadius:8, overflow:'hidden' }}>
+                        <OrderPipeline
+                          status={o.orderStatus}
+                          onAdvance={async (nextStatus) => {
+                            try {
+                              await employeeApi.updateOrderStatus(o._id, { status: nextStatus });
+                              handleStatusUpdated(o._id, nextStatus, '');
+                            } catch (e) {
+                              alert(e?.response?.data?.message || 'Update failed');
+                            }
+                          }}
+                          theme={{ line:C.line, accent:C.accent, green:C.green, red:C.red, mute:C.mute, text:C.text, bg:C.bg, card2:C.card2 }}
+                        />
+                      </div>
+
                       <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap', marginBottom:14, padding:'10px 14px', background:C.bg, borderRadius:8, border:`1px solid ${C.line}` }}>
                         <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em' }}>Payment</div>
                         <Badge text={o.paymentMethod} color={o.paymentMethod==='COD'?C.yellow:C.blue} />
@@ -2682,6 +2749,7 @@ const NAV_TABS = [
   { id:'Delivery Areas',  iconEl: Icon.box     },
   { id:'Add Product',     iconEl: Icon.plus    },
   { id:'Coupons',         iconEl: Icon.coupon  },
+  { id:'Support',         iconEl: Icon.chat || Icon.coupon },
   { id:'My Salary',       iconEl: Icon.dollar  },
   { id:'Catalog',         iconEl: Icon.catalog },
   { id:'Settings',        iconEl: Icon.gear    },
@@ -2696,6 +2764,7 @@ const TAB_SUBTITLES = {
   'Delivery Areas': 'Manage pincodes and delivery charges',
   'Add Product':    'Create a new product listing',
   Coupons:          'Create and manage discount coupons for customers',
+  Support:          'Reply to customer support tickets and resolve queries',
   'My Salary':      'View your monthly salary, deductions, and bonuses',
   Catalog:          'Manage brands, categories, attributes and events',
   Settings:         'Configure COD availability, order amount limits, and booking payments',
@@ -2993,6 +3062,7 @@ export default function SellerDashboard() {
                 <div style={{ display: tab==='Cancellations' ? '' : 'none' }}>{mountedTabs.has('Cancellations') && <EmployeeCancellationsTab key={refreshKeys['Cancellations'] || 0} />}</div>
                 <div style={{ display: tab==='Delivery Areas'? '' : 'none' }}>{mountedTabs.has('Delivery Areas')&& <DeliveryAreasTab      key={refreshKeys['Delivery Areas'] || 0} />}</div>
                 <div style={{ display: tab==='Coupons'       ? '' : 'none' }}>{mountedTabs.has('Coupons')       && <EmployeeCouponsTab   key={refreshKeys['Coupons']        || 0} />}</div>
+                <div style={{ display: tab==='Support'       ? '' : 'none' }}>{mountedTabs.has('Support')       && <AdminSupportTab      key={refreshKeys['Support']        || 0} />}</div>
                 <div style={{ display: tab==='My Salary'     ? '' : 'none' }}>{mountedTabs.has('My Salary')     && <MySalaryTab          key={refreshKeys['My Salary']      || 0} />}</div>
                 <div style={{ display: tab==='Catalog'       ? '' : 'none' }}>{mountedTabs.has('Catalog')       && <AdminCatalogTab      key={refreshKeys['Catalog']        || 0} />}</div>
                 <div style={{ display: tab==='Settings'      ? '' : 'none' }}>{mountedTabs.has('Settings')      && <EmployeeSettingsTab  key={refreshKeys['Settings']       || 0} />}</div>

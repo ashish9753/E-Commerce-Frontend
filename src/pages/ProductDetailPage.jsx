@@ -114,6 +114,18 @@ export default function ProductDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Hard cap on quantity — backend allows max 50, UI shouldn't offer more than
+  // what's actually in stock either. Computed before early returns so the hooks
+  // below run on every render (Rules of Hooks).
+  const stockNum = product?.stock || 0;
+  const maxQty = Math.max(1, Math.min(stockNum, 50));
+
+  // If stock dropped (e.g. fresh fetch after someone else bought some), clamp qty.
+  useEffect(() => {
+    if (qty > maxQty) setQty(maxQty);
+    if (qty < 1) setQty(1);
+  }, [maxQty]);
+
   if (loading) return (
     <div className="wrap py-20 text-center">
       <div className="spinner mx-auto" style={{ width:40, height:40 }} />
@@ -140,12 +152,22 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = async () => {
     if (!user) { toast('Please sign in to add items to cart', 'error'); navigate('/login'); return; }
+    if (qty > product.stock) {
+      toast(`Only ${product.stock} in stock — adjust quantity to continue.`, 'error');
+      setQty(maxQty);
+      return;
+    }
     const result = await addToCart(product._id, qty);
     if (result?.success === false) toast(result.error, 'error');
     else toast(`${product.name} added to cart`);
   };
   const handleBuyNow = () => {
     if (!user) { navigate('/login'); return; }
+    if (qty > product.stock) {
+      toast(`Only ${product.stock} in stock — adjust quantity to continue.`, 'error');
+      setQty(maxQty);
+      return;
+    }
     navigate('/checkout', {
       state: {
         buyNow: {
@@ -502,17 +524,25 @@ export default function ProductDetailPage() {
                 {product.stock > 5 ? 'In stock' : product.stock > 0 ? `Only ${product.stock} left` : 'Currently unavailable'}
               </div>
 
-              {/* Quantity */}
+              {/* Quantity — options capped to actual stock so the user can never
+                  pick more than is available. */}
               {inStock && (
                 <div style={{ marginBottom:12 }}>
-                  <label style={{ fontSize:13, fontWeight:600, color:'#0F1111', display:'block', marginBottom:4 }}>Quantity:</label>
+                  <label style={{ fontSize:13, fontWeight:600, color:'#0F1111', display:'block', marginBottom:4 }}>
+                    Quantity: <span style={{ fontWeight:400, color:'#888', fontSize:12 }}>(max {maxQty})</span>
+                  </label>
                   <select value={qty} onChange={e => setQty(Number(e.target.value))}
                     style={{ width:'100%', height:36, border:'1px solid #ddd', borderRadius:4, fontSize:13,
                       background:'#f0f2f2', padding:'0 8px', cursor:'pointer' }}>
-                    {Array.from({ length: 10 }, (_, i) => i+1).map(n => (
+                    {Array.from({ length: maxQty }, (_, i) => i+1).map(n => (
                       <option key={n} value={n}>{n}</option>
                     ))}
                   </select>
+                  {product.stock <= 5 && (
+                    <div style={{ fontSize:11, color:'#FF5A1F', marginTop:4, fontWeight:600 }}>
+                      ⚠ Low stock — only {product.stock} available
+                    </div>
+                  )}
                 </div>
               )}
 
