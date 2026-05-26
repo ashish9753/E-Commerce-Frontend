@@ -36,6 +36,10 @@ client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    if (!original) return Promise.reject(error);
+
+    const originalToken = original.headers?.Authorization?.replace('Bearer ', '') || null;
+
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
 
@@ -65,8 +69,14 @@ client.interceptors.response.use(
         return client(original);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        localStorage.removeItem('accessToken');
-        window.dispatchEvent(new Event('auth:logout'));
+        // A stale request can fail after the user has already logged in again.
+        // Only clear auth if the token that failed is still the active token.
+        if (!originalToken || localStorage.getItem('accessToken') === originalToken) {
+          localStorage.removeItem('accessToken');
+          window.dispatchEvent(new CustomEvent('auth:logout', {
+            detail: { token: originalToken },
+          }));
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

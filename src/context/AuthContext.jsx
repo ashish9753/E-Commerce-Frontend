@@ -30,7 +30,11 @@ export function AuthProvider({ children }) {
 
   // Listen for token-expiry forced logout
   useEffect(() => {
-    const handler = () => logout();
+    const handler = (event) => {
+      const failedToken = event.detail?.token;
+      if (failedToken && localStorage.getItem('accessToken') !== failedToken) return;
+      logout();
+    };
     window.addEventListener('auth:logout', handler);
     return () => window.removeEventListener('auth:logout', handler);
   }, [logout]);
