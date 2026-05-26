@@ -25,7 +25,7 @@ export const attributesApi = {
 
 export const eventsApi = {
   getAll:   ()           => client.get('/events'),
-  create:   (data)       => client.post('/events', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:   (id, data)   => client.patch(`/events/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  create:   (data)       => client.post('/events', data),
+  update:   (id, data)   => client.patch(`/events/${id}`, data),
   remove:   (id)         => client.delete(`/events/${id}`),
 };

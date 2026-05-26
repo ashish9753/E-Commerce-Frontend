@@ -1,15 +1,18 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { COMPANY } from "../config/company";
 
+// Pull invoice header values from the central company config so updating
+// office/email/phone there propagates to the generated PDF too.
 const STORE = {
-  name:    "TradeEngine",
-  tagline: "Your one-stop online store",
-  address: "123, Commerce Street, Delhi, India - 110001",
-  email:   "support@shopease.in",
-  phone:   "+91 98765 43210",
-  gstin:   "07AABCS1234A1Z5",
-  pan:     "AABCS1234A",
-  website: "www.shopease.in",
+  name:    COMPANY.name,
+  tagline: COMPANY.tagline,
+  address: COMPANY.office,
+  email:   COMPANY.email,
+  phone:   `Sales ${COMPANY.salesPhone} · Support ${COMPANY.supportPhone}`,
+  gstin:   COMPANY.gstin,
+  pan:     COMPANY.pan,
+  website: COMPANY.website,
 };
 
 const GST_RATE = 0.18;

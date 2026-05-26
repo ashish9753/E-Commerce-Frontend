@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { COMPANY, COMPANY_LINKS } from '../../config/company';
 
 export default function Footer() {
   const navigate = useNavigate();
@@ -53,9 +54,10 @@ export default function Footer() {
               { label: 'EMI Options', href: '#' },
             ]},
             { title: 'Contact', links: [
-              { label: '+977-1-4XXXXXX', href: 'tel:+977-1-4XXXXXX' },
-              { label: 'support@tradeengine.com.np', href: 'mailto:support@tradeengine.com.np' },
-              { label: 'Kathmandu, Nepal', href: '#' },
+              { label: `Sales: ${COMPANY.salesPhone}`,     href: COMPANY_LINKS.salesTel },
+              { label: `Support: ${COMPANY.supportPhone}`, href: COMPANY_LINKS.supportTel },
+              { label: COMPANY.email,                       href: COMPANY_LINKS.emailLink },
+              { label: COMPANY.office,                      href: '#' },
             ]},
           ].map(col => (
             <div key={col.title}>
@@ -66,7 +68,7 @@ export default function Footer() {
                   : <a key={l.label} className={link} href={l.href}>{l.label}</a>
               ))}
               {col.title === 'Contact' && (
-                <div className="mt-4 text-xs text-white/40 leading-relaxed">Mon–Sat: 10am – 6pm<br />Sun: 11am – 4pm</div>
+                <div className="mt-4 text-xs text-white/40 leading-relaxed">{COMPANY.hours}</div>
               )}
             </div>
           ))}

@@ -56,6 +56,17 @@ const REASON_LABEL = {
 
 const fmt    = (n) => Number(n || 0).toLocaleString('en-IN');
 const fmtRs  = (n) => `Rs. ${Math.round(Number(n || 0)).toLocaleString('en-IN')}`;
+
+const NOTIF_ICONS = { ORDER: '🛒', PAYMENT: '💳', OFFER: '🎁', REFUND: '↩️', SYSTEM: '🔔' };
+const timeAgo = (date) => {
+  const diff = Date.now() - new Date(date).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h > 1 ? 's' : ''} ago`;
+  return `${Math.floor(h / 24)} day${Math.floor(h / 24) > 1 ? 's' : ''} ago`;
+};
 const fmtShort = (n) => {
   const v = Math.round(Number(n || 0));
   if (v >= 10000000) return `Rs. ${(v / 10000000).toFixed(1)}Cr`;
@@ -216,9 +227,12 @@ function PagBar({ page, pagination, loading, setPage, label = '', borderBottom =
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function OverviewTab({ profile }) {
   const { isMobile, isTablet } = useResponsive();
+  const navigate = useNavigate();
+  const { notifications } = useNotifications();
   const [products, setProducts] = useState([]);
   const [ordersData, setOrdersData] = useState(null);
   const [loading, setLoading]   = useState(true);
+  const notifs = notifications.slice(0, 6);
 
   useEffect(() => {
     Promise.all([
@@ -269,13 +283,13 @@ function OverviewTab({ profile }) {
           {outOfStock.length > 0 && (
             <div style={{ background: C.red+'14', border:`1px solid ${C.red}33`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.red, marginBottom: 8, display:'flex', alignItems:'center', gap:8 }}>
               <SvgAt el={Icon.warn} size={14} />
-              <strong>{outOfStock.length} products</strong>&nbsp;out of stock
+              <strong>{outOfStock.length} {outOfStock.length === 1 ? 'product' : 'products'}</strong>&nbsp;out of stock
             </div>
           )}
           {lowStock.length > 0 && (
             <div style={{ background: C.yellow+'14', border:`1px solid ${C.yellow}33`, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: C.yellow, display:'flex', alignItems:'center', gap:8 }}>
               <SvgAt el={Icon.warn} size={14} />
-              <strong>{lowStock.length} products</strong>&nbsp;with â‰¤5 units left
+              <strong>{lowStock.length} {lowStock.length === 1 ? 'product' : 'products'}</strong>&nbsp;with 5 or fewer units left
             </div>
           )}
         </Card>
@@ -324,6 +338,37 @@ function OverviewTab({ profile }) {
           </ResponsiveContainer>
         </Card>
       )}
+
+      {/* Latest Notifications */}
+      <Card title="Latest Notifications" action={
+        <span onClick={() => navigate('/notifications')}
+          style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all →</span>
+      }>
+        {notifs.length === 0
+          ? <Empty text="No notifications yet" />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {notifs.map((n, i) => (
+                <div key={n._id || i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 0',
+                  borderBottom: i < notifs.length - 1 ? `1px solid ${C.line}` : 'none',
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    background: C.bg, border: `1px solid ${C.line}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                  }}>
+                    {NOTIF_ICONS[n.type] || '🔔'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: n.isRead ? 600 : 700, fontSize: 13, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
+                    <div style={{ fontSize: 11, color: C.mute, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.message}</div>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.mute, flexShrink: 0, whiteSpace: 'nowrap' }}>{timeAgo(n.createdAt)}</div>
+                </div>
+              ))}
+            </div>
+        }
+      </Card>
 
     </div>
   );
@@ -395,7 +440,7 @@ function ProductsTab({ onEdit }) {
           <Sel value={stockF} onChange={e=>setStockF(e.target.value)} style={{ width: 150 }}>
             <option value="">All Stock</option>
             <option value="ok">In Stock (&gt;5)</option>
-            <option value="low">Low Stock (â‰¤5)</option>
+            <option value="low">Low Stock (5 or fewer)</option>
             <option value="out">Out of Stock</option>
           </Sel>
           <Sel value={pubF} onChange={e=>setPubF(e.target.value)} style={{ width: 130 }}>
@@ -2956,16 +3001,12 @@ export default function SellerDashboard() {
                       <div style={{ fontSize:28, marginBottom:8 }}>🔔</div>
                       No notifications yet
                     </div>
-                  ) : notifications.map(n => (
+                  ) : notifications.slice(0, 20).map(n => (
                     <div key={n._id}
                       onClick={() => { if (!n.isRead) markRead(n._id); }}
-                      style={{ display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.line}`, background: n.isRead ? 'transparent' : C.accent+'0a', cursor: n.isRead ? 'default' : 'pointer', transition:'background .15s', alignItems:'flex-start' }}>
-                      {/* Unread dot */}
-                      <div style={{ flexShrink:0, marginTop:5 }}>
-                        {n.isRead
-                          ? <div style={{ width:8, height:8, borderRadius:'50%', background:C.line }} />
-                          : <div style={{ width:8, height:8, borderRadius:'50%', background:C.accent }} />
-                        }
+                      style={{ display:'flex', gap:12, padding:'12px 16px', borderBottom:`1px solid ${C.line}`, background: n.isRead ? 'transparent' : C.accent+'0a', cursor:'default', alignItems:'flex-start' }}>
+                      <div style={{ width:34, height:34, borderRadius:10, flexShrink:0, background:C.bg, border:`1px solid ${C.line}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>
+                        {NOTIF_ICONS[n.type] || '🔔'}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight: n.isRead ? 500 : 700, fontSize:13, color: n.isRead ? C.sub : C.text, marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -2974,7 +3015,15 @@ export default function SellerDashboard() {
                         <div style={{ fontSize:12, color:C.mute, lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
                           {n.message}
                         </div>
-                        <div style={{ fontSize:10, color:C.line, marginTop:4, color:'#666' }}>
+                        {n.link && (
+                          <a href={n.link.startsWith('http') ? n.link : `${window.location.origin}${n.link}`}
+                            target="_blank" rel="noopener noreferrer"
+                            onClick={e => { e.stopPropagation(); if (!n.isRead) markRead(n._id); }}
+                            style={{ display:'inline-flex', alignItems:'center', gap:5, marginTop:6, padding:'4px 10px', borderRadius:6, background:C.accent+'18', border:`1px solid ${C.accent}44`, fontSize:12, fontWeight:700, color:C.accent, textDecoration:'none' }}>
+                            🔗 Click here ↗
+                          </a>
+                        )}
+                        <div style={{ fontSize:10, color:C.mute, marginTop:4 }}>
                           {new Date(n.createdAt).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
                         </div>
                       </div>
@@ -2984,6 +3033,14 @@ export default function SellerDashboard() {
                         title="Delete">✕</button>
                     </div>
                   ))}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding:'12px 16px', borderTop:`1px solid ${C.line}`, textAlign:'center', flexShrink:0 }}>
+                  <button onClick={() => { navigate('/notifications'); setNotifOpen(false); }}
+                    style={{ fontSize:13, fontWeight:700, color:C.accent, background:'none', border:'none', cursor:'pointer' }}>
+                    View all notifications →
+                  </button>
                 </div>
               </div>
             )}

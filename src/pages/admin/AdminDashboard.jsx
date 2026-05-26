@@ -212,26 +212,27 @@ function timeAgo(date) {
 
 function OverviewTab() {
   const { isMobile, isTablet } = useResponsive();
+  const navigate = useNavigate();
+  const { notifications } = useNotifications();
   const [stats, setStats]       = useState(null);
   const [allOrders, setAllOrders] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [notifs, setNotifs]     = useState([]);
   const [userCount, setUC]      = useState(0);
   const [loading, setLoading]   = useState(true);
   const [chartPeriod, setChartPeriod] = useState('1Y');
+
+  const notifs = notifications.slice(0, 6);
 
   useEffect(() => {
     Promise.all([
       adminApi.getOrderStats(),
       adminApi.getOrders({ limit: 1000 }),
-      notificationsApi.getMy({ limit: 6 }),
       adminApi.getUsers({ limit: 1 }),
-    ]).then(([s, o, n, u]) => {
+    ]).then(([s, o, u]) => {
       setStats(s.data?.data || {});
       const allO = o.data?.data?.data || [];
       setAllOrders(allO);
       setRecentOrders(allO.slice(0, 5));
-      setNotifs(n.data?.data?.data || []);
       setUC(u.data?.data?.pagination?.total || u.data?.data?.total || 0);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -491,7 +492,7 @@ function OverviewTab() {
 
         {/* Latest Notifications */}
         <Card title="Latest Notifications" action={
-          <span onClick={() => { const ev = new CustomEvent('overview-nav', { detail: 'Notifications' }); window.dispatchEvent(ev); }}
+          <span onClick={() => navigate('/notifications')}
             style={{ fontSize: 12, color: C.accent, cursor: 'pointer', fontWeight: 600 }}>View all →</span>
         }>
           {notifs.length === 0
@@ -1137,19 +1138,19 @@ function EmployeesTab({ globalSearch = '' }) {
             <div style={MP}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 {[
-                  { l:'Full Name *',        k:'name',          t:'text',     p:'Employee full name',   col:'1/-1' },
-                  { l:'Email *',            k:'email',         t:'email',    p:'employee@email.com' },
-                  { l:'Phone *',            k:'phone',         t:'text',     p:'Mobile number' },
-                  { l:'Password *',         k:'password',      t:'password', p:'Login password' },
-                  { l:'Designation',        k:'designation',   t:'text',     p:'e.g. Sales Manager' },
-                  { l:'Department',         k:'department',    t:'text',     p:'e.g. Sales' },
-                  { l:'Joining Date',       k:'joiningDate',   t:'date',     p:'' },
-                  { l:'Monthly Salary (₹)', k:'monthlySalary', t:'number',   p:'e.g. 25000' },
-                  { l:'Work Address',       k:'businessAddress',t:'text',    p:'Office / work location', col:'1/-1' },
-                ].map(({ l, k, t, p, col }) => (
+                  { l:'Full Name *',        k:'name',           t:'text',     p:'Employee full name',     col:'1/-1', ac:'off' },
+                  { l:'Email *',            k:'email',          t:'email',    p:'employee@email.com',                 ac:'off' },
+                  { l:'Phone *',            k:'phone',          t:'tel',      p:'Mobile number',                      ac:'off' },
+                  { l:'Password *',         k:'password',       t:'password', p:'Login password',                     ac:'new-password' },
+                  { l:'Designation',        k:'designation',    t:'text',     p:'e.g. Sales Manager',                 ac:'off' },
+                  { l:'Department',         k:'department',     t:'text',     p:'e.g. Sales',                         ac:'off' },
+                  { l:'Joining Date',       k:'joiningDate',    t:'date',     p:'',                                   ac:'off' },
+                  { l:'Monthly Salary (₹)', k:'monthlySalary',  t:'number',   p:'e.g. 25000',                         ac:'off' },
+                  { l:'Work Address',       k:'businessAddress', t:'text',    p:'Office / work location', col:'1/-1', ac:'off' },
+                ].map(({ l, k, t, p, col, ac }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
                     {EL(l)}
-                    <input value={form[k]} onChange={e=>{setForm(f=>({...f,[k]:e.target.value}));setCreateErr('');}} type={t} placeholder={p} style={EI} />
+                    <input value={form[k]} onChange={e=>{setForm(f=>({...f,[k]:e.target.value}));setCreateErr('');}} type={t} placeholder={p} autoComplete={ac} style={EI} />
                   </div>
                 ))}
               </div>
@@ -1173,14 +1174,14 @@ function EmployeesTab({ globalSearch = '' }) {
               <div style={{ fontSize:11, fontWeight:700, color:C.accent, letterSpacing:'.07em', textTransform:'uppercase', marginBottom:10 }}>Account Details</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
                 {[
-                  { l:'Full Name *',  k:'name',        t:'text',     p:'Employee full name', col:'1/-1' },
-                  { l:'Email *',      k:'email',       t:'email',    p:'employee@email.com' },
-                  { l:'Phone *',      k:'phone',       t:'text',     p:'Mobile number' },
-                  { l:'New Password', k:'newPassword', t:'password', p:'Leave blank to keep current' },
-                ].map(({ l, k, t, p, col }) => (
+                  { l:'Full Name *',  k:'name',        t:'text',     p:'Employee full name', col:'1/-1', ac:'off' },
+                  { l:'Email *',      k:'email',       t:'email',    p:'employee@email.com',             ac:'off' },
+                  { l:'Phone *',      k:'phone',       t:'tel',      p:'Mobile number',                  ac:'off' },
+                  { l:'New Password', k:'newPassword', t:'password', p:'Leave blank to keep current',    ac:'new-password' },
+                ].map(({ l, k, t, p, col, ac }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
                     {EL(l)}
-                    <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} style={EI} />
+                    <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} autoComplete={ac} style={EI} />
                   </div>
                 ))}
               </div>
@@ -3540,7 +3541,16 @@ export default function AdminDashboard() {
   };
   const navigate                    = useNavigate();
   const { user, logout }            = useAuth();
-  const { notifications }           = useNotifications();
+  const { notifications, unreadCount, markRead, markAllRead, remove: removeNotif } = useNotifications();
+  const [notifOpen, setNotifOpen]   = useState(false);
+  const notifRef                    = useRef(null);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
 
   // Fetch open ticket count on mount
   useEffect(() => {
@@ -3740,15 +3750,77 @@ export default function AdminDashboard() {
           {/* Right actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 'auto' }}>
             {/* Notification bell */}
-            <div style={{ position: 'relative', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center' }}
-              onClick={() => handleTabClick('Notifications')}>
-              {Icon.bell}
-              {openTicketCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: -5, right: -5, background: C.red, color: 'white',
-                  fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 99,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
-                }}>{openTicketCount}</span>
+            <div ref={notifRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setNotifOpen(v => !v)}
+                style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color: notifOpen ? C.accent : C.mute, display: 'flex', alignItems: 'center', padding: 4 }}>
+                <SvgAt el={Icon.bell} size={20} />
+                {unreadCount > 0 && (
+                  <span style={{ position: 'absolute', top: -3, right: -3, background: C.red, color: 'white', fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div style={{ position: 'fixed', top: 62, right: isMobile ? 8 : 24, width: isMobile ? 'calc(100vw - 16px)' : 380, maxWidth: 380, background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: '0 20px 50px rgba(0,0,0,.55)', zIndex: 999, display: 'flex', flexDirection: 'column', maxHeight: 520, overflow: 'hidden' }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 12px', borderBottom: `1px solid ${C.line}`, flexShrink: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>
+                      Notifications
+                      {unreadCount > 0 && <span style={{ marginLeft: 8, background: C.red + '22', color: C.red, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99 }}>{unreadCount} new</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {unreadCount > 0 && (
+                        <button onClick={markAllRead} style={{ fontSize: 11, fontWeight: 600, color: C.accent, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Mark all read</button>
+                      )}
+                      <button onClick={() => setNotifOpen(false)} style={{ background: 'none', border: 'none', color: C.mute, cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>✕</button>
+                    </div>
+                  </div>
+
+                  {/* List */}
+                  <div style={{ overflowY: 'auto', flex: 1 }}>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: '40px 16px', textAlign: 'center', color: C.mute, fontSize: 13 }}>
+                        <div style={{ fontSize: 28, marginBottom: 8 }}>🔔</div>
+                        No notifications yet
+                      </div>
+                    ) : notifications.slice(0, 20).map(n => (
+                      <div key={n._id}
+                        onClick={() => { if (!n.isRead) markRead(n._id); }}
+                        style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: `1px solid ${C.line}`, background: n.isRead ? 'transparent' : C.accent + '0a', cursor: 'default', alignItems: 'flex-start' }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, background: C.bg, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>
+                          {NOTIF_ICONS[n.type] || '🔔'}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: n.isRead ? 500 : 700, fontSize: 13, color: n.isRead ? C.sub : C.text, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</div>
+                          <div style={{ fontSize: 12, color: C.mute, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.message}</div>
+                          {n.link && (
+                            <a href={n.link.startsWith('http') ? n.link : `${window.location.origin}${n.link}`}
+                              target="_blank" rel="noopener noreferrer"
+                              onClick={e => { e.stopPropagation(); if (!n.isRead) markRead(n._id); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, padding: '4px 10px', borderRadius: 6, background: C.accent + '18', border: `1px solid ${C.accent}44`, fontSize: 12, fontWeight: 700, color: C.accent, textDecoration: 'none' }}>
+                              🔗 Click here ↗
+                            </a>
+                          )}
+                          <div style={{ fontSize: 10, color: C.mute, marginTop: 4 }}>
+                            {new Date(n.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                        <button onClick={e => { e.stopPropagation(); removeNotif(n._id); }}
+                          style={{ flexShrink: 0, background: 'none', border: 'none', color: C.mute, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px', borderRadius: 4, opacity: .6 }} title="Delete">✕</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.line}`, textAlign: 'center', flexShrink: 0 }}>
+                    <button onClick={() => { navigate('/notifications'); setNotifOpen(false); }}
+                      style={{ fontSize: 13, fontWeight: 700, color: C.accent, background: 'none', border: 'none', cursor: 'pointer' }}>
+                      View all notifications →
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
             {/* User chip */}

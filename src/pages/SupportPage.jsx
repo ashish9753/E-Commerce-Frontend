@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { supportApi } from '../api/support';
 import { ordersApi } from '../api/orders';
 import SupportIcon from '../components/icons/SupportIcon';
+import { COMPANY } from '../config/company';
 
 /* ── palette ── */
 const C = {
@@ -350,8 +351,8 @@ function ChatPanel({ ticket, onBack, onUpdated }) {
   const hasAdminReply = (ticket.messages || []).some(m => m.senderRole === 'admin');
   const waitingForTeam = isUserRole && !hasAdminReply && !isClosed;
 
-  const SUPPORT_PHONE = '+977-1-4XXXXXX';
-  const SUPPORT_HOURS = 'Mon–Sat: 10am–6pm  ·  Sun: 11am–4pm';
+  const SUPPORT_PHONE = COMPANY.supportPhone;
+  const SUPPORT_HOURS = COMPANY.hours;
 
   return (
     <div style={{

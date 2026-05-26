@@ -4,6 +4,7 @@ import { Eye, EyeOff, ShieldCheck, Truck, RefreshCw, Star } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validators } from '../utils/validators';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const BENEFITS = [
   { icon: <Truck size={16} />,       text: 'Free delivery on orders above ₹499' },
@@ -230,6 +231,11 @@ export default function LoginPage() {
             <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
             <span style={{ fontSize: 12, color: '#bbb', fontWeight: 500 }}>OR</span>
             <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
+          </div>
+
+          {/* Google sign-in */}
+          <div style={{ marginBottom: 18 }}>
+            <GoogleAuthButton text="signin_with" />
           </div>
 
           {/* Register link */}

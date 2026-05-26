@@ -50,23 +50,6 @@ const heroSlides = [
   },
 ];
 
-const fallbackCategories = [
-  { name: 'Smartphones', offer: '40-70% OFF' },
-  { name: 'Laptops', offer: '20-45% OFF' },
-  { name: 'Televisions', offer: '30-60% OFF' },
-  { name: 'Refrigerators', offer: '25-55% OFF' },
-  { name: 'Washing Machines', offer: '30-60% OFF' },
-  { name: 'Air Conditioners', offer: '25-50% OFF' },
-  { name: 'Headphones', offer: '50-80% OFF' },
-  { name: 'Kitchen Appliances', offer: '35-70% OFF' },
-  { name: 'Cameras', offer: '20-45% OFF' },
-  { name: 'Speakers', offer: '45-75% OFF' },
-  { name: 'Monitors', offer: '25-55% OFF' },
-  { name: 'Accessories', offer: '60-85% OFF' },
-];
-
-const fallbackBrands = ['Samsung', 'LG', 'Sony', 'Bosch', 'Panasonic', 'Philips', 'Xiaomi', 'IFB'];
-
 const categoryIcons = {
   smartphones: Smartphone,
   mobiles: Smartphone,
@@ -175,17 +158,18 @@ function RisingStars({ products }) {
   );
 }
 
-function MedalBrands({ brands, products }) {
+function MedalBrands({ brands }) {
   const navigate = useNavigate();
-  const brandList = brands.filter((brand) => brand.isActive !== false).slice(0, 6);
-  const list = brandList.length ? brandList : fallbackBrands.map((name) => ({ name }));
-  const productImages = products.map(getProductImage).filter(Boolean);
+  // Only real, active brands. No hardcoded fallback list — if nothing is in the
+  // catalog the section simply doesn't render.
+  const list = brands.filter((brand) => brand.isActive !== false).slice(0, 6);
+  if (!list.length) return null;
 
   return (
     <section>
       <SectionTitle>Medal Worthy Brands To Bag</SectionTitle>
       <div className="myn-medal-row">
-        {list.slice(0, 6).map((brand, index) => (
+        {list.map((brand) => (
           <button
             className="myn-medal-card"
             key={brand._id || brand.name}
@@ -193,17 +177,24 @@ function MedalBrands({ brands, products }) {
           >
             <div className="myn-medal-img">
               {brand.logo ? (
-                <img src={brand.logo} alt={brand.name} />
-              ) : productImages[index] ? (
-                <img src={productImages[index]} alt={brand.name} />
-              ) : (
-                <Sparkles size={54} />
-              )}
+                <img
+                  src={brand.logo}
+                  alt={brand.name}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                />
+              ) : null}
+              <div style={{
+                display: brand.logo ? 'none' : 'flex',
+                width: 80, height: 80, borderRadius: '50%',
+                background: 'linear-gradient(135deg,#FF5A1F22,#FF5A1F44)',
+                alignItems: 'center', justifyContent: 'center',
+                fontSize: 36, fontWeight: 900, color: '#FF5A1F', letterSpacing: '-1px',
+              }}>
+                {brand.name.charAt(0).toUpperCase()}
+              </div>
             </div>
             <div className="myn-medal-copy">
               <span>{brand.name}</span>
-              <p>{index % 2 === 0 ? 'Trending Electronics' : 'Home Appliance Deals'}</p>
-              <strong>Starting Rs. {index % 2 === 0 ? '999' : '1499'}</strong>
             </div>
           </button>
         ))}
@@ -212,15 +203,24 @@ function MedalBrands({ brands, products }) {
   );
 }
 
-function ShopByCategory({ categories }) {
+function ShopByCategory({ categories, products = [] }) {
   const navigate = useNavigate();
-  const displayCategories = useMemo(() => {
-    if (!categories.length) return fallbackCategories;
-    return categories.slice(0, 12).map((category, index) => ({
-      ...category,
-      offer: fallbackCategories[index % fallbackCategories.length].offer,
-    }));
-  }, [categories]);
+  // Only real categories from the catalog. No hardcoded fallback list and no
+  // fabricated "% OFF" overlay — the Category model has no offer field, so we
+  // simply don't show one. Hide the whole section when nothing is configured.
+  const displayCategories = useMemo(
+    () => categories.slice(0, 12),
+    [categories],
+  );
+  if (!displayCategories.length) return null;
+
+  const getCategoryImage = (categoryName) => {
+    const needle = categoryName.toLowerCase();
+    const match = products.find(
+      (p) => (p.category || '').toLowerCase().includes(needle) || needle.includes((p.category || '').toLowerCase())
+    );
+    return match ? getProductImage(match) : '';
+  };
 
   return (
     <section>
@@ -229,6 +229,7 @@ function ShopByCategory({ categories }) {
         {displayCategories.map((category, index) => {
           const key = category.name.toLowerCase();
           const Icon = categoryIcons[key] || categoryIcons[key.replace('&', '').trim()] || PackageCheck;
+          const categoryImg = category.image || getCategoryImage(category.name);
           return (
             <button
               className="myn-category-card"
@@ -236,11 +237,10 @@ function ShopByCategory({ categories }) {
               onClick={() => navigate(`/products?category=${encodeURIComponent(category.name)}`)}
             >
               <div className={`myn-category-visual tone-${index % 6}`}>
-                {category.image ? <img src={category.image} alt={category.name} /> : <Icon size={70} strokeWidth={1.5} />}
+                {categoryImg ? <img src={categoryImg} alt={category.name} /> : <Icon size={70} strokeWidth={1.5} />}
               </div>
               <div className="myn-category-label">
                 <span>{category.name}</span>
-                <strong>{category.offer}</strong>
                 <p>Shop Now</p>
               </div>
             </button>
@@ -314,7 +314,7 @@ export default function HomePage() {
     cached(
       'home:myntraStyleProducts',
       10 * 60 * 1000,
-      () => productsApi.getAll({ sort: 'popular', limit: 18 })
+      () => productsApi.getAll({ sort: 'popular', limit: 36 })
         .then(({ data }) => normalizeProducts(data.data?.products || data.data?.data || [])),
     ).then(setProducts).catch(() => {});
 
@@ -329,8 +329,8 @@ export default function HomePage() {
       <CouponStrip coupons={coupons} />
       <div className="myn-content">
         <RisingStars products={products} />
-        <MedalBrands brands={brands} products={products.slice(5)} />
-        <ShopByCategory categories={topCategories} />
+        <MedalBrands brands={brands} />
+        <ShopByCategory categories={topCategories} products={products} />
         <TrustBand />
       </div>
 

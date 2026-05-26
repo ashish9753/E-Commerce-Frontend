@@ -79,6 +79,41 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Google sign-in (step 1). Existing users come back logged in. New users
+  // come back with needsRegistration=true and a verified profile preview —
+  // the caller routes them to /complete-signup.
+  const googleLogin = async (idToken) => {
+    try {
+      const { data } = await authApi.googleAuth(idToken);
+      const payload = data.data;
+      if (payload.needsRegistration) {
+        return { success: true, needsRegistration: true, profile: payload.profile, idToken };
+      }
+      const { user: u, accessToken } = payload;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('user', JSON.stringify(u));
+      setUser(u);
+      return { success: true, needsRegistration: false, user: u };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
+  };
+
+  // Google sign-in (step 2). Creates the account with the user-supplied
+  // name/phone/password and the already-verified Google email.
+  const googleComplete = async ({ idToken, name, phone, password }) => {
+    try {
+      const { data } = await authApi.googleComplete({ idToken, name, phone, password });
+      const { user: u, accessToken } = data.data;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('user', JSON.stringify(u));
+      setUser(u);
+      return { success: true, user: u };
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) };
+    }
+  };
+
   const updateProfile = async (updates) => {
     try {
       const { data } = await usersApi.updateProfile(updates);
@@ -101,7 +136,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, googleComplete, logout, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

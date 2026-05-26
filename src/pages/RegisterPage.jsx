@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Package, Tag, CreditCard, Headphones } from 'lucide-react';
+import { Eye, EyeOff, Package, Tag, CreditCard, Headphones, ShieldCheck, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { validators } from '../utils/validators';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const PERKS = [
   { icon: <Package size={15} />,    text: 'Track all your orders in one place' },
@@ -43,23 +44,50 @@ function InputField({ label, name, type = 'text', placeholder, value, error, onC
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { googleComplete } = useAuth();
   const toast = useToast();
-  const [form, setForm]     = useState({ name: '', email: '', phone: '', password: '', confirm: '' });
+
+  // `pendingGoogle` holds { idToken, profile:{email,name,picture} } once the
+  // user has clicked "Sign up with Google" and Google has verified their
+  // email. Until then the form is locked — registration requires Google
+  // verification (no manual-email path).
+  const [pendingGoogle, setPendingGoogle] = useState(null);
+  const [form, setForm]     = useState({ name: '', phone: '', password: '', confirm: '' });
   const [errors, setErrors] = useState({});
   const [showPw, setShowPw] = useState(false);
   const [showCp, setShowCp] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // If the user clicked Google on the Login page and was sent here, the
+  // verified payload is in sessionStorage — hydrate it on mount.
+  useEffect(() => {
+    const raw = sessionStorage.getItem('pendingGoogleSignup');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      sessionStorage.removeItem('pendingGoogleSignup');
+      acceptGooglePayload(parsed);
+    } catch {
+      sessionStorage.removeItem('pendingGoogleSignup');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const acceptGooglePayload = (payload) => {
+    setPendingGoogle(payload);
+    setForm(f => ({ ...f, name: payload?.profile?.name || f.name }));
+    setErrors({});
+  };
+
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: null })); };
 
   const validate = () => {
     const errs = {};
-    const nameErr = validators.name(form.name);         if (nameErr) errs.name = nameErr;
-    const emailErr = validators.email(form.email);      if (emailErr) errs.email = emailErr;
-    const phoneErr = validators.phone(form.phone);      if (phoneErr) errs.phone = phoneErr;
-    const pwErr = validators.password(form.password);   if (pwErr) errs.password = pwErr;
-    const cpErr = validators.confirmPassword(form.confirm, form.password); if (cpErr) errs.confirm = cpErr;
+    if (!pendingGoogle) errs.email = 'Please verify your email with Google first';
+    const nameErr  = validators.name(form.name);                              if (nameErr) errs.name = nameErr;
+    const phoneErr = validators.phone(form.phone);                            if (phoneErr) errs.phone = phoneErr;
+    const pwErr    = validators.password(form.password);                      if (pwErr) errs.password = pwErr;
+    const cpErr    = validators.confirmPassword(form.confirm, form.password); if (cpErr) errs.confirm = cpErr;
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -68,14 +96,25 @@ export default function RegisterPage() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    const result = await register({ name: form.name, email: form.email, phone: form.phone, password: form.password });
+    const result = await googleComplete({
+      idToken: pendingGoogle.idToken,
+      name: form.name,
+      phone: form.phone,
+      password: form.password,
+    });
     setLoading(false);
     if (result.success) {
       toast(`Account created! Welcome, ${result.user.name.split(' ')[0]}!`);
       navigate('/');
     } else {
       toast(result.error, 'error');
-      setErrors({ email: result.error });
+      // If the Google token has expired, clear it so the user re-verifies.
+      if (/token|expired|invalid/i.test(result.error || '')) {
+        setPendingGoogle(null);
+        setErrors({ email: 'Verification expired — please sign in with Google again' });
+      } else {
+        setErrors({ phone: result.error });
+      }
     }
   };
 
@@ -176,6 +215,51 @@ export default function RegisterPage() {
             <p style={{ fontSize: 12, color: '#888' }}>Start shopping Nepal's best electronics store</p>
           </div>
 
+          {/* Step 1 — verify email with Google (required, no manual email entry) */}
+          {!pendingGoogle ? (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <GoogleAuthButton text="signup_with" onNeedsRegistration={acceptGooglePayload} />
+              </div>
+              <div style={{
+                background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8,
+                padding: '10px 12px', marginBottom: 14, display: 'flex', gap: 8, alignItems: 'flex-start',
+              }}>
+                <ShieldCheck size={15} style={{ color: '#FF5A1F', flexShrink: 0, marginTop: 1 }} />
+                <p style={{ fontSize: 11.5, color: '#9a3412', margin: 0, lineHeight: 1.5 }}>
+                  Sign up with Google to verify your email address. Once verified, you can fill in the rest of your details below.
+                </p>
+              </div>
+              {errors.email && <div style={{ fontSize: 11, color: '#e53935', marginBottom: 12 }}>{errors.email}</div>}
+            </>
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+              padding: '10px 12px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10,
+            }}>
+              {pendingGoogle.profile?.picture ? (
+                <img src={pendingGoogle.profile.picture} alt="" referrerPolicy="no-referrer"
+                  style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '2px solid #fff' }} />
+              ) : (
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13 }}>
+                  {pendingGoogle.profile?.name?.charAt(0).toUpperCase() || '?'}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <ShieldCheck size={12} /> Email verified by Google
+                </div>
+                <div style={{ fontSize: 11.5, color: '#047857', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {pendingGoogle.profile?.email}
+                </div>
+              </div>
+              <button type="button" onClick={() => setPendingGoogle(null)}
+                style={{ background: 'none', border: 'none', color: '#047857', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Change
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} noValidate>
             {/* Two-column row: Name + Phone */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -185,8 +269,30 @@ export default function RegisterPage() {
                 value={form.phone} error={errors.phone} onChange={set} />
             </div>
 
-            <InputField label="Email Address" name="email" type="email" placeholder="you@example.com"
-              value={form.email} error={errors.email} onChange={set} />
+            {/* Email — Google-only. Disabled at all times. */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#333', marginBottom: 5 }}>
+                Email Address
+                {pendingGoogle && <span style={{ fontSize: 10.5, color: '#10b981', fontWeight: 700, marginLeft: 6 }}>· VERIFIED</span>}
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="email" readOnly disabled
+                  value={pendingGoogle?.profile?.email || ''}
+                  placeholder="Click 'Sign up with Google' above to verify"
+                  style={{
+                    width: '100%', height: 42, padding: '0 38px 0 12px',
+                    border: `1.5px solid ${pendingGoogle ? '#a7f3d0' : '#e0e0e0'}`,
+                    borderRadius: 8, fontSize: 13,
+                    color: pendingGoogle ? '#065f46' : '#9ca3af',
+                    outline: 'none',
+                    background: pendingGoogle ? '#ecfdf5' : '#f3f4f6',
+                    boxSizing: 'border-box', cursor: 'not-allowed',
+                  }}
+                />
+                <Lock size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+              </div>
+            </div>
 
             <InputField label="Password" name="password" type={showPw ? 'text' : 'password'}
               placeholder="Min. 8 chars, 1 uppercase, 1 number"
@@ -211,13 +317,16 @@ export default function RegisterPage() {
             </div>
 
             {/* Submit */}
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={loading || !pendingGoogle}
+              title={!pendingGoogle ? 'Please verify your email with Google first' : undefined}
               style={{
-                width: '100%', height: 46, borderRadius: 8, border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                background: loading ? '#ccc' : 'linear-gradient(135deg, #FF5A1F, #e04a0f)',
+                width: '100%', height: 46, borderRadius: 8, border: 'none',
+                cursor: (loading || !pendingGoogle) ? 'not-allowed' : 'pointer',
+                background: (loading || !pendingGoogle) ? '#ccc' : 'linear-gradient(135deg, #FF5A1F, #e04a0f)',
                 color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: .3,
-                boxShadow: loading ? 'none' : '0 4px 14px rgba(255,90,31,.35)',
+                boxShadow: (loading || !pendingGoogle) ? 'none' : '0 4px 14px rgba(255,90,31,.35)',
                 marginBottom: 16,
+                opacity: !pendingGoogle ? 0.7 : 1,
               }}>
               {loading
                 ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
