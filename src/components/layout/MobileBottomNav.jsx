@@ -76,19 +76,19 @@ export default function MobileBottomNav() {
             z-index: 150;
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            background: #ffffff;
-            border-top: 1px solid #e5e7eb;
+            background: #131921;
+            border-top: 1px solid #273241;
             /* iOS safe-area: respect the home-indicator inset on iPhones */
-            padding: 6px 4px calc(6px + env(safe-area-inset-bottom)) 4px;
-            box-shadow: 0 -4px 16px rgba(15, 23, 42, .08);
+            padding: 8px 8px calc(8px + env(safe-area-inset-bottom)) 8px;
+            box-shadow: 0 -8px 24px rgba(0, 0, 0, .26);
           }
           .te-bottomnav-tab {
             background: none;
             border: 0;
             padding: 6px 2px;
-            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            display: flex; align-items: center; justify-content: center;
             cursor: pointer;
-            color: #6b7280;
+            color: #f8fafc;
             transition: color .15s;
             -webkit-tap-highlight-color: transparent;
           }
@@ -112,16 +112,16 @@ export default function MobileBottomNav() {
             color: #fff;
             font-size: 9.5px; font-weight: 800;
             display: inline-flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 0 2px #fff;
+            box-shadow: 0 0 0 2px #131921;
           }
           .te-bottomnav-label {
-            font-size: 10.5px;
-            font-weight: 600;
-            letter-spacing: .01em;
-            line-height: 1;
-          }
-          .te-bottomnav-tab.is-active .te-bottomnav-label {
-            font-weight: 800;
+            position: absolute;
+            width: 1px; height: 1px;
+            padding: 0; margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
           }
 
           /* Reserve space at the bottom of every page so content isn't

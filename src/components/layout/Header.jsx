@@ -1,6 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, User, Search, GitCompare, Bell, Package } from 'lucide-react';
+import {
+  ShoppingCart,
+  Heart,
+  User,
+  Search,
+  GitCompare,
+  Bell,
+  Package,
+  Home as HomeIcon,
+  Zap,
+  Sparkles,
+  Flame,
+  Tags,
+  Monitor,
+  WashingMachine,
+} from 'lucide-react';
 import SupportIcon from '../icons/SupportIcon';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -14,6 +29,13 @@ import { useCatalog, getCatEmoji } from '../../context/CatalogContext';
 import { categories as FALLBACK_CATS } from '../../data/categories';
 
 const TYPE_ICON = { ORDER:'📦', PAYMENT:'💳', OFFER:'🎁', REFUND:'↩️', SYSTEM:'🔔' };
+
+function DrawerCategoryIcon({ name }) {
+  const normalized = String(name || '').toLowerCase();
+  if (normalized.includes('television') || normalized.includes('tv')) return <Monitor size={17} strokeWidth={2.1} />;
+  if (normalized.includes('washing')) return <WashingMachine size={17} strokeWidth={2.1} />;
+  return <ShoppingCart size={17} strokeWidth={2.1} />;
+}
 
 function CopyButton({ code }) {
   const [copied, setCopied] = useState(false);
@@ -652,24 +674,29 @@ export default function Header() {
           <div className="te-drawer-body">
             <div className="te-drawer-sectionlabel">Shop</div>
             {[
-              { label: 'Home',         icon: '🏠', path: '/' },
-              { label: 'All Products', icon: '🛒', path: '/products' },
-              { label: 'Flash Sale',   icon: '⚡', path: '/products?sort=discount' },
-              { label: 'New Arrivals', icon: '🆕', path: '/products?sort=newest' },
-              { label: 'Top Selling',  icon: '🔥', path: '/products?sort=popular' },
-              { label: 'Brands',       icon: '🏷️', path: '/products?sort=brand' },
-            ].map(item => (
+              { label: 'Home',         icon: HomeIcon,     path: '/',                       color: '#22d3ee' },
+              { label: 'All Products', icon: ShoppingCart, path: '/products',               color: '#c4b5fd' },
+              { label: 'Flash Sale',   icon: Zap,          path: '/products?sort=discount', color: '#fb923c' },
+              { label: 'New Arrivals', icon: Sparkles,     path: '/products?sort=newest',   color: '#60a5fa' },
+              { label: 'Top Selling',  icon: Flame,        path: '/products?sort=popular',  color: '#f97316' },
+              { label: 'Brands',       icon: Tags,         path: '/products?sort=brand',    color: '#fbbf24' },
+            ].map(item => {
+              const Icon = item.icon;
+              return (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => navTo(item.path)}
                 className="te-drawer-item"
               >
-                <span className="te-drawer-itemicon" aria-hidden="true">{item.icon}</span>
+                <span className="te-drawer-itemicon" style={{ color: item.color }} aria-hidden="true">
+                  <Icon size={17} strokeWidth={2.1} />
+                </span>
                 <span className="te-drawer-itemlabel">{item.label}</span>
                 <span className="te-drawer-itemchev" aria-hidden="true">›</span>
               </button>
-            ))}
+              );
+            })}
 
             {navCats.length > 0 && (
               <>
@@ -682,7 +709,9 @@ export default function Header() {
                     onClick={() => navTo(`/products?category=${encodeURIComponent(c.name)}`)}
                     className="te-drawer-item"
                   >
-                    <span className="te-drawer-itemicon" aria-hidden="true">{c.emo}</span>
+                    <span className="te-drawer-itemicon te-drawer-categoryicon" aria-hidden="true">
+                      <DrawerCategoryIcon name={c.name} />
+                    </span>
                     <span className="te-drawer-itemlabel">{c.name}</span>
                     <span className="te-drawer-itemchev" aria-hidden="true">›</span>
                   </button>
@@ -840,7 +869,11 @@ export default function Header() {
             }
             .te-drawer-itemicon {
               width: 22px; flex-shrink: 0;
+              display: inline-flex; align-items: center; justify-content: center;
               font-size: 16px; text-align: center; line-height: 1;
+            }
+            .te-drawer-categoryicon {
+              color: #c4b5fd;
             }
             .te-drawer-itemlabel {
               flex: 1; min-width: 0;

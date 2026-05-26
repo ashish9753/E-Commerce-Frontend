@@ -30,7 +30,37 @@ export default function ProductDetailPage() {
   const [reviews, setReviews]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [qty, setQty]             = useState(1);
-  const [activeTab, setActiveTab]     = useState('description');
+  // Tab state.
+  //  - Desktop (≥769px): one tab is always open. We default to "description"
+  //    so users see something below the divider immediately.
+  //  - Mobile  (<769px): both panels start collapsed so the page is shorter
+  //    on small screens. The user expands the one they care about; clicking
+  //    the open tab a second time collapses it again (accordion behavior).
+  const isMobileViewport = () =>
+    typeof window !== 'undefined' && window.innerWidth < 769;
+  const [isMobile, setIsMobile] = useState(isMobileViewport);
+  const [activeTab, setActiveTab] = useState(() =>
+    isMobileViewport() ? null : 'description'
+  );
+
+  // Keep `isMobile` in sync with viewport changes (rotation, devtools resize).
+  // We do NOT auto-open the desktop default when crossing the breakpoint —
+  // that would surprise the user mid-interaction. Only initial-load state
+  // differs; subsequent toggling stays in the user's hands.
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 769);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Tab click handler: on mobile, clicking the open tab again closes it.
+  // On desktop, clicks just switch tabs (one is always open).
+  const handleTabClick = (tab) => {
+    setActiveTab((current) => {
+      if (isMobile && current === tab) return null;   // collapse
+      return tab;
+    });
+  };
   const [activeThumb, setActiveThumb] = useState(0);
   const [pincode, setPincode]         = useState('');
   const [pinResult, setPinResult]     = useState(null); // { available, city, deliveryCharge } | null
@@ -415,19 +445,34 @@ export default function ProductDetailPage() {
 
             <div style={{ height:1, background:'#e7e7e7', margin:'16px 0' }} />
 
-            {/* Tabs: specs + description only */}
+            {/* Tabs: specs + description only.
+                On mobile both panels are collapsed by default; clicking a tab
+                opens it, clicking again collapses (handled by handleTabClick).
+                A small chevron is shown on mobile so the affordance is clear. */}
             <div>
-              <div style={{ display:'flex', gap:0, borderBottom:'1px solid #e7e7e7', marginBottom:16 }}>
-                {['description','specs'].map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)}
-                    style={{ padding:'10px 20px', fontSize:13, fontWeight: activeTab===tab ? 700 : 500,
-                      color: activeTab===tab ? '#0F1111' : '#666',
-                      borderBottom: activeTab===tab ? '3px solid #FF5A1F' : '3px solid transparent',
-                      background:'none', border:'none',
-                      cursor:'pointer', textTransform:'capitalize' }}>
-                    {tab === 'specs' ? 'Specifications' : 'Product Details'}
-                  </button>
-                ))}
+              <div style={{ display:'flex', gap:0, borderBottom:'1px solid #e7e7e7', marginBottom: activeTab ? 16 : 0 }}>
+                {['description','specs'].map(tab => {
+                  const isOpen = activeTab === tab;
+                  return (
+                    <button key={tab} onClick={() => handleTabClick(tab)}
+                      aria-expanded={isMobile ? isOpen : undefined}
+                      style={{ padding:'10px 20px', fontSize:13, fontWeight: isOpen ? 700 : 500,
+                        color: isOpen ? '#0F1111' : '#666',
+                        borderBottom: isOpen ? '3px solid #FF5A1F' : '3px solid transparent',
+                        background:'none', border:'none',
+                        cursor:'pointer', textTransform:'capitalize',
+                        display:'inline-flex', alignItems:'center', gap:6 }}>
+                      {tab === 'specs' ? 'Specifications' : 'Product Details'}
+                      {isMobile && (
+                        <span aria-hidden="true" style={{
+                          fontSize: 11, lineHeight: 1, color: isOpen ? '#FF5A1F' : '#9ca3af',
+                          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform .2s',
+                        }}>▾</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {activeTab === 'specs' && (
