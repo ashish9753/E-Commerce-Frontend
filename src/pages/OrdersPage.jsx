@@ -6,7 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { reviewsApi } from '../api/reviews';
 import { paymentsApi } from '../api/payments';
 import { ordersApi } from '../api/orders';
-import { getErrorMessage } from '../api/client';
+import client, { getErrorMessage } from '../api/client';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 import SupportIcon from '../components/icons/SupportIcon';
 import { generateInvoice } from '../utils/generateInvoice';
@@ -325,9 +325,11 @@ export default function OrdersPage() {
     if (!user) { navigate('/login'); return; }
     reloadOrders().finally(() => setLoading(false));
     // Pull live timeout from backend so the countdown matches the sweep schedule.
-    fetch('/api/v1/config/order-timeout')
-      .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j?.data?.timeoutMinutes) setPaymentTimeoutMin(j.data.timeoutMinutes); })
+    // Uses the shared axios client → inherits the configured base URL and the
+    // 401-refresh interceptor. (Previously a raw fetch tied to /api/v1, which
+    // only worked behind the dev proxy.)
+    client.get('/config/order-timeout')
+      .then(({ data }) => { if (data?.data?.timeoutMinutes) setPaymentTimeoutMin(data.data.timeoutMinutes); })
       .catch(() => {});
   }, [user]);
 

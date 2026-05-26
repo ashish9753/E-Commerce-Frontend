@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { notificationsApi } from '../api/notifications';
+import { API_BASE_URL } from '../api/client';
 import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext(null);
@@ -39,7 +40,11 @@ export function NotificationProvider({ children }) {
         if (!ticket || cancelled) return;
 
         esRef.current?.close();
-        const es = new EventSource(`/api/v1/notifications/stream?ticket=${encodeURIComponent(ticket)}`);
+        // Absolute URL is required because the backend lives on a different
+        // origin (Render). Same base URL the axios client uses.
+        const es = new EventSource(
+          `${API_BASE_URL}/notifications/stream?ticket=${encodeURIComponent(ticket)}`,
+        );
         esRef.current = es;
 
         es.onmessage = (e) => {

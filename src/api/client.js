@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const BASE_URL = 'https://e-commerce-backend-meb1.onrender.com/api/v1';
+// Single source of truth for the backend URL. Override via VITE_API_BASE_URL
+// in `.env` (e.g. for local development against localhost:5000).
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://e-commerce-backend-meb1.onrender.com/api/v1';
+
+const BASE_URL = API_BASE_URL;
 
 // withCredentials so the httpOnly refresh-token cookie is sent along with
 // /auth/refresh-token requests. The access token still rides in the
