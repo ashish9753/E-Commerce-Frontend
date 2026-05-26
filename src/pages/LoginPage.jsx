@@ -48,10 +48,15 @@ export default function LoginPage() {
     setLoading(false);
     if (result.success) {
       toast(`Welcome back, ${result.user.name.split(' ')[0]}!`);
-      const role = result.user.role;
-      if (role === 'admin') navigate('/admin');
-      else if (role === 'employee') navigate('/employee');
-      else navigate('/');
+      const role = String(result.user.role || '').toLowerCase();
+      const targetPath = role === 'admin' ? '/admin' : role === 'employee' ? '/employee' : '/';
+      navigate(targetPath, { replace: true });
+
+      // Production fallback: if the SPA router is interrupted by a stale auth
+      // render, leave /login using the token already stored by AuthContext.
+      window.setTimeout(() => {
+        if (window.location.pathname === '/login') window.location.replace(targetPath);
+      }, 100);
     } else {
       toast(result.error, 'error');
       setErrors({ password: result.error });

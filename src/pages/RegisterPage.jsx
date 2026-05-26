@@ -105,7 +105,10 @@ export default function RegisterPage() {
     setLoading(false);
     if (result.success) {
       toast(`Account created! Welcome, ${result.user.name.split(' ')[0]}!`);
-      navigate('/');
+      navigate('/', { replace: true });
+      window.setTimeout(() => {
+        if (window.location.pathname === '/register') window.location.replace('/');
+      }, 100);
     } else {
       toast(result.error, 'error');
       // If the Google token has expired, clear it so the user re-verifies.

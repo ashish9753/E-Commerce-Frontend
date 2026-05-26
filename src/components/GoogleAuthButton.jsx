@@ -40,10 +40,14 @@ export default function GoogleAuthButton({ text = 'continue_with', onNeedsRegist
     }
 
     toast(`Welcome, ${result.user.name.split(' ')[0]}!`);
-    const role = result.user.role;
-    if (role === 'admin') navigate('/admin');
-    else if (role === 'employee') navigate('/employee');
-    else navigate('/');
+    const role = String(result.user.role || '').toLowerCase();
+    const targetPath = role === 'admin' ? '/admin' : role === 'employee' ? '/employee' : '/';
+    navigate(targetPath, { replace: true });
+    window.setTimeout(() => {
+      if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+        window.location.replace(targetPath);
+      }
+    }, 100);
   };
 
   return (

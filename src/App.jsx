@@ -63,6 +63,23 @@ function PageTitle() {
 
 const Spinner = () => <div className="min-h-screen flex items-center justify-center"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
 
+function getStoredAuthUser() {
+  try {
+    const token = localStorage.getItem('accessToken');
+    const rawUser = localStorage.getItem('user');
+    return token && rawUser ? JSON.parse(rawUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getRoleHome(user) {
+  const role = String(user?.role || '').toLowerCase();
+  if (role === 'admin') return '/admin';
+  if (role === 'employee') return '/employee';
+  return '/';
+}
+
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -75,7 +92,7 @@ function AdminRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/" replace />;
+  if (String(user.role || '').toLowerCase() !== 'admin') return <Navigate to="/" replace />;
   return children;
 }
 
@@ -83,18 +100,16 @@ function EmployeeRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'employee' && user.role !== 'admin') return <Navigate to="/" replace />;
+  const role = String(user.role || '').toLowerCase();
+  if (role !== 'employee' && role !== 'admin') return <Navigate to="/" replace />;
   return children;
 }
 
 function GuestRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) {
-    if (user.role === 'admin') return <Navigate to="/admin" replace />;
-    if (user.role === 'employee') return <Navigate to="/employee" replace />;
-    return <Navigate to="/" replace />;
-  }
+  const sessionUser = user || getStoredAuthUser();
+  if (sessionUser) return <Navigate to={getRoleHome(sessionUser)} replace />;
   return children;
 }
 
