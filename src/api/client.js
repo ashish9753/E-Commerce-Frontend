@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = '/api/v1';
+const BASE_URL = 'https://e-commerce-backend-meb1.onrender.com/api/v1';
 
 // withCredentials so the httpOnly refresh-token cookie is sent along with
 // /auth/refresh-token requests. The access token still rides in the
