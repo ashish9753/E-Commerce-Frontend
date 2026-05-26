@@ -56,7 +56,7 @@ export default function LoginPage() {
       // render, leave /login using the token already stored by AuthContext.
       window.setTimeout(() => {
         if (window.location.pathname === '/login') window.location.replace(targetPath);
-      }, 100);
+      }, 250);
     } else {
       toast(result.error, 'error');
       setErrors({ password: result.error });

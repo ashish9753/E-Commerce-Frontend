@@ -47,7 +47,7 @@ export default function GoogleAuthButton({ text = 'continue_with', onNeedsRegist
       if (window.location.pathname === '/login' || window.location.pathname === '/register') {
         window.location.replace(targetPath);
       }
-    }, 100);
+    }, 250);
   };
 
   return (

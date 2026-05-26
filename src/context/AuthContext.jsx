@@ -17,7 +17,14 @@ function getStoredUser() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(getStoredUser);
-  const [loading, setLoading] = useState(true);
+  // `loading` blocks route guards. We only need to actually block when we
+  // have a leftover token but no cached user — every other case we already
+  // know who the user is (or know we're logged out) from localStorage, so
+  // routing can proceed instantly. This avoids the blank-page wait while
+  // a sleeping Render backend cold-starts during the initial getMe call.
+  const [loading, setLoading] = useState(() => {
+    return !!localStorage.getItem('accessToken') && !getStoredUser();
+  });
 
   const logout = useCallback(() => {
     // Backend clears the httpOnly refresh cookie when /auth/logout runs.
@@ -39,7 +46,9 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:logout', handler);
   }, [logout]);
 
-  // Validate stored session on mount
+  // Background session validation. Runs on mount but does NOT block routing
+  // unless we genuinely had no cached user to fall back on. If the token is
+  // invalid the 401-refresh interceptor in client.js handles the cleanup.
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) { setLoading(false); return; }
@@ -50,9 +59,14 @@ export function AuthProvider({ children }) {
         localStorage.setItem('user', JSON.stringify(u));
       })
       .catch(() => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
-        setUser(null);
+        // Only clear if we never had a cached user — if we did, trust it and
+        // let a *real* 401 on a *real* request trigger the auth:logout path.
+        // This stops a transient cold-start failure from kicking people out.
+        if (!getStoredUser()) {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
       })
       .finally(() => setLoading(false));
   }, []);

@@ -108,7 +108,7 @@ export default function RegisterPage() {
       navigate('/', { replace: true });
       window.setTimeout(() => {
         if (window.location.pathname === '/register') window.location.replace('/');
-      }, 100);
+      }, 250);
     } else {
       toast(result.error, 'error');
       // If the Google token has expired, clear it so the user re-verifies.
