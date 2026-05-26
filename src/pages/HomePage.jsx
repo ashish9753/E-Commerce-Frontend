@@ -81,6 +81,173 @@ function SectionTitle({ children }) {
   return <h2 className="myn-section-title">{children}</h2>;
 }
 
+/* ───────────────────────────── LIVE EVENTS ───────────────────────────── */
+// Compact "X left" string for the countdown chip. Resolution drops as the
+// remaining window shrinks so the chip stays punchy: days → hours → minutes.
+function formatTimeLeft(endDate) {
+  const ms = new Date(endDate).getTime() - Date.now();
+  if (ms <= 0) return 'Ending soon';
+  const minutes = Math.floor(ms / 60000);
+  const hours   = Math.floor(minutes / 60);
+  const days    = Math.floor(hours / 24);
+  if (days >= 2)  return `${days} days left`;
+  if (days === 1) return '1 day left';
+  if (hours >= 1) return `${hours}h ${minutes % 60}m left`;
+  return `${minutes}m left`;
+}
+
+// Deterministic palette per event so the same event always renders the
+// same gradient (no flicker on refresh). Indexed by an id-derived hash.
+const EVENT_PALETTES = [
+  { from: '#fb7185', to: '#be123c' }, // rose
+  { from: '#f59e0b', to: '#b45309' }, // amber
+  { from: '#0ea5e9', to: '#0c4a6e' }, // sky
+  { from: '#10b981', to: '#065f46' }, // emerald
+  { from: '#8b5cf6', to: '#5b21b6' }, // violet
+  { from: '#ef4444', to: '#7f1d1d' }, // red
+];
+function paletteFor(id = '') {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return EVENT_PALETTES[Math.abs(h) % EVENT_PALETTES.length];
+}
+
+function LiveEvents({ events }) {
+  const navigate = useNavigate();
+  // `copiedKey` is the event id of the badge that was just copied — used to
+  // swap the "Code: XYZ" pill for a green "✓ Copied!" pill for ~1.5s.
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  // Only events that are currently live: server-side "isActive" AND inside
+  // the [start, end] window. The Catalog context already filters to
+  // isActive=true, but we re-check date so an active-but-not-yet-started
+  // event doesn't leak onto the home page.
+  const now = Date.now();
+  const live = (events || []).filter((ev) => {
+    if (ev.isActive === false) return false;
+    const start = new Date(ev.startDate).getTime();
+    const end   = new Date(ev.endDate).getTime();
+    return start <= now && end >= now;
+  });
+  if (!live.length) return null;       // no live events → no section at all
+
+  // Copy the badge code to the clipboard. e.stopPropagation prevents the
+  // surrounding card's "navigate to /products" handler from firing.
+  const copyCode = async (e, ev) => {
+    e.stopPropagation();
+    if (!ev.badge) return;
+    const key = ev._id || ev.name;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(ev.badge);
+      } else {
+        // Fallback for older browsers / non-secure contexts (clipboard API
+        // is gated behind https + user activation).
+        const ta = document.createElement('textarea');
+        ta.value = ev.badge;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      // silent — worst case the user sees no feedback and types it manually
+    }
+  };
+
+  // Keyboard activation for the card (the card is a <div role="button">
+  // because we have a nested <button> for copy, which can't live inside a
+  // real <button>).
+  const onCardKeyDown = (e, fn) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+  };
+
+  return (
+    <section className="myn-events-wrap">
+      <div className="myn-events-head">
+        <div>
+          <span className="myn-events-eyebrow">🎉 Live Right Now</span>
+          <h2 className="myn-events-title">Festive Events &amp; Schemes</h2>
+        </div>
+        <button className="myn-events-allbtn" onClick={() => navigate('/products')}>
+          View all deals →
+        </button>
+      </div>
+
+      <div className="myn-events-grid">
+        {live.map((ev) => {
+          const palette  = paletteFor(ev._id || ev.name);
+          const key      = ev._id || ev.name;
+          const isCopied = copiedKey === key;
+          const goShop   = () => navigate(`/products?event=${encodeURIComponent(ev.badge || ev.name)}`);
+          return (
+            <div
+              key={key}
+              role="button"
+              tabIndex={0}
+              className="myn-event-card"
+              onClick={goShop}
+              onKeyDown={(e) => onCardKeyDown(e, goShop)}
+            >
+              {/* Background: uploaded image overlays the gradient if present */}
+              <div className="myn-event-bg"
+                style={{ background: `linear-gradient(135deg, ${palette.from}, ${palette.to})` }}>
+                {ev.image && <img src={ev.image} alt="" className="myn-event-img" />}
+                <div className="myn-event-shade" />
+              </div>
+
+              {/* Foreground */}
+              <div className="myn-event-fg">
+                <div className="myn-event-top">
+                  <span className="myn-event-countdown">⏰ {formatTimeLeft(ev.endDate)}</span>
+                  {ev.discountPercent > 0 && (
+                    <span className="myn-event-discount">
+                      <strong>{ev.discountPercent}%</strong>
+                      <span>OFF</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="myn-event-body">
+                  <h3>{ev.name}</h3>
+                  {ev.description && <p>{ev.description}</p>}
+                </div>
+
+                <div className="myn-event-foot">
+                  {ev.badge && (
+                    <button
+                      type="button"
+                      className={`myn-event-copy ${isCopied ? 'is-copied' : ''}`}
+                      onClick={(e) => copyCode(e, ev)}
+                      title={isCopied ? 'Copied!' : 'Click to copy code'}
+                      aria-label={isCopied ? `Code ${ev.badge} copied` : `Copy code ${ev.badge}`}
+                    >
+                      {isCopied ? (
+                        <>✓ <strong>Copied!</strong></>
+                      ) : (
+                        <>
+                          <span className="myn-event-copy-label">Code:</span>
+                          <strong>{ev.badge}</strong>
+                          <span className="myn-event-copy-icon" aria-hidden="true">⧉</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <span className="myn-event-cta">Shop Now →</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function HeroMyntraStyle() {
   const [index, setIndex] = useState(0);
   const navigate = useNavigate();
@@ -306,7 +473,7 @@ function TrustBand() {
 }
 
 export default function HomePage() {
-  const { brands, topCategories } = useCatalog();
+  const { brands, topCategories, events } = useCatalog();
   const [products, setProducts] = useState([]);
   const [coupons, setCoupons] = useState([]);
 
@@ -326,6 +493,7 @@ export default function HomePage() {
   return (
     <main className="myn-home">
       <HeroMyntraStyle />
+      <LiveEvents events={events} />
       <CouponStrip coupons={coupons} />
       <div className="myn-content">
         <RisingStars products={products} />
@@ -345,22 +513,38 @@ export default function HomePage() {
           position: relative;
           display: grid;
           grid-template-columns: minmax(0, 1.9fr) minmax(320px, .9fr);
-          min-height: clamp(330px, 38vw, 510px);
+          /* Lock the hero to a fixed height so a different image's intrinsic
+             size — or longer slide copy on the right — can't reflow the rest
+             of the page when the carousel auto-rotates. */
+          height: clamp(330px, 38vw, 510px);
           background: #f7f6f4;
           overflow: hidden;
+          /* contain: tells the browser that nothing inside this section can
+             affect layout, paint, or style of anything outside it. Cheap and
+             effective firewall against the auto-slide jitter. */
+          contain: layout paint style;
         }
 
         .myn-hero-media {
           min-width: 0;
           background: #edf1f4;
+          /* The image is absolutely positioned inside so a swap to a
+             different aspect ratio doesn't push the grid track around. */
+          position: relative;
+          overflow: hidden;
         }
 
         .myn-hero-media img {
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
-          min-height: clamp(330px, 38vw, 510px);
           object-fit: cover;
           display: block;
+          /* Soft crossfade when src swaps — the browser paints the new image
+             over the old one for 350ms. Stops the "snap" the user reads as
+             shaking even when no layout actually shifts. */
+          transition: opacity .35s ease;
         }
 
         .myn-hero-copy {
@@ -372,6 +556,20 @@ export default function HomePage() {
           padding: 54px 6vw 74px 52px;
           background: linear-gradient(90deg, #ffffff 0%, #fbfaf8 100%);
           border-left: 1px solid #ece7df;
+          /* Allow flex children to shrink below their content size and clip
+             overflow so a long title can't push the hero taller. */
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
+        }
+
+        /* Clamp the title to 3 lines so a longer slide name can't change the
+           column's height between slides. */
+        .myn-hero-copy h1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 3;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
 
         .myn-hero-copy p {
@@ -853,6 +1051,228 @@ export default function HomePage() {
           .myn-category-label p {
             font-size: 13px;
           }
+        }
+
+        /* ─────────────── Live Events / Schemes ─────────────── */
+        .myn-events-wrap {
+          max-width: 1560px;
+          margin: 0 auto;
+          padding: 36px 38px 8px;
+        }
+        .myn-events-head {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+        .myn-events-eyebrow {
+          display: inline-block;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+          color: #d97706;
+          margin-bottom: 6px;
+        }
+        .myn-events-title {
+          margin: 0;
+          font-family: Georgia, 'Times New Roman', serif;
+          font-weight: 500;
+          font-size: clamp(24px, 2.4vw, 36px);
+          color: #171923;
+        }
+        .myn-events-allbtn {
+          background: transparent;
+          border: 1px solid #e5e7eb;
+          border-radius: 999px;
+          padding: 8px 16px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #0f172a;
+          cursor: pointer;
+          transition: background .15s, border-color .15s;
+        }
+        .myn-events-allbtn:hover {
+          background: #f3f4f6;
+          border-color: #d1d5db;
+        }
+        .myn-events-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 16px;
+        }
+        .myn-event-card {
+          position: relative;
+          border: 0;
+          padding: 0;
+          border-radius: 16px;
+          overflow: hidden;
+          cursor: pointer;
+          min-height: 220px;
+          text-align: left;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, .12);
+          transform: translateZ(0);
+          transition: transform .25s ease, box-shadow .25s ease;
+        }
+        .myn-event-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 12px 28px rgba(15, 23, 42, .22);
+        }
+        .myn-event-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+        }
+        .myn-event-img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: .55;
+          mix-blend-mode: luminosity;
+        }
+        .myn-event-shade {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(180deg, rgba(0,0,0,0) 30%, rgba(0,0,0,.55) 100%),
+            radial-gradient(circle at top right, rgba(255,255,255,.18), transparent 55%);
+        }
+        .myn-event-fg {
+          position: relative;
+          z-index: 1;
+          height: 100%;
+          min-height: 220px;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          padding: 18px 20px;
+          color: #fff;
+        }
+        .myn-event-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .myn-event-countdown {
+          background: rgba(0,0,0,.4);
+          border: 1px solid rgba(255,255,255,.25);
+          backdrop-filter: blur(4px);
+          padding: 5px 10px;
+          border-radius: 999px;
+          font-size: 11.5px;
+          font-weight: 700;
+          letter-spacing: .04em;
+        }
+        .myn-event-discount {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          line-height: 1;
+          background: rgba(255,255,255,.95);
+          color: #b91c1c;
+          border-radius: 10px;
+          padding: 6px 10px;
+        }
+        .myn-event-discount strong {
+          font-size: 26px;
+          font-weight: 900;
+          letter-spacing: -.02em;
+        }
+        .myn-event-discount span {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .18em;
+          margin-top: 2px;
+        }
+        .myn-event-body h3 {
+          margin: 18px 0 6px;
+          font-size: 22px;
+          font-weight: 800;
+          letter-spacing: -.01em;
+          line-height: 1.15;
+        }
+        .myn-event-body p {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.45;
+          opacity: .88;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .myn-event-foot {
+          margin-top: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        /* Copy-code pill — a real button so it has its own click/keyboard
+           handling separate from the card's "Shop Now" navigation.        */
+        .myn-event-copy {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11.5px;
+          color: #fff;
+          background: rgba(255,255,255,.18);
+          border: 1px dashed rgba(255,255,255,.55);
+          border-radius: 6px;
+          padding: 5px 9px;
+          letter-spacing: .04em;
+          cursor: pointer;
+          transition: background .15s, border-color .15s, transform .1s;
+          font-family: inherit;
+        }
+        .myn-event-copy:hover {
+          background: rgba(255,255,255,.28);
+          border-color: rgba(255,255,255,.85);
+        }
+        .myn-event-copy:active {
+          transform: scale(.97);
+        }
+        .myn-event-copy:focus-visible {
+          outline: 2px solid #fff;
+          outline-offset: 2px;
+        }
+        .myn-event-copy strong {
+          font-weight: 800;
+          font-family: 'SF Mono', Menlo, monospace;
+        }
+        .myn-event-copy-label {
+          opacity: .85;
+        }
+        .myn-event-copy-icon {
+          font-size: 13px;
+          opacity: .9;
+          margin-left: 2px;
+        }
+        .myn-event-copy.is-copied {
+          background: rgba(34, 197, 94, .25);
+          border-color: rgba(187, 247, 208, .9);
+          border-style: solid;
+          color: #ecfdf5;
+        }
+        .myn-event-card[role="button"] {
+          cursor: pointer;
+        }
+        .myn-event-card[role="button"]:focus-visible {
+          outline: 3px solid #f97316;
+          outline-offset: 3px;
+        }
+        .myn-event-cta {
+          margin-left: auto;
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: .04em;
+        }
+        @media (max-width: 720px) {
+          .myn-events-wrap { padding: 24px 16px 4px; }
+          .myn-events-head { flex-direction: column; align-items: flex-start; }
+          .myn-events-allbtn { align-self: stretch; text-align: center; }
         }
       `}</style>
     </main>
