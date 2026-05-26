@@ -466,44 +466,69 @@ export default function Header() {
         </>
       ) : (
         <>
-          {/* Mobile top bar */}
+          {/* Mobile top bar — minimal: Hamburger ・ Logo ・ Bell.
+              Cart, Wishlist, Account live in the bottom tab bar (the modern
+              Amazon/Flipkart pattern), so the top bar can stay clean. */}
           <div style={{ background: '#131921', borderBottom: '1px solid #2a2a2a' }}>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', height: 56, gap: 8 }}>
-              {/* Logo */}
-              <div onClick={() => navigate('/')} style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.02em',
-                cursor: 'pointer', color: 'white', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 10px', height: 56, gap: 6 }}>
+              {/* Hamburger (left) — bigger tap target than before */}
+              <button
+                onClick={() => setMobileOpen(true)}
+                aria-label="Open menu"
+                style={{
+                  background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+                  width: 40, height: 40, display: 'flex', flexDirection: 'column',
+                  gap: 5, alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 8,
+                }}
+              >
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
+                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
+              </button>
+
+              {/* Logo (center, takes remaining space) */}
+              <div
+                onClick={() => navigate('/')}
+                style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.02em',
+                  cursor: 'pointer', color: 'white', flex: 1, textAlign: 'center' }}
+              >
                 Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
               </div>
 
-              {/* Bell */}
-              {user && (
+              {/* Bell (right) — only when logged in */}
+              {user ? (
                 <div style={{ position: 'relative' }} ref={bellRef}>
-                  <button onClick={() => setShowNotifs(v => !v)} style={{ position: 'relative', background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setShowNotifs(v => !v)}
+                    aria-label="Notifications"
+                    style={{
+                      position: 'relative', background: 'none', border: 'none',
+                      color: 'white', cursor: 'pointer',
+                      width: 40, height: 40, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', borderRadius: 8,
+                    }}
+                  >
                     <Bell size={22} />
-                    {unreadCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
-                      background: '#FF5A1F', color: 'white', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>}
+                    {unreadCount > 0 && (
+                      <span style={{
+                        position: 'absolute', top: 4, right: 4,
+                        minWidth: 16, height: 16, padding: '0 4px',
+                        borderRadius: 9, background: '#FF5A1F', color: 'white',
+                        fontSize: 9, fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 0 0 2px #131921',
+                      }}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
                   </button>
                   {showNotifs && <NotificationDropdown onClose={() => setShowNotifs(false)} />}
                 </div>
+              ) : (
+                /* Spacer so the logo stays visually centered when no bell. */
+                <div style={{ width: 40, height: 40 }} aria-hidden="true" />
               )}
-
-              {/* Cart */}
-              <button onClick={() => navigate('/cart')} style={{ position: 'relative', background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '6px 8px', display: 'flex', alignItems: 'center' }}>
-                <ShoppingCart size={22} />
-                {cartCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%',
-                  background: '#FF5A1F', color: 'white', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {cartCount}
-                </span>}
-              </button>
-
-              {/* Hamburger */}
-              <button onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
-                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
-                <span style={{ display: 'block', width: 22, height: 2, background: 'white', borderRadius: 1 }} />
-              </button>
             </div>
 
             {/* Mobile search row */}
@@ -551,95 +576,282 @@ export default function Header() {
     </nav>
     {isMobile && mobileOpen && (
       <>
-        <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 200 }} />
-        <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 285, background: '#131921', zIndex: 201, overflowY: 'auto', overflowX: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: '#1a2a3a', borderBottom: '1px solid #2a2a2a' }}>
+        {/* Backdrop — slightly darker for stronger focus on the drawer */}
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="te-drawer-backdrop"
+          aria-hidden="true"
+        />
+
+        {/* Slide-in drawer. Width is responsive — 84vw on tiny phones, capped
+            at 340px on larger devices — so menu labels never get clipped. */}
+        <aside
+          className="te-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Main navigation"
+        >
+          {/* Header: avatar / name on left, close button on right. */}
+          <div className="te-drawer-head">
             {user ? (
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>Hello, {user.name.split(' ')[0]}</div>
-                {(user.role === 'admin' || user.role === 'employee') && (
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4, marginTop: 4, display: 'inline-block',
-                    background: user.role === 'admin' ? '#7c3aed33' : '#f59e0b22',
-                    color: user.role === 'admin' ? '#c4b5fd' : '#fcd34d', textTransform: 'uppercase' }}>
-                    {user.role}
-                  </span>
-                )}
+              <div className="te-drawer-userblock">
+                <div className="te-drawer-avatar">
+                  {user.profileImage ? (
+                    <img src={user.profileImage} alt="" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span>{(user.name || '?').charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="te-drawer-usermeta">
+                  <span className="te-drawer-hi">Hello,</span>
+                  <strong>{user.name.split(' ')[0]}</strong>
+                  {(user.role === 'admin' || user.role === 'employee') && (
+                    <span
+                      className="te-drawer-rolebadge"
+                      style={{
+                        background: user.role === 'admin' ? '#7c3aed33' : '#f59e0b22',
+                        color:      user.role === 'admin' ? '#c4b5fd' : '#fcd34d',
+                      }}
+                    >
+                      {user.role}
+                    </span>
+                  )}
+                </div>
               </div>
             ) : (
-              <button onClick={() => navTo('/login')}
-                style={{ background: '#FF5A1F', color: 'white', border: 'none', borderRadius: 4, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-                Sign In
-              </button>
+              <div className="te-drawer-userblock guest">
+                <div className="te-drawer-avatar guest">
+                  <span>👋</span>
+                </div>
+                <div className="te-drawer-usermeta">
+                  <span className="te-drawer-hi">Welcome</span>
+                  <strong>Sign in for the best deals</strong>
+                </div>
+              </div>
             )}
-            <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: '#aaa', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 4 }}>✕</button>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+              className="te-drawer-close"
+            >✕</button>
           </div>
-          <div style={{ padding: '8px 0' }}>
-            <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Shop</div>
+
+          {/* Sign-in CTA right under the header for guests — fastest path. */}
+          {!user && (
+            <button
+              type="button"
+              onClick={() => navTo('/login')}
+              className="te-drawer-signincta"
+            >
+              Sign In / Register
+            </button>
+          )}
+
+          {/* Sections */}
+          <div className="te-drawer-body">
+            <div className="te-drawer-sectionlabel">Shop</div>
             {[
-              { label: '🏠  Home', path: '/' },
-              { label: '🛒  All Products', path: '/products' },
-              { label: '⚡  Flash Sale', path: '/products?sort=discount' },
-              { label: '🆕  New Arrivals', path: '/products?sort=newest' },
-              { label: '🔥  Top Selling', path: '/products?sort=popular' },
-              { label: '🏷️  Brands', path: '/products?sort=brand' },
+              { label: 'Home',         icon: '🏠', path: '/' },
+              { label: 'All Products', icon: '🛒', path: '/products' },
+              { label: 'Flash Sale',   icon: '⚡', path: '/products?sort=discount' },
+              { label: 'New Arrivals', icon: '🆕', path: '/products?sort=newest' },
+              { label: 'Top Selling',  icon: '🔥', path: '/products?sort=popular' },
+              { label: 'Brands',       icon: '🏷️', path: '/products?sort=brand' },
             ].map(item => (
-              <button key={item.label} onClick={() => navTo(item.path)}
-                style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                  textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                {item.label}
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => navTo(item.path)}
+                className="te-drawer-item"
+              >
+                <span className="te-drawer-itemicon" aria-hidden="true">{item.icon}</span>
+                <span className="te-drawer-itemlabel">{item.label}</span>
+                <span className="te-drawer-itemchev" aria-hidden="true">›</span>
               </button>
             ))}
+
             {navCats.length > 0 && (
               <>
-                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Categories</div>
+                <div className="te-drawer-divider" />
+                <div className="te-drawer-sectionlabel">Categories</div>
                 {navCats.slice(0, 8).map(c => (
-                  <button key={c.id || c.name} onClick={() => navTo(`/products?category=${encodeURIComponent(c.name)}`)}
-                    style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                      textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                    {c.emo}  {c.name}
+                  <button
+                    key={c.id || c.name}
+                    type="button"
+                    onClick={() => navTo(`/products?category=${encodeURIComponent(c.name)}`)}
+                    className="te-drawer-item"
+                  >
+                    <span className="te-drawer-itemicon" aria-hidden="true">{c.emo}</span>
+                    <span className="te-drawer-itemlabel">{c.name}</span>
+                    <span className="te-drawer-itemchev" aria-hidden="true">›</span>
                   </button>
                 ))}
               </>
             )}
+
             {user && (
               <>
-                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                <div style={{ padding: '8px 16px 4px', fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '.1em' }}>Account</div>
+                <div className="te-drawer-divider" />
+                <div className="te-drawer-sectionlabel">Your Account</div>
                 {[
-                  { label: '📦  My Orders', path: '/orders' },
-                  { label: '❤️  Wishlist', path: '/wishlist' },
-                  { label: '👤  Profile', path: '/profile' },
-                  { label: '💬  Support', path: '/support' },
-                  ...(user.role === 'admin' ? [{ label: '⚙️  Admin Panel', path: '/admin' }] : []),
-                  ...(user.role === 'employee' ? [{ label: '🖥️  Employee Panel', path: '/employee' }] : []),
+                  { label: 'My Orders',      icon: '📦', path: '/orders' },
+                  { label: 'Wishlist',       icon: '❤️', path: '/wishlist' },
+                  { label: 'Profile',        icon: '👤', path: '/profile' },
+                  { label: 'Support',        icon: '💬', path: '/support' },
+                  ...(user.role === 'admin'    ? [{ label: 'Admin Panel',    icon: '⚙️', path: '/admin'    }] : []),
+                  ...(user.role === 'employee' ? [{ label: 'Employee Panel', icon: '🖥️', path: '/employee' }] : []),
                 ].map(item => (
-                  <button key={item.label} onClick={() => navTo(item.path)}
-                    style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                      textAlign: 'left', color: '#d1d5db', fontSize: 14, cursor: 'pointer', fontWeight: 500, boxSizing: 'border-box' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#1f2937'; e.currentTarget.style.color = 'white'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#d1d5db'; }}>
-                    {item.label}
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => navTo(item.path)}
+                    className="te-drawer-item"
+                  >
+                    <span className="te-drawer-itemicon" aria-hidden="true">{item.icon}</span>
+                    <span className="te-drawer-itemlabel">{item.label}</span>
+                    <span className="te-drawer-itemchev" aria-hidden="true">›</span>
                   </button>
                 ))}
-              </>
-            )}
-            {!user && (
-              <>
-                <div style={{ height: 1, background: '#2a2a2a', margin: '6px 0' }} />
-                <button onClick={() => navTo('/login')}
-                  style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none',
-                    textAlign: 'left', color: '#FF5A1F', fontSize: 14, cursor: 'pointer', fontWeight: 700, boxSizing: 'border-box' }}>
-                  Sign In / Register →
-                </button>
               </>
             )}
           </div>
-        </div>
+
+          <style>{`
+            @keyframes te-drawer-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+            @keyframes te-drawer-fade { from { opacity: 0; } to { opacity: 1; } }
+
+            .te-drawer-backdrop {
+              position: fixed; inset: 0;
+              background: rgba(0,0,0,.55);
+              z-index: 200;
+              animation: te-drawer-fade .18s ease;
+            }
+            .te-drawer {
+              position: fixed; top: 0; bottom: 0; left: 0;
+              width: min(84vw, 340px);
+              background: linear-gradient(180deg, #131921 0%, #0d1218 100%);
+              z-index: 201;
+              display: flex;
+              flex-direction: column;
+              overflow-y: auto;
+              overflow-x: hidden;
+              animation: te-drawer-in .22s cubic-bezier(.2,.8,.2,1);
+              box-shadow: 4px 0 24px rgba(0,0,0,.45);
+            }
+            .te-drawer-head {
+              position: sticky; top: 0; z-index: 2;
+              display: flex; align-items: center; justify-content: space-between;
+              gap: 12px;
+              padding: 16px 14px;
+              background: linear-gradient(135deg, #1a2332 0%, #131921 100%);
+              border-bottom: 1px solid #2a3445;
+            }
+            .te-drawer-userblock {
+              display: flex; align-items: center; gap: 12px;
+              min-width: 0;
+              flex: 1;
+            }
+            .te-drawer-avatar {
+              width: 40px; height: 40px;
+              border-radius: 50%;
+              background: linear-gradient(135deg, #FF5A1F, #e04a0f);
+              color: #fff;
+              display: flex; align-items: center; justify-content: center;
+              font-weight: 800; font-size: 16px;
+              flex-shrink: 0;
+              overflow: hidden;
+            }
+            .te-drawer-avatar.guest {
+              background: linear-gradient(135deg, #334155, #1e293b);
+              font-size: 20px;
+            }
+            .te-drawer-avatar img { width: 100%; height: 100%; object-fit: cover; }
+            .te-drawer-usermeta {
+              display: flex; flex-direction: column; gap: 1px;
+              min-width: 0;
+              line-height: 1.2;
+            }
+            .te-drawer-hi {
+              font-size: 11px; color: #9ca3af;
+              text-transform: uppercase; letter-spacing: .08em;
+            }
+            .te-drawer-usermeta strong {
+              color: #fff; font-size: 15px; font-weight: 700;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+              max-width: 100%;
+            }
+            .te-drawer-rolebadge {
+              align-self: flex-start;
+              margin-top: 4px;
+              font-size: 9.5px; font-weight: 800;
+              padding: 2px 7px; border-radius: 4px;
+              text-transform: uppercase; letter-spacing: .04em;
+            }
+            .te-drawer-close {
+              background: rgba(255,255,255,.06);
+              border: 1px solid rgba(255,255,255,.08);
+              color: #d1d5db; font-size: 16px; line-height: 1;
+              padding: 0; cursor: pointer;
+              width: 32px; height: 32px;
+              border-radius: 50%;
+              display: flex; align-items: center; justify-content: center;
+              flex-shrink: 0;
+              transition: background .15s, color .15s;
+            }
+            .te-drawer-close:hover { background: rgba(255,90,31,.15); color: #FF5A1F; }
+
+            .te-drawer-signincta {
+              margin: 14px 14px 4px;
+              padding: 12px 14px;
+              background: linear-gradient(135deg, #FF5A1F, #e04a0f);
+              color: #fff; border: none; border-radius: 10px;
+              font-weight: 800; font-size: 14px; letter-spacing: .02em;
+              cursor: pointer;
+              box-shadow: 0 4px 14px rgba(255,90,31,.35);
+            }
+            .te-drawer-signincta:active { transform: scale(.98); }
+
+            .te-drawer-body { padding: 8px 0 24px; }
+            .te-drawer-sectionlabel {
+              padding: 14px 18px 6px;
+              font-size: 10.5px; font-weight: 800;
+              color: #64748b;
+              text-transform: uppercase; letter-spacing: .14em;
+            }
+            .te-drawer-divider {
+              height: 1px; margin: 6px 14px;
+              background: linear-gradient(90deg, transparent, #2a3445, transparent);
+            }
+            .te-drawer-item {
+              display: flex; align-items: center; gap: 12px;
+              width: 100%;
+              padding: 12px 18px;
+              background: none; border: none;
+              text-align: left; cursor: pointer;
+              color: #d1d5db; font-size: 14.5px; font-weight: 500;
+              box-sizing: border-box;
+              transition: background .12s, color .12s;
+            }
+            .te-drawer-item:hover,
+            .te-drawer-item:active {
+              background: rgba(255,255,255,.05);
+              color: #fff;
+            }
+            .te-drawer-itemicon {
+              width: 22px; flex-shrink: 0;
+              font-size: 16px; text-align: center; line-height: 1;
+            }
+            .te-drawer-itemlabel {
+              flex: 1; min-width: 0;
+              white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .te-drawer-itemchev {
+              color: #4b5563; font-size: 16px; line-height: 1;
+              flex-shrink: 0;
+            }
+          `}</style>
+        </aside>
       </>
     )}
     </>

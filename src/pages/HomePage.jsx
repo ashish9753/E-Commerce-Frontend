@@ -974,12 +974,41 @@ export default function HomePage() {
 
         @media (max-width: 820px) {
           .myn-hero {
+            /* Stack on mobile: image row above, copy row below. Override the
+               desktop fixed height so the two rows can each have a sane size
+               instead of squeezing into 330px together. */
             grid-template-columns: 1fr;
+            grid-template-rows: clamp(190px, 52vw, 300px) auto;
+            height: auto;
           }
 
           .myn-hero-copy {
-            padding: 28px 22px 58px;
+            padding: 22px 22px 56px;
             border-left: 0;
+            border-top: 1px solid #ece7df;
+            gap: 14px;
+          }
+
+          .myn-hero-copy h1 {
+            font-size: clamp(22px, 6vw, 32px);
+            max-width: 100%;
+            line-height: 1.08;
+          }
+
+          .myn-hero-copy strong {
+            font-size: clamp(18px, 4.5vw, 26px);
+          }
+
+          /* Vertically center the arrows over the image row (not the whole
+             stacked hero). Without this they'd float over the text below. */
+          .myn-hero-arrow {
+            top: clamp(95px, 26vw, 150px);
+          }
+
+          /* Park the dots at the bottom of the image, just above the copy. */
+          .myn-dots {
+            bottom: auto;
+            top: calc(clamp(190px, 52vw, 300px) - 24px);
           }
 
           .myn-section-title {
