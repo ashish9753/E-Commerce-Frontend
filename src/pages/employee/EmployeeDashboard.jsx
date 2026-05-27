@@ -12,7 +12,9 @@ import { settingsApi } from '../../api/settings';
 import { couponsApi } from '../../api/coupons';
 import { useCatalog } from '../../context/CatalogContext';
 import AdminCatalogTab from '../admin/AdminCatalogTab';
+import AdminBannersTab from '../admin/AdminBannersTab';
 import { AdminSupportTab } from '../admin/AdminDashboard';
+import { hasPermission, ALL_PERMISSIONS } from '../../utils/permissions';
 import OrderPipeline from '../../components/orders/OrderPipeline';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -377,7 +379,7 @@ function OverviewTab({ profile }) {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MY PRODUCTS TAB
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-function ProductsTab({ onEdit }) {
+export function ProductsTab({ onEdit }) {
   const { isMobile } = useResponsive();
   const [all, setAll]       = useState([]);
   const [loading, setLoading] = useState(true);
@@ -923,12 +925,17 @@ function SectionHead({ title, sub }) {
   );
 }
 
-function ProductForm({ initial, onSave, onCancel }) {
+export function ProductForm({ initial, onSave, onCancel, employees }) {
   const { brands: catalogBrands, topCategories, getSubcats } = useCatalog();
   const fileInputRef = useRef(null);
   const isEditMode = !!initial;
+  const showEmployeePicker = Array.isArray(employees);
 
-  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'VAT',taxRate:0 };
+  const initEmployeeId = initial
+    ? (typeof initial.employee === 'object' ? initial.employee?._id : initial.employee) || ''
+    : '';
+
+  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'VAT',taxRate:0,employee:initEmployeeId };
 
   // Derive initial parentCat from the initial category's parent field
   const initCatId = initial ? (typeof initial.category==='object' ? initial.category?._id : initial.category)||'' : '';
@@ -949,6 +956,7 @@ function ProductForm({ initial, onSave, onCancel }) {
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
     taxLabel: initial.taxLabel || 'VAT', taxRate: initial.taxRate ?? 0,
+    employee: initEmployeeId,
   } : empty;
 
   const [form, setForm, clearFormDraft] = useFormDraft('emp-product-draft', editInitialForm, !isEditMode);
@@ -1030,6 +1038,10 @@ function ProductForm({ initial, onSave, onCancel }) {
       setError('Title, description, price, stock, and category are required.');
       return;
     }
+    if (showEmployeePicker && !form.employee) {
+      setError('Please select a seller / employee for this product.');
+      return;
+    }
     setSaving(true); setError('');
     try {
       const fd = new FormData();
@@ -1071,6 +1083,22 @@ function ProductForm({ initial, onSave, onCancel }) {
       )}
 
       <Card title={initial ? 'Edit Product' : 'Add New Product'}>
+        {showEmployeePicker && (
+          <div style={{ marginBottom:16, padding:'12px 14px', borderRadius:10, border:`1px solid ${C.accent}44`, background:C.accent+'10' }}>
+            <label style={LS}>Seller / Employee *</label>
+            <select value={form.employee} onChange={e=>set('employee', e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
+              <option value="">— Select seller —</option>
+              {employees.map(emp => (
+                <option key={emp._id} value={emp._id}>
+                  {emp.shopName || emp.user?.name || 'Unnamed shop'}{emp.user?.email ? ` · ${emp.user.email}` : ''}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize:11, color:C.mute, marginTop:6 }}>
+              This product will be listed under the selected seller's shop.
+            </div>
+          </div>
+        )}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
           <div><label style={LS}>Title *</label><input value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Product name" style={inpStyle} /></div>
           <div>
@@ -1782,13 +1810,13 @@ function EmployeeReturnsTab() {
 /* ─────────────────────────────────────────────────────────
    DELIVERY AREAS TAB
 ───────────────────────────────────────────────────────── */
-function DeliveryAreasTab() {
+export function DeliveryAreasTab() {
   const [areas, setAreas]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
   const [editId, setEditId]     = useState(null);
-  const empty = { pincode:'', city:'', state:'', deliveryCharge:'' };
+  const empty = { city:'', state:'', pincode:'', deliveryCharge:'' };
   const [form, setForm]         = useState(empty);
   const [showForm, setShowForm] = useState(false);
 
@@ -1811,8 +1839,7 @@ function DeliveryAreasTab() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async () => {
-    if (!form.pincode) { setError('Pincode is required'); return; }
-    if (!/^\d{6}$/.test(form.pincode)) { setError('Pincode must be exactly 6 digits'); return; }
+    if (!form.city.trim()) { setError('City / location is required'); return; }
     const charge = form.deliveryCharge === '' ? 0 : Number(form.deliveryCharge);
     setSaving(true); setError('');
     try {
@@ -1828,7 +1855,7 @@ function DeliveryAreasTab() {
   };
 
   const handleEdit = (a) => {
-    setForm({ pincode: a.pincode, city: a.city||'', state: a.state||'', deliveryCharge: a.deliveryCharge });
+    setForm({ city: a.city||'', state: a.state||'', pincode: a.pincode||'', deliveryCharge: a.deliveryCharge });
     setEditId(a._id); setShowForm(true); setError('');
   };
 
@@ -1857,7 +1884,7 @@ function DeliveryAreasTab() {
             }
             setEditId(null); setShowForm(s => !s); setError('');
           }}>
-            {showForm && !editId ? 'Cancel' : showForm ? 'Cancel' : '+ Add Pincode'}
+            {showForm && !editId ? 'Cancel' : showForm ? 'Cancel' : '+ Add City'}
           </Btn>
         </div>
 
@@ -1868,17 +1895,19 @@ function DeliveryAreasTab() {
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12 }}>
               <div>
-                <label style={LS}>Pincode *</label>
-                <input value={form.pincode} onChange={e=>set('pincode', e.target.value.replace(/\D/g,'').slice(0,6))}
-                  placeholder="6-digit pincode" disabled={!!editId} style={{ ...inpStyle, opacity: editId ? 0.6 : 1 }} />
+                <label style={LS}>City / Location *</label>
+                <input value={form.city} onChange={e=>set('city',e.target.value)}
+                  placeholder="e.g. Kathmandu" style={inpStyle} />
               </div>
               <div>
-                <label style={LS}>City</label>
-                <input value={form.city} onChange={e=>set('city',e.target.value)} placeholder="City name" style={inpStyle} />
+                <label style={LS}>State / Province</label>
+                <input value={form.state} onChange={e=>set('state',e.target.value)}
+                  placeholder="e.g. Bagmati" style={inpStyle} />
               </div>
               <div>
-                <label style={LS}>State</label>
-                <input value={form.state} onChange={e=>set('state',e.target.value)} placeholder="State" style={inpStyle} />
+                <label style={LS}>Pincode (optional)</label>
+                <input value={form.pincode} onChange={e=>set('pincode', e.target.value)}
+                  placeholder="Leave blank if N/A" style={inpStyle} />
               </div>
               <div>
                 <label style={LS}>Delivery Charge (Rs.) — blank = Free</label>
@@ -1902,14 +1931,14 @@ function DeliveryAreasTab() {
           <div style={{ textAlign:'center', padding:40, color:C.mute }}>
             <div style={{ fontSize:40, marginBottom:8 }}>📍</div>
             <div>No delivery areas added yet.</div>
-            <div style={{ fontSize:12, marginTop:4 }}>Add pincodes to enable delivery checking for customers.</div>
+            <div style={{ fontSize:12, marginTop:4 }}>Add cities to enable delivery checking for customers.</div>
           </div>
         ) : (
           <div style={{ overflowX:'auto' }}>
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
               <thead>
                 <tr style={{ background:C.card2 }}>
-                  {['Pincode','City','State','Delivery Charge','Status','Actions'].map(h => (
+                  {['City / Location','State','Pincode','Delivery Charge','Status','Actions'].map(h => (
                     <th key={h} style={{ padding:'10px 14px', textAlign:'left', color:C.mute, fontWeight:700, fontSize:11, textTransform:'uppercase', letterSpacing:'.05em', borderBottom:`1px solid ${C.line}` }}>{h}</th>
                   ))}
                 </tr>
@@ -1917,9 +1946,9 @@ function DeliveryAreasTab() {
               <tbody>
                 {areas.map((a, i) => (
                   <tr key={a._id} style={{ borderBottom:`1px solid ${C.line}`, background: i%2===0?'transparent':C.card2+'44' }}>
-                    <td style={{ padding:'10px 14px', fontWeight:700, color:C.text, fontFamily:'monospace', letterSpacing:'.05em' }}>{a.pincode}</td>
-                    <td style={{ padding:'10px 14px', color:C.sub }}>{a.city || '—'}</td>
+                    <td style={{ padding:'10px 14px', fontWeight:700, color:C.text }}>{a.city || '—'}</td>
                     <td style={{ padding:'10px 14px', color:C.sub }}>{a.state || '—'}</td>
+                    <td style={{ padding:'10px 14px', color:C.sub, fontFamily:'monospace' }}>{a.pincode || '—'}</td>
                     <td style={{ padding:'10px 14px', color: a.deliveryCharge===0 ? C.green : C.text, fontWeight:600 }}>
                       {a.deliveryCharge === 0 ? 'Free' : `Rs. ${a.deliveryCharge}`}
                     </td>
@@ -2786,18 +2815,19 @@ function EmployeeCancellationsTab() {
 }
 
 const NAV_TABS = [
-  { id:'Overview',        iconEl: Icon.grid    },
-  { id:'Products',     iconEl: Icon.bag     },
-  { id:'Orders',          iconEl: Icon.orders  },
-  { id:'Returns',         iconEl: Icon.refund  },
-  { id:'Cancellations',   iconEl: Icon.refund  },
-  { id:'Delivery Areas',  iconEl: Icon.box     },
-  { id:'Add Product',     iconEl: Icon.plus    },
-  { id:'Coupons',         iconEl: Icon.coupon  },
-  { id:'Support',         iconEl: Icon.chat || Icon.coupon },
-  { id:'My Salary',       iconEl: Icon.dollar  },
-  { id:'Catalog',         iconEl: Icon.catalog },
-  { id:'Settings',        iconEl: Icon.gear    },
+  { id:'Overview',        iconEl: Icon.grid,    perm: 'overview' },
+  { id:'Products',        iconEl: Icon.bag,     perm: 'products' },
+  { id:'Orders',          iconEl: Icon.orders,  perm: 'orders' },
+  { id:'Returns',         iconEl: Icon.refund,  perm: 'returns' },
+  { id:'Cancellations',   iconEl: Icon.refund,  perm: 'cancellations' },
+  { id:'Delivery Areas',  iconEl: Icon.box,     perm: 'deliveryAreas' },
+  { id:'Add Product',     iconEl: Icon.plus,    perm: 'products.write' },
+  { id:'Coupons',         iconEl: Icon.coupon,  perm: 'coupons' },
+  { id:'Support',         iconEl: Icon.chat || Icon.coupon, perm: 'support' },
+  { id:'My Salary',       iconEl: Icon.dollar,  perm: 'salary' },
+  { id:'Catalog',         iconEl: Icon.catalog, perm: 'catalog' },
+  { id:'Banners',         iconEl: Icon.bag,     perm: 'banners' },
+  { id:'Settings',        iconEl: Icon.gear,    perm: 'settings' },
 ];
 
 const TAB_SUBTITLES = {
@@ -2806,12 +2836,13 @@ const TAB_SUBTITLES = {
   Orders:           'Track and fulfil orders containing your products',
   Returns:          'Review and respond to return requests from customers',
   Cancellations:    'Cancelled orders and their refund status',
-  'Delivery Areas': 'Manage pincodes and delivery charges',
+  'Delivery Areas': 'Manage serviceable cities and delivery charges',
   'Add Product':    'Create a new product listing',
   Coupons:          'Create and manage discount coupons for customers',
   Support:          'Reply to customer support tickets and resolve queries',
   'My Salary':      'View your monthly salary, deductions, and bonuses',
   Catalog:          'Manage brands, categories, attributes and events',
+  Banners:          'Upload and manage homepage banners — with text overlays, fonts and product links',
   Settings:         'Configure COD availability, order amount limits, and booking payments',
 };
 
@@ -2831,6 +2862,23 @@ export default function SellerDashboard() {
   const [profile, setProfile]   = useState(null);
   const [editProduct, setEdit]  = useState(null);
   const [loading, setLoading]   = useState(true);
+
+  // Effective permissions for this employee. Legacy profiles without a
+  // permissions array fall back to full access (matches backend behaviour).
+  const myPerms = (profile && Array.isArray(profile.permissions) && profile.permissions.length)
+    ? profile.permissions
+    : ALL_PERMISSIONS;
+
+  const visibleTabs = NAV_TABS.filter(t => !t.perm || hasPermission(myPerms, t.perm));
+
+  // If the current tab was just revoked, fall back to the first allowed tab.
+  useEffect(() => {
+    if (!profile) return;
+    if (!visibleTabs.find(t => t.id === tab) && visibleTabs.length) {
+      setTab(visibleTabs[0].id);
+      setMountedTabs(prev => prev.has(visibleTabs[0].id) ? prev : new Set([...prev, visibleTabs[0].id]));
+    }
+  }, [profile, visibleTabs, tab]);
   const navigate                = useNavigate();
   const { user, logout }        = useAuth();
   const { notifications, unreadCount, markRead, markAllRead, remove } = useNotifications();
@@ -2905,7 +2953,7 @@ export default function SellerDashboard() {
 
         {/* Nav */}
         <nav style={{ flex:1, padding:'8px 10px', overflowY:'auto' }}>
-          {profile && NAV_TABS.map(t => {
+          {profile && visibleTabs.map(t => {
             const active = activeTab === t.id && !editProduct || (editProduct && t.id === 'Products');
             const isEdit = editProduct && t.id === 'Products';
             return (
@@ -3122,6 +3170,7 @@ export default function SellerDashboard() {
                 <div style={{ display: tab==='Support'       ? '' : 'none' }}>{mountedTabs.has('Support')       && <AdminSupportTab      key={refreshKeys['Support']        || 0} />}</div>
                 <div style={{ display: tab==='My Salary'     ? '' : 'none' }}>{mountedTabs.has('My Salary')     && <MySalaryTab          key={refreshKeys['My Salary']      || 0} />}</div>
                 <div style={{ display: tab==='Catalog'       ? '' : 'none' }}>{mountedTabs.has('Catalog')       && <AdminCatalogTab      key={refreshKeys['Catalog']        || 0} />}</div>
+                <div style={{ display: tab==='Banners'       ? '' : 'none' }}>{mountedTabs.has('Banners')       && <AdminBannersTab      key={refreshKeys['Banners']        || 0} />}</div>
                 <div style={{ display: tab==='Settings'      ? '' : 'none' }}>{mountedTabs.has('Settings')      && <EmployeeSettingsTab  key={refreshKeys['Settings']       || 0} />}</div>
                 {tab==='Add Product' && <ProductForm onSave={handleAddProduct} />}
               </>)}

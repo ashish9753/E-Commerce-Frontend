@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Package, Tag, CreditCard, Headphones, ShieldCheck, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { validators } from '../utils/validators';
+import { validators, cleanPhone } from '../utils/validators';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const PERKS = [
@@ -79,7 +79,11 @@ export default function RegisterPage() {
     setErrors({});
   };
 
-  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: null })); };
+  const set = (k, v) => {
+    const value = k === 'phone' ? cleanPhone(v) : v;
+    setForm(f => ({ ...f, [k]: value }));
+    setErrors(e => ({ ...e, [k]: null }));
+  };
 
   const validate = () => {
     const errs = {};
@@ -268,7 +272,7 @@ export default function RegisterPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <InputField label="Full Name" name="name" placeholder="Suman Shrestha"
                 value={form.name} error={errors.name} onChange={set} />
-              <InputField label="Phone Number" name="phone" type="tel" placeholder="+977 98XXXXXXXX"
+              <InputField label="Phone Number" name="phone" type="tel" placeholder="10-digit mobile number"
                 value={form.phone} error={errors.phone} onChange={set} />
             </div>
 

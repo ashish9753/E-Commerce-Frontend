@@ -62,9 +62,10 @@ export default function ProductDetailPage() {
     });
   };
   const [activeThumb, setActiveThumb] = useState(0);
-  const [pincode, setPincode]         = useState('');
-  const [pinResult, setPinResult]     = useState(null); // { available, city, deliveryCharge } | null
-  const [pinChecking, setPinChecking] = useState(false);
+  const [location, setLocation]           = useState('');
+  const [locationResult, setLocationResult] = useState(null); // { available, city, deliveryCharge } | null
+  const [locationChecking, setLocationChecking] = useState(false);
+  const [areaSuggestions, setAreaSuggestions]   = useState([]); // active service areas for autocomplete
 
   const [couponCode, setCouponCode]   = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
@@ -79,23 +80,30 @@ export default function ProductDetailPage() {
   const [reviewLoading, setReviewLoading]     = useState(false);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
 
-  const checkPincode = async (pin) => {
-    const p = (pin || pincode).trim();
-    if (p.length !== 6) return;
-    setPinChecking(true);
+  const checkLocation = async (loc) => {
+    const q = (loc || location).trim();
+    if (!q) return;
+    setLocationChecking(true);
     try {
-      const { data } = await deliveryAreasApi.check(p);
-      setPinResult(data.data);
-    } catch { setPinResult({ available: false }); }
-    finally { setPinChecking(false); }
+      const { data } = await deliveryAreasApi.check(q);
+      setLocationResult(data.data);
+    } catch { setLocationResult({ available: false }); }
+    finally { setLocationChecking(false); }
   };
 
-  // Auto-check using saved address pincode when user is logged in
+  // Pull the list of serviceable cities once so we can power the autocomplete.
   useEffect(() => {
-    const savedPin = user?.addresses?.[0]?.pincode;
-    if (savedPin && savedPin.length === 6) {
-      setPincode(savedPin);
-      checkPincode(savedPin);
+    deliveryAreasApi.getAll()
+      .then(({ data }) => setAreaSuggestions(data.data?.areas || []))
+      .catch(() => {});
+  }, []);
+
+  // Auto-check using saved address city when user is logged in
+  useEffect(() => {
+    const savedCity = user?.addresses?.[0]?.city;
+    if (savedCity && savedCity.trim()) {
+      setLocation(savedCity);
+      checkLocation(savedCity);
     }
   }, [user]);
 
@@ -520,44 +528,51 @@ export default function ProductDetailPage() {
                 <span style={{ fontWeight:600, color:'#0F1111' }}>on orders above Rs. 5,000</span>
               </div>
 
-              {/* Pincode checker */}
+              {/* Delivery-by-location checker */}
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:'#555', marginBottom:6 }}>
                   Check delivery availability
-                  {user?.addresses?.[0]?.pincode && (
+                  {user?.addresses?.[0]?.city && (
                     <span style={{ fontWeight:400, color:'#007185', marginLeft:6 }}>
-                      (auto: {user.addresses[0].city || user.addresses[0].pincode})
+                      (auto: {user.addresses[0].city})
                     </span>
                   )}
                 </div>
                 <div style={{ display:'flex', gap:6 }}>
                   <input
-                    value={pincode}
-                    onChange={e => { setPincode(e.target.value.replace(/\D/g,'').slice(0,6)); setPinResult(null); }}
-                    onKeyDown={e => e.key==='Enter' && checkPincode('')}
-                    placeholder="Enter pincode"
-                    maxLength={6}
+                    list="delivery-areas-options"
+                    value={location}
+                    onChange={e => { setLocation(e.target.value); setLocationResult(null); }}
+                    onKeyDown={e => e.key === 'Enter' && checkLocation('')}
+                    placeholder="Enter your city (e.g. Kathmandu, Pokhara)"
                     style={{ flex:1, height:34, border:'1px solid #ddd', borderRadius:4,
                       padding:'0 10px', fontSize:13, outline:'none' }}
                   />
-                  <button onClick={() => checkPincode('')} disabled={pincode.length!==6 || pinChecking}
-                    style={{ padding:'0 12px', height:34, borderRadius:4, border:'1px solid #ddd',
-                      background:'#f0f2f2', fontSize:12, fontWeight:700, cursor: pincode.length===6?'pointer':'not-allowed',
+                  <datalist id="delivery-areas-options">
+                    {areaSuggestions.map(a => (
+                      <option key={a._id} value={a.city}>
+                        {a.state ? `${a.city}, ${a.state}` : a.city}
+                      </option>
+                    ))}
+                  </datalist>
+                  <button onClick={() => checkLocation('')} disabled={!location.trim() || locationChecking}
+                    style={{ padding:'0 14px', height:34, borderRadius:4, border:'1px solid #ddd',
+                      background:'#f0f2f2', fontSize:12, fontWeight:700, cursor: location.trim() ? 'pointer' : 'not-allowed',
                       color:'#0F1111', whiteSpace:'nowrap' }}>
-                    {pinChecking ? '...' : 'Check'}
+                    {locationChecking ? '...' : 'Check'}
                   </button>
                 </div>
-                {pinResult && (
-                  pinResult.available ? (
+                {locationResult && (
+                  locationResult.available ? (
                     <div style={{ marginTop:6, fontSize:12, color:'#007600', fontWeight:600 }}>
-                      ✓ Delivery available{pinResult.city ? ` in ${pinResult.city}` : ''}
-                      {pinResult.deliveryCharge === 0
+                      ✓ Delivery available{locationResult.city ? ` in ${locationResult.city}` : ''}
+                      {locationResult.deliveryCharge === 0
                         ? ' — Free delivery'
-                        : ` — Delivery charge: Rs. ${pinResult.deliveryCharge}`}
+                        : ` — Delivery charge: Rs. ${locationResult.deliveryCharge}`}
                     </div>
                   ) : (
                     <div style={{ marginTop:6, fontSize:12, color:'#CC0C39', fontWeight:600 }}>
-                      ✗ Delivery not available in this area
+                      ✗ Delivery not available in this area yet
                     </div>
                   )
                 )}

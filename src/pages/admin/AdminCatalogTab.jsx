@@ -794,6 +794,16 @@ function EventsSection({ onMutate }) {
                           {ev.badge}
                         </span>
                       ) : <span style={{ color: C.mute }}>—</span>}
+                      {ev.coupon?.code && ev.coupon.code !== ev.badge && (
+                        <div style={{ fontSize: 10, color: C.green, marginTop: 4, fontFamily: 'monospace' }}>
+                          → coupon: {ev.coupon.code}
+                        </div>
+                      )}
+                      {ev.coupon?.code && (
+                        <div style={{ fontSize: 10, color: C.mute, marginTop: 2 }}>
+                          {ev.coupon.isActive ? '🟢 active in coupons' : '⚪ inactive'}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: C.accent }}>
                       {ev.discountPercent > 0 ? `${ev.discountPercent}%` : <span style={{ color: C.mute }}>—</span>}

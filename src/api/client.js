@@ -31,12 +31,30 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+// Fire a global toast for any API error with a server message. Non-React
+// code (this interceptor) reaches the ToastProvider via a window CustomEvent.
+const fireErrorToast = (error) => {
+  const status = error.response?.status;
+  // 401 has its own retry/logout dance — skip to avoid noise; auth pages
+  // surface their own inline error.
+  if (status === 401) return;
+  // Allow callers to opt out per-request: `client.get(url, { skipErrorToast: true })`
+  if (error.config?.skipErrorToast) return;
+  const message = error.response?.data?.message || error.message;
+  if (!message) return;
+  // Pick the right toast tone: warn for permission/validation, error otherwise.
+  const type = status === 403 || status === 400 ? 'warn' : 'error';
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { message, type } }));
+  }
+};
+
 // On 401: try to refresh, then replay request
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (!original) return Promise.reject(error);
+    if (!original) { fireErrorToast(error); return Promise.reject(error); }
 
     const originalToken = original.headers?.Authorization?.replace('Bearer ', '') || null;
 
@@ -82,6 +100,7 @@ client.interceptors.response.use(
         isRefreshing = false;
       }
     }
+    fireErrorToast(error);
     return Promise.reject(error);
   }
 );

@@ -20,10 +20,12 @@ export const validators = {
     return v === original ? null : 'Passwords do not match';
   },
 
+  // Mobile numbers must be exactly 10 digits.
   phone: (v) => {
     if (!v?.trim()) return 'Phone number is required';
     const cleaned = v.replace(/\D/g, '');
-    return cleaned.length >= 10 ? null : 'Enter a valid phone number';
+    if (cleaned.length !== 10) return 'Phone number must be exactly 10 digits';
+    return null;
   },
 
   name: (v) => {
@@ -52,6 +54,18 @@ export function validateForm(fields, rules) {
   });
 
   return { isValid, errors };
+}
+
+// Strip everything that's not a digit, then cap at 10. Use this in onChange
+// handlers so users physically cannot type an 11th character.
+export function cleanPhone(v) {
+  return String(v ?? '').replace(/\D/g, '').slice(0, 10);
+}
+
+// True iff `v` is a 10-digit phone number. Pass to disable buttons /
+// for inline-error checks without re-running the full validator.
+export function isValidPhone(v) {
+  return /^\d{10}$/.test(String(v ?? '').replace(/\D/g, ''));
 }
 
 export function sanitizeInput(str) {

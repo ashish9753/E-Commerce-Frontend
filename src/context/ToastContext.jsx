@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 
 const ToastContext = createContext(null);
 
@@ -7,10 +7,24 @@ export function ToastProvider({ children }) {
   const timerRef = useRef(null);
 
   const showToast = useCallback((msg, type = 'success') => {
+    if (!msg) return;
     clearTimeout(timerRef.current);
     setToast({ show: true, msg, type });
-    timerRef.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 2600);
+    timerRef.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 3200);
   }, []);
+
+  // Global event channel so non-React code (e.g. axios interceptors) can fire
+  // toasts. Any code can `window.dispatchEvent(new CustomEvent('app:toast', {
+  // detail: { message, type } }))` and it'll show in the same bottom-right pill
+  // as the success welcome toast.
+  useEffect(() => {
+    const handler = (e) => {
+      const { message, type } = e.detail || {};
+      showToast(message, type || 'error');
+    };
+    window.addEventListener('app:toast', handler);
+    return () => window.removeEventListener('app:toast', handler);
+  }, [showToast]);
 
   const icons = { success: '✓', error: '✕', warn: '!' };
   const iconBg = { success: 'bg-ok', error: 'bg-bad', warn: 'bg-warn' };

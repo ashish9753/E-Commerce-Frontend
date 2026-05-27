@@ -4,7 +4,7 @@ import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Ch
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usersApi } from '../api/users';
-import { validators } from '../utils/validators';
+import { validators, cleanPhone, isValidPhone } from '../utils/validators';
 
 const STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
@@ -31,12 +31,16 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial);
   const [errs, setErrs] = useState({});
 
-  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrs(e => ({ ...e, [k]: '' })); };
+  const set = (k, v) => {
+    const value = k === 'phone' ? cleanPhone(v) : v;
+    setForm(f => ({ ...f, [k]: value }));
+    setErrs(e => ({ ...e, [k]: '' }));
+  };
 
   const validate = () => {
     const e = {};
     if (!form.fullName.trim()) e.fullName = 'Required';
-    if (!form.phone.trim())    e.phone    = 'Required';
+    if (!isValidPhone(form.phone)) e.phone = 'Enter a 10-digit phone number';
     if (!form.houseNo.trim())  e.houseNo  = 'Required';
     if (!form.area.trim())     e.area     = 'Required';
     if (!form.city.trim())     e.city     = 'Required';
@@ -171,6 +175,7 @@ export default function ProfilePage() {
     const errs = {};
     const nameErr = validators.name(form.name);
     if (nameErr) errs.name = nameErr;
+    if (form.phone && !isValidPhone(form.phone)) errs.phone = 'Phone number must be exactly 10 digits';
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setLoading(true);
     const result = await updateProfile({ name: form.name, phone: form.phone });
@@ -290,11 +295,13 @@ export default function ProfilePage() {
                 <div className="field">
                   <label>Phone Number</label>
                   <input
-                    className="input"
+                    className={`input${errors.phone ? ' error' : ''}`}
                     value={form.phone}
-                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="+91 98XXXXXXXX"
+                    onChange={e => { setForm(f => ({ ...f, phone: cleanPhone(e.target.value) })); setErrors(err => ({ ...err, phone: undefined })); }}
+                    placeholder="10-digit mobile number"
+                    inputMode="numeric"
                   />
+                  {errors.phone && <div className="field-error">{errors.phone}</div>}
                 </div>
               </div>
               <div className="field mb-7">

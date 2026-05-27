@@ -16,6 +16,11 @@ import {
 import SupportIcon from '../../components/icons/SupportIcon';
 import OrderPipeline from '../../components/orders/OrderPipeline';
 import AdminCatalogTab from './AdminCatalogTab';
+import AdminBannersTab from './AdminBannersTab';
+import { employeeApi } from '../../api/employee';
+import { ProductsTab, ProductForm, DeliveryAreasTab } from '../employee/EmployeeDashboard';
+import { PERMISSION_GROUPS, ALL_PERMISSIONS } from '../../utils/permissions';
+import { cleanPhone, isValidPhone } from '../../utils/validators';
 import { settingsApi } from '../../api/settings';
 import { paymentsApi } from '../../api/payments';
 import { useFormDraft } from '../../hooks/useFormDraft';
@@ -962,12 +967,89 @@ function UsersTab({ globalSearch = '' }) {
 /* ══════════════════════════════════════════════════════
    SELLERS TAB
 ══════════════════════════════════════════════════════ */
-const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', designation:'', department:'', joiningDate:'', monthlySalary:'', businessAddress:'' };
+const EMPTY_EMP_FORM = { name:'', email:'', phone:'', password:'', designation:'', department:'', joiningDate:'', monthlySalary:'', businessAddress:'', permissions: ALL_PERMISSIONS };
 const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const EMPTY_SAL = { month: new Date().getMonth()+1, year: new Date().getFullYear(), baseSalary:'', deductions:[], bonuses:[], status:'PENDING', notes:'' };
 
 const EmpInp = { width:'100%', height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', fontSize:13, outline:'none', background:C.bg, color:C.text, fontFamily:'inherit', boxSizing:'border-box' };
 const EmpLbl = ({ ch }) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.05em' }}>{ch}</label>;
+
+function PermissionsPicker({ value, onChange }) {
+  const perms = Array.isArray(value) ? value : [];
+  const has = (k) => perms.includes(k);
+
+  const toggleRead = (key, write) => {
+    const next = new Set(perms);
+    if (has(key)) {
+      next.delete(key);
+      if (write) next.delete(`${key}.write`); // revoking read also revokes write
+    } else {
+      next.add(key);
+    }
+    onChange([...next]);
+  };
+  const toggleWrite = (key) => {
+    const next = new Set(perms);
+    const w = `${key}.write`;
+    if (has(w)) next.delete(w);
+    else { next.add(w); next.add(key); } // granting write implies read
+    onChange([...next]);
+  };
+
+  const setAll = (mode) => {
+    if (mode === 'all') {
+      const full = [];
+      PERMISSION_GROUPS.forEach(g => { full.push(g.key); if (g.write) full.push(`${g.key}.write`); });
+      onChange(full);
+    } else if (mode === 'none') {
+      onChange(['overview']); // always keep overview so they can log in to something
+    } else if (mode === 'read') {
+      onChange(PERMISSION_GROUPS.map(g => g.key));
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+        <button type="button" onClick={() => setAll('all')}
+          style={{ padding:'5px 12px', fontSize:11, fontWeight:700, borderRadius:6, border:`1px solid ${C.green}55`, background:C.green+'18', color:C.green, cursor:'pointer' }}>
+          Grant All
+        </button>
+        <button type="button" onClick={() => setAll('read')}
+          style={{ padding:'5px 12px', fontSize:11, fontWeight:700, borderRadius:6, border:`1px solid ${C.blue}55`, background:C.blue+'18', color:C.blue, cursor:'pointer' }}>
+          View-Only
+        </button>
+        <button type="button" onClick={() => setAll('none')}
+          style={{ padding:'5px 12px', fontSize:11, fontWeight:700, borderRadius:6, border:`1px solid ${C.red}55`, background:C.red+'18', color:C.red, cursor:'pointer' }}>
+          Revoke All
+        </button>
+      </div>
+      <div style={{ border:`1px solid ${C.line}`, borderRadius:10, overflow:'hidden' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 90px 90px', padding:'8px 12px', background:C.bg, fontSize:10, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.06em' }}>
+          <div>Tab / Feature</div>
+          <div style={{ textAlign:'center' }}>View</div>
+          <div style={{ textAlign:'center' }}>Edit/Create</div>
+        </div>
+        {PERMISSION_GROUPS.map(g => (
+          <label key={g.key}
+            style={{ display:'grid', gridTemplateColumns:'1fr 90px 90px', padding:'10px 12px', borderTop:`1px solid ${C.line}`, alignItems:'center', cursor:'default' }}>
+            <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{g.label}</span>
+            <span style={{ textAlign:'center' }}>
+              <input type="checkbox" checked={has(g.key)} onChange={() => toggleRead(g.key, g.write)}
+                style={{ width:16, height:16, cursor:'pointer', accentColor:C.accent }} />
+            </span>
+            <span style={{ textAlign:'center' }}>
+              {g.write ? (
+                <input type="checkbox" checked={has(`${g.key}.write`)} onChange={() => toggleWrite(g.key)}
+                  style={{ width:16, height:16, cursor:'pointer', accentColor:C.accent }} />
+              ) : <span style={{ color:C.mute, fontSize:11 }}>—</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function EmployeesTab({ globalSearch = '' }) {
   const [all, setAll]         = useState([]);
@@ -1038,6 +1120,7 @@ function EmployeesTab({ globalSearch = '' }) {
   };
   const handleCreate = async () => {
     if (!form.name || !form.email || !form.phone || !form.password) { setCreateErr('Name, email, phone and password are required.'); return; }
+    if (!isValidPhone(form.phone)) { setCreateErr('Phone number must be exactly 10 digits.'); return; }
     setCreating(true); setCreateErr('');
     try {
       const res = await adminApi.createEmployee({ ...form, monthlySalary: form.monthlySalary ? Number(form.monthlySalary) : 0 });
@@ -1053,11 +1136,13 @@ function EmployeesTab({ globalSearch = '' }) {
       designation: emp.designation||'', department: emp.department||'',
       joiningDate: emp.joiningDate ? emp.joiningDate.slice(0,10) : '',
       monthlySalary: emp.monthlySalary||'', businessAddress: emp.businessAddress||'',
+      permissions: Array.isArray(emp.permissions) && emp.permissions.length ? emp.permissions : ALL_PERMISSIONS,
     });
     setEditErr('');
   };
   const handleEditSave = async () => {
     if (!editForm.name || !editForm.email || !editForm.phone) { setEditErr('Name, email and phone are required.'); return; }
+    if (!isValidPhone(editForm.phone)) { setEditErr('Phone number must be exactly 10 digits.'); return; }
     setEditSaving(true); setEditErr('');
     try {
       const payload = { ...editForm, monthlySalary: editForm.monthlySalary ? Number(editForm.monthlySalary) : 0 };
@@ -1140,7 +1225,7 @@ function EmployeesTab({ globalSearch = '' }) {
                 {[
                   { l:'Full Name *',        k:'name',           t:'text',     p:'Employee full name',     col:'1/-1', ac:'off' },
                   { l:'Email *',            k:'email',          t:'email',    p:'employee@email.com',                 ac:'off' },
-                  { l:'Phone *',            k:'phone',          t:'tel',      p:'Mobile number',                      ac:'off' },
+                  { l:'Phone * (10 digits)', k:'phone',         t:'tel',      p:'10-digit mobile number',             ac:'off' },
                   { l:'Password *',         k:'password',       t:'password', p:'Login password',                     ac:'new-password' },
                   { l:'Designation',        k:'designation',    t:'text',     p:'e.g. Sales Manager',                 ac:'off' },
                   { l:'Department',         k:'department',     t:'text',     p:'e.g. Sales',                         ac:'off' },
@@ -1150,9 +1235,24 @@ function EmployeesTab({ globalSearch = '' }) {
                 ].map(({ l, k, t, p, col, ac }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
                     {EL(l)}
-                    <input value={form[k]} onChange={e=>{setForm(f=>({...f,[k]:e.target.value}));setCreateErr('');}} type={t} placeholder={p} autoComplete={ac} style={EI} />
+                    <input value={form[k]}
+                      onChange={e=>{
+                        const v = k === 'phone' ? cleanPhone(e.target.value) : e.target.value;
+                        setForm(f=>({...f,[k]:v}));
+                        setCreateErr('');
+                      }}
+                      type={t} placeholder={p} autoComplete={ac}
+                      inputMode={k === 'phone' ? 'numeric' : undefined}
+                      style={EI} />
                   </div>
                 ))}
+              </div>
+              <div style={{ marginTop:18 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.accent, letterSpacing:'.07em', textTransform:'uppercase', marginBottom:10 }}>Access Permissions</div>
+                <PermissionsPicker
+                  value={form.permissions || ALL_PERMISSIONS}
+                  onChange={(p) => setForm(f => ({ ...f, permissions: p }))}
+                />
               </div>
               {createErr && <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background:C.red+'18', color:'#f87171', fontSize:13 }}>{createErr}</div>}
               <div style={{ display:'flex', gap:10, marginTop:18, justifyContent:'flex-end' }}>
@@ -1175,13 +1275,21 @@ function EmployeesTab({ globalSearch = '' }) {
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
                 {[
                   { l:'Full Name *',  k:'name',        t:'text',     p:'Employee full name', col:'1/-1', ac:'off' },
-                  { l:'Email *',      k:'email',       t:'email',    p:'employee@email.com',             ac:'off' },
-                  { l:'Phone *',      k:'phone',       t:'tel',      p:'Mobile number',                  ac:'off' },
-                  { l:'New Password', k:'newPassword', t:'password', p:'Leave blank to keep current',    ac:'new-password' },
+                  { l:'Email *',           k:'email',       t:'email',    p:'employee@email.com',             ac:'off' },
+                  { l:'Phone * (10 digits)', k:'phone',     t:'tel',      p:'10-digit mobile number',         ac:'off' },
+                  { l:'New Password',      k:'newPassword', t:'password', p:'Leave blank to keep current',    ac:'new-password' },
                 ].map(({ l, k, t, p, col, ac }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
                     {EL(l)}
-                    <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} autoComplete={ac} style={EI} />
+                    <input value={editForm[k]||''}
+                      onChange={e=>{
+                        const v = k === 'phone' ? cleanPhone(e.target.value) : e.target.value;
+                        setEditForm(f=>({...f,[k]:v}));
+                        setEditErr('');
+                      }}
+                      type={t} placeholder={p} autoComplete={ac}
+                      inputMode={k === 'phone' ? 'numeric' : undefined}
+                      style={EI} />
                   </div>
                 ))}
               </div>
@@ -1200,6 +1308,14 @@ function EmployeesTab({ globalSearch = '' }) {
                     <input value={editForm[k]||''} onChange={e=>{setEditForm(f=>({...f,[k]:e.target.value}));setEditErr('');}} type={t} placeholder={p} style={EI} />
                   </div>
                 ))}
+              </div>
+              {/* Permissions */}
+              <div style={{ marginTop:16 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.accent, letterSpacing:'.07em', textTransform:'uppercase', marginBottom:10 }}>Access Permissions</div>
+                <PermissionsPicker
+                  value={editForm.permissions || ALL_PERMISSIONS}
+                  onChange={(p) => { setEditForm(f => ({ ...f, permissions: p })); setEditErr(''); }}
+                />
               </div>
               {editErr && <div style={{ marginTop:12, padding:'10px 14px', borderRadius:8, background:C.red+'18', color:'#f87171', fontSize:13 }}>{editErr}</div>}
               <div style={{ display:'flex', gap:10, marginTop:18, justifyContent:'flex-end' }}>
@@ -3501,6 +3617,9 @@ const NAV_SECTIONS = [
       { id: 'Orders',        iconEl: Icon.orders },
       { id: 'Returns',        iconEl: Icon.refund },
       { id: 'Cancellations', iconEl: Icon.refund },
+      { id: 'Products',      iconEl: Icon.bag },
+      { id: 'Add Product',   iconEl: Icon.bag },
+      { id: 'Delivery Areas',iconEl: Icon.box },
       { id: 'Inventory',     iconEl: Icon.box },
       { id: 'Coupons',       iconEl: Icon.coupon },
       { id: 'Notifications', iconEl: Icon.bell },
@@ -3511,6 +3630,7 @@ const NAV_SECTIONS = [
     label: 'CATALOG',
     tabs: [
       { id: 'Catalog',  iconEl: Icon.book },
+      { id: 'Banners',  iconEl: Icon.bag },
     ],
   },
   {
@@ -3544,6 +3664,27 @@ export default function AdminDashboard() {
   const { notifications, unreadCount, markRead, markAllRead, remove: removeNotif } = useNotifications();
   const [notifOpen, setNotifOpen]   = useState(false);
   const notifRef                    = useRef(null);
+  const [editProduct, setEditProduct] = useState(null);
+  const [employeesForProduct, setEmployeesForProduct] = useState([]);
+
+  // Load sellers/employees once — needed for the admin product form's seller picker
+  useEffect(() => {
+    adminApi.getEmployees({ limit: 500 })
+      .then(r => setEmployeesForProduct(r.data?.data?.data || r.data?.data?.employees || []))
+      .catch(() => {});
+  }, []);
+
+  const handleAdminAddProduct = async (data) => {
+    await employeeApi.createProduct(data);
+    setRefreshKeys(k => ({ ...k, Products: (k['Products'] || 0) + 1 }));
+    handleTabClick('Products');
+  };
+  const handleAdminEditSave = async (data) => {
+    await employeeApi.updateProduct(editProduct._id, data);
+    setEditProduct(null);
+    setRefreshKeys(k => ({ ...k, Products: (k['Products'] || 0) + 1 }));
+    handleTabClick('Products');
+  };
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -3572,6 +3713,7 @@ export default function AdminDashboard() {
     navTo(id);
     setGlobalSearch('');
     if (id === 'Support') setOTC(0);
+    if (id !== 'Products' && id !== 'Add Product') setEditProduct(null);
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -3591,11 +3733,15 @@ export default function AdminDashboard() {
     Orders:        'View and manage all customer orders',
     Returns:         'Monitor and take action on all return & refund requests',
     Cancellations:   'View cancelled orders and manage Razorpay refunds',
+    Products:        'View, edit and delete every product across all sellers',
+    'Add Product':   'Create a new product listing on behalf of any seller',
+    'Delivery Areas':'Manage serviceable cities and delivery charges',
     Coupons:         'Create and manage discount coupons for customers',
     Notifications: 'Broadcast notifications to customers, employees, or everyone',
     Support:       'View and respond to customer support tickets',
     Inventory:     'Stock levels, top-sellers, category breakdown, and order analytics',
     Catalog:       'Manage brands, categories, sub-categories, attributes and events',
+    Banners:       'Upload, schedule, and link homepage banners — with text overlays and product links',
     Settings:      'Configure COD availability, order amount limits, and booking payments',
   };
   return (
@@ -3859,8 +4005,8 @@ export default function AdminDashboard() {
           <div style={{ marginBottom: 22, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12 }}>
             {!isMobile && (
               <div>
-                <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: C.text, margin: 0, lineHeight: 1 }}>{tab}</h1>
-                <p style={{ color: C.mute, margin: '6px 0 0', fontSize: 13 }}>{TAB_SUBTITLES[tab]}</p>
+                <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 24, fontWeight: 700, color: C.text, margin: 0, lineHeight: 1 }}>{editProduct && tab === 'Products' ? 'Edit Product' : tab}</h1>
+                <p style={{ color: C.mute, margin: '6px 0 0', fontSize: 13 }}>{editProduct && tab === 'Products' ? `Editing: ${editProduct.title}` : TAB_SUBTITLES[tab]}</p>
               </div>
             )}
             <button onClick={doRefresh} disabled={spinning}
@@ -3889,11 +4035,25 @@ export default function AdminDashboard() {
           <div style={{ display: tab === 'Orders'        ? '' : 'none' }}>{mountedTabs.has('Orders')        && <OrdersTab         key={refreshKeys['Orders']        || 0} globalSearch={globalSearch} />}</div>
           <div style={{ display: tab === 'Returns'       ? '' : 'none' }}>{mountedTabs.has('Returns')       && <AdminReturnsTab   key={refreshKeys['Returns']       || 0} globalSearch={globalSearch} />}</div>
           <div style={{ display: tab === 'Cancellations' ? '' : 'none' }}>{mountedTabs.has('Cancellations') && <CancellationsTab   key={refreshKeys['Cancellations'] || 0} globalSearch={globalSearch} />}</div>
+          <div style={{ display: tab === 'Products'      ? '' : 'none' }}>
+            {mountedTabs.has('Products') && (
+              editProduct
+                ? <ProductForm initial={editProduct} onSave={handleAdminEditSave} onCancel={() => setEditProduct(null)} employees={employeesForProduct} />
+                : <ProductsTab key={refreshKeys['Products'] || 0} onEdit={p => setEditProduct(p)} />
+            )}
+          </div>
+          <div style={{ display: tab === 'Add Product'   ? '' : 'none' }}>
+            {mountedTabs.has('Add Product') && (
+              <ProductForm key={refreshKeys['Add Product'] || 0} onSave={handleAdminAddProduct} employees={employeesForProduct} />
+            )}
+          </div>
+          <div style={{ display: tab === 'Delivery Areas'? '' : 'none' }}>{mountedTabs.has('Delivery Areas') && <DeliveryAreasTab key={refreshKeys['Delivery Areas'] || 0} />}</div>
           <div style={{ display: tab === 'Coupons'       ? '' : 'none' }}>{mountedTabs.has('Coupons')       && <AdminCouponsTab    key={refreshKeys['Coupons']       || 0} globalSearch={globalSearch} />}</div>
           <div style={{ display: tab === 'Notifications' ? '' : 'none' }}>{mountedTabs.has('Notifications') && <AdminNotificationsTab key={refreshKeys['Notifications'] || 0} />}</div>
           <div style={{ display: tab === 'Support'       ? '' : 'none' }}>{mountedTabs.has('Support')       && <AdminSupportTab   key={refreshKeys['Support']       || 0} globalSearch={globalSearch} />}</div>
           <div style={{ display: tab === 'Inventory'     ? '' : 'none' }}>{mountedTabs.has('Inventory')     && <InventoryTab      key={refreshKeys['Inventory']     || 0} globalSearch={globalSearch} />}</div>
           <div style={{ display: tab === 'Catalog'       ? '' : 'none' }}>{mountedTabs.has('Catalog')       && <AdminCatalogTab   key={refreshKeys['Catalog']       || 0} />}</div>
+          <div style={{ display: tab === 'Banners'       ? '' : 'none' }}>{mountedTabs.has('Banners')       && <AdminBannersTab   key={refreshKeys['Banners']       || 0} />}</div>
           <div style={{ display: tab === 'Settings'      ? '' : 'none' }}>{mountedTabs.has('Settings')      && <AdminSettingsTab  key={refreshKeys['Settings']      || 0} />}</div>
         </div>
       </div>

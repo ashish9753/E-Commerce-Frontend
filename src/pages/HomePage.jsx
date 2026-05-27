@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { productsApi } from '../api/products';
 import { couponsApi } from '../api/coupons';
+import { bannersApi } from '../api/banners';
 import { useCatalog } from '../context/CatalogContext';
 import { cached } from '../utils/apiCache';
 import { normalizeProducts } from '../utils/normalizers';
@@ -248,46 +249,115 @@ function LiveEvents({ events }) {
   );
 }
 
-function HeroMyntraStyle() {
+function HeroMyntraStyle({ banners = [] }) {
   const [index, setIndex] = useState(0);
   const navigate = useNavigate();
-  const current = heroSlides[index];
+
+  // Use admin-managed banners when present, else fall back to the bundled slides
+  const slides = banners.length > 0
+    ? banners.map((b) => ({
+        _id:        b._id,
+        image:      b.image,
+        title:      b.title,
+        subtitle:   b.subtitle,
+        overlay:    b.overlayText,
+        cta:        b.ctaLabel || 'Shop Now',
+        textColor:  b.textColor || '#ffffff',
+        textPosition: b.textPosition || 'left',
+        fontFamily: b.fontFamily || 'Syne',
+        fontSize:   b.fontSize ?? 48,
+        fontWeight: b.fontWeight || '800',
+        fontStyle:  b.fontStyle || 'normal',
+        path:       b.product?._id
+                      ? `/product/${b.product._id}`
+                      : (b.link || '/products'),
+      }))
+    : heroSlides.map((s) => ({
+        image:        s.image,
+        title:        s.title,
+        subtitle:     s.brand,
+        overlay:      s.offer,
+        cta:          'Explore',
+        textColor:    '#ffffff',
+        textPosition: 'left',
+        fontFamily:   'Syne',
+        fontSize:     48,
+        fontWeight:   '800',
+        fontStyle:    'normal',
+        path:         s.path,
+      }));
+
+  const current = slides[index % slides.length];
 
   useEffect(() => {
-    const timer = setInterval(() => setIndex((value) => (value + 1) % heroSlides.length), 4500);
+    if (slides.length <= 1) return;
+    const timer = setInterval(() => setIndex((value) => (value + 1) % slides.length), 4500);
     return () => clearInterval(timer);
-  }, []);
+  }, [slides.length]);
+
+  // Reset to first slide if the list changes
+  useEffect(() => { setIndex(0); }, [banners.length]);
 
   const move = (direction) => {
-    setIndex((value) => (value + direction + heroSlides.length) % heroSlides.length);
+    setIndex((value) => (value + direction + slides.length) % slides.length);
   };
 
+  if (!current) return null;
+
+  const align = current.textPosition === 'center' ? 'center'
+              : current.textPosition === 'right'  ? 'flex-end'
+              : 'flex-start';
+
   return (
-    <section className="myn-hero">
+    <section className="myn-hero myn-hero-banner">
       <button className="myn-hero-arrow left" onClick={() => move(-1)} aria-label="Previous banner">
         <ArrowLeft size={22} />
       </button>
-      <div className="myn-hero-media">
+      <div
+        className="myn-hero-bgmedia"
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(current.path)}
+      >
         <img src={current.image} alt={current.title} />
-      </div>
-      <div className="myn-hero-copy">
-        <p>{current.brand}</p>
-        <h1>{current.title}</h1>
-        <strong>{current.offer}</strong>
-        <button onClick={() => navigate(current.path)}>
-          Explore <ChevronRight size={18} />
-        </button>
+        <div
+          className="myn-hero-overlay"
+          style={{
+            color: current.textColor,
+            alignItems: align,
+            textAlign: current.textPosition,
+            fontFamily: `'${current.fontFamily}', sans-serif`,
+            fontStyle: current.fontStyle,
+          }}
+        >
+          {current.overlay && <span className="myn-hero-tag">{current.overlay}</span>}
+          {current.title && (
+            <h1 style={{
+              fontFamily: `'${current.fontFamily}', sans-serif`,
+              fontSize: `clamp(24px, ${current.fontSize * 0.55}px, ${current.fontSize}px)`,
+              fontWeight: current.fontWeight,
+              fontStyle: current.fontStyle,
+            }}>{current.title}</h1>
+          )}
+          {current.subtitle && <p>{current.subtitle}</p>}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate(current.path); }}
+            className="myn-hero-cta"
+          >
+            {current.cta} <ChevronRight size={18} />
+          </button>
+        </div>
       </div>
       <button className="myn-hero-arrow right" onClick={() => move(1)} aria-label="Next banner">
         <ArrowRight size={22} />
       </button>
       <div className="myn-dots" aria-label="Banner slides">
-        {heroSlides.map((slide, slideIndex) => (
+        {slides.map((slide, slideIndex) => (
           <button
-            key={slide.title}
+            key={slide._id || slide.title || slideIndex}
             className={slideIndex === index ? 'active' : ''}
             onClick={() => setIndex(slideIndex)}
-            aria-label={`Show ${slide.brand}`}
+            aria-label={`Show banner ${slideIndex + 1}`}
           />
         ))}
       </div>
@@ -476,6 +546,7 @@ export default function HomePage() {
   const { brands, topCategories, events } = useCatalog();
   const [products, setProducts] = useState([]);
   const [coupons, setCoupons] = useState([]);
+  const [banners, setBanners] = useState([]);
 
   useEffect(() => {
     cached(
@@ -488,11 +559,15 @@ export default function HomePage() {
     couponsApi.getPublic()
       .then(({ data }) => setCoupons(data.data?.coupons || []))
       .catch(() => {});
+
+    bannersApi.getActive()
+      .then(({ data }) => setBanners(data.data?.banners || []))
+      .catch(() => {});
   }, []);
 
   return (
     <main className="myn-home">
-      <HeroMyntraStyle />
+      <HeroMyntraStyle banners={banners} />
       <LiveEvents events={events} />
       <CouponStrip coupons={coupons} />
       <div className="myn-content">
@@ -524,6 +599,89 @@ export default function HomePage() {
              effective firewall against the auto-slide jitter. */
           contain: layout paint style;
         }
+
+        /* Banner-style hero — full-width image with text overlay (Amazon-style) */
+        .myn-hero-banner { display: block; }
+
+        .myn-hero-bgmedia {
+          position: absolute;
+          inset: 0;
+          overflow: hidden;
+        }
+        .myn-hero-bgmedia img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+          transition: opacity .35s ease;
+        }
+        .myn-hero-bgmedia::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.15) 50%, rgba(0,0,0,.45) 100%);
+          pointer-events: none;
+        }
+        .myn-hero-overlay {
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 14px;
+          padding: 5vw 6vw;
+          text-shadow: 0 2px 12px rgba(0,0,0,.55);
+        }
+        .myn-hero-overlay h1 {
+          margin: 0;
+          max-width: 620px;
+          font-family: 'Syne', Georgia, serif;
+          font-weight: 800;
+          font-size: clamp(28px, 4.2vw, 58px);
+          line-height: 1.02;
+        }
+        .myn-hero-overlay p {
+          margin: 0;
+          max-width: 540px;
+          font-size: clamp(13px, 1.4vw, 18px);
+          font-weight: 500;
+          opacity: .96;
+        }
+        .myn-hero-tag {
+          display: inline-block;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .18em;
+          text-transform: uppercase;
+          background: rgba(0,0,0,.35);
+          padding: 5px 12px;
+          border-radius: 999px;
+          backdrop-filter: blur(6px);
+        }
+        .myn-hero-cta {
+          align-self: flex-start;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          height: 44px;
+          padding: 0 22px;
+          border: 0;
+          border-radius: 999px;
+          background: #f97316;
+          color: #fff;
+          font-weight: 800;
+          font-size: 14px;
+          letter-spacing: .04em;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(0,0,0,.25);
+          font: inherit;
+          font-weight: 800;
+        }
+        .myn-hero-banner .myn-hero-overlay[style*="flex-end"] .myn-hero-cta { align-self: flex-end; }
+        .myn-hero-banner .myn-hero-overlay[style*="center"] .myn-hero-cta   { align-self: center; }
 
         .myn-hero-media {
           min-width: 0;

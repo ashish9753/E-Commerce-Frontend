@@ -10,6 +10,7 @@ import { paymentsApi } from '../api/payments';
 import { deliveryAreasApi } from '../api/deliveryAreas';
 import { couponsApi } from '../api/coupons';
 import { formatPriceShort } from '../utils/formatters';
+import { cleanPhone, isValidPhone } from '../utils/validators';
 import { getErrorMessage } from '../api/client';
 
 /* ── tiny helpers ── */
@@ -31,16 +32,25 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
     city:     initial.city     || '', houseNo: initial.houseNo || '',
     area:     initial.area     || '', landmark: initial.landmark || '',
   });
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => {
+    const value = k === 'phone' ? cleanPhone(v) : v;
+    setForm(f => ({ ...f, [k]: value }));
+  };
 
-  const valid = form.fullName && form.phone && form.city && form.state && form.pincode;
+  const phoneValid = isValidPhone(form.phone);
+  const valid = form.fullName && phoneValid && form.city && form.state && form.pincode;
 
   return (
     <div style={{ border: '1px solid #e77600', borderRadius: 6, padding: '18px 20px', background: '#fffdf5', marginTop: 12 }}>
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16, color: '#333' }}>Add a new address</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
         <Inp label="Full Name *" value={form.fullName} onChange={e=>set('fullName',e.target.value)} placeholder="Your full name" half />
-        <Inp label="Mobile Number *" value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="+91 98765XXXXX" half />
+        <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 5 }}>Mobile Number *</label>
+          <input value={form.phone} onChange={e=>set('phone',e.target.value)} placeholder="10-digit mobile number" inputMode="numeric"
+            style={{ width: '100%', height: 38, border: `1px solid ${form.phone && !phoneValid ? '#dc2626' : '#a0a0a0'}`, borderRadius: 4, padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+          {form.phone && !phoneValid && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 3 }}>Phone number must be exactly 10 digits</div>}
+        </div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
         <Inp label="Pincode *" value={form.pincode} onChange={e=>set('pincode',e.target.value)} placeholder="110001" half />
@@ -300,24 +310,16 @@ export default function CheckoutPage() {
         : codCfg.bookingValue)
     : 0;
 
-  const checkDelivery = async (pin) => {
+  const checkDelivery = async (city) => {
     // Surface a clear, actionable state instead of leaving the user with a
     // permanently-disabled "Use this address" button and no explanation.
-    if (!pin) {
-      setDeliveryCheck({ available: false, reason: 'no_pincode', message: 'This address has no pincode. Please edit it.' });
-      return;
-    }
-    if (!/^\d{6}$/.test(pin)) {
-      setDeliveryCheck({
-        available: false,
-        reason: 'invalid_pincode',
-        message: `"${pin}" is not a valid pincode. Indian pincodes are 6 digits. Please edit this address.`,
-      });
+    if (!city || !city.trim()) {
+      setDeliveryCheck({ available: false, reason: 'no_city', message: 'This address has no city. Please edit it.' });
       return;
     }
     setDeliveryChecking(true);
     try {
-      const { data } = await deliveryAreasApi.check(pin);
+      const { data } = await deliveryAreasApi.check(city.trim());
       setDeliveryCheck(data.data);
     } catch (err) {
       setDeliveryCheck({
@@ -333,7 +335,7 @@ export default function CheckoutPage() {
   // Check delivery whenever selected address changes
   useEffect(() => {
     const addr = addresses.find(a => a._id === selectedAddressId);
-    if (addr?.pincode) checkDelivery(addr.pincode);
+    if (addr?.city) checkDelivery(addr.city);
     else setDeliveryCheck(null);
   }, [selectedAddressId, addresses]);
 
@@ -625,17 +627,16 @@ export default function CheckoutPage() {
                           ) : (
                             <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
                               <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 14, marginBottom: 4 }}>
-                                {deliveryCheck.reason === 'invalid_pincode' ? '⚠ Invalid pincode'
-                                  : deliveryCheck.reason === 'no_pincode' ? '⚠ Missing pincode'
+                                {deliveryCheck.reason === 'no_city' ? '⚠ Missing city'
                                   : deliveryCheck.reason === 'check_failed' ? '⚠ Could not verify delivery'
                                   : '🚫 Delivery not available in this area'}
                               </div>
                               <div style={{ fontSize: 13, color: '#b91c1c' }}>
                                 {deliveryCheck.message || (
-                                  <>We currently do not deliver to pincode <strong>{addresses.find(a => a._id === selectedAddressId)?.pincode}</strong>. Please use a different address or contact support.</>
+                                  <>We currently do not deliver to <strong>{addresses.find(a => a._id === selectedAddressId)?.city || 'this location'}</strong>. Please use a different address or contact support.</>
                                 )}
                               </div>
-                              {(deliveryCheck.reason === 'invalid_pincode' || deliveryCheck.reason === 'no_pincode') && (
+                              {deliveryCheck.reason === 'no_city' && (
                                 <button
                                   onClick={() => { setEditingAddrId(selectedAddressId); setShowAddForm(false); }}
                                   style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#dc2626', background: 'white', border: '1px solid #fca5a5', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>
@@ -678,8 +679,8 @@ export default function CheckoutPage() {
                           ? 'Checking delivery...'
                           : deliveryCheck?.available === true
                             ? 'Use this address'
-                            : deliveryCheck?.reason === 'invalid_pincode' || deliveryCheck?.reason === 'no_pincode'
-                              ? 'Fix the pincode to continue'
+                            : deliveryCheck?.reason === 'no_city'
+                              ? 'Fix the address to continue'
                               : 'Delivery not available — choose another address'}
                       </button>
                     )}
