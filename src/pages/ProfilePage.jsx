@@ -49,22 +49,26 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
     setErrs(e => ({ ...e, [k]: '' }));
   };
 
-  // Picking a city from the Upaya dropdown auto-fills the city name and
-  // captures the locationId + areaId needed by the courier integration.
-  const handleCityChange = (e) => {
-    const id = e.target.value;
-    if (!id) {
-      setForm(f => ({ ...f, city: '', upayaLocationId: null, upayaAreaId: null }));
-      return;
+  // Typable city autocomplete — input + datalist so the user can either
+  // scroll the list or start typing to filter. We resolve the typed text
+  // back to a locationId on every keystroke; when no exact (case-insensitive)
+  // match exists we clear the captured ids so the form fails validation
+  // until they pick a real Upaya city.
+  const handleCityInput = (e) => {
+    const text = e.target.value;
+    const match = upayaLocations.find(
+      l => (l.locationName || l.city || '').toLowerCase() === text.toLowerCase()
+    );
+    if (match) {
+      setForm(f => ({
+        ...f,
+        city: match.locationName || match.city || '',
+        upayaLocationId: Number(match.locationId),
+        upayaAreaId:     match.areaId != null ? Number(match.areaId) : Number(match.locationId),
+      }));
+    } else {
+      setForm(f => ({ ...f, city: text, upayaLocationId: null, upayaAreaId: null }));
     }
-    const loc = upayaLocations.find(l => String(l.locationId) === String(id));
-    if (!loc) return;
-    setForm(f => ({
-      ...f,
-      city: loc.locationName || loc.city || '',
-      upayaLocationId: Number(loc.locationId),
-      upayaAreaId:     loc.areaId != null ? Number(loc.areaId) : Number(loc.locationId),
-    }));
     setErrs(er => ({ ...er, city: '' }));
   };
 
@@ -95,26 +99,32 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
         <AddrField k="houseNo"  label="House / Tole / Block *" placeholder="e.g. House 12, Ward 5" half form={form} errs={errs} onSet={set} />
         <AddrField k="area"     label="Street / Area / Tole *" placeholder="Street or tole name" half form={form} errs={errs} onSet={set} />
 
-        {/* City / Delivery Location — driven by Upaya */}
+        {/* City / Delivery Location — typable autocomplete backed by Upaya */}
         <div className="field col-span-1">
           <label>City / Delivery Location * <span style={{ color:'#007185', fontWeight: 400 }}>(from Upaya)</span></label>
-          <select
+          <input
+            list="profile-upaya-locations"
             className={`input${errs.city ? ' error' : ''}`}
-            value={form.upayaLocationId || ''}
-            onChange={handleCityChange}
+            value={form.city}
+            onChange={handleCityInput}
             disabled={upayaLoading || !upayaLocations.length}
-          >
-            <option value="">
-              {upayaLoading ? 'Loading serviceable cities…'
-                : upayaLocations.length ? '— Select your city —'
-                : 'Delivery service unavailable'}
-            </option>
+            placeholder={upayaLoading ? 'Loading serviceable cities…'
+              : upayaLocations.length ? 'Type or select your city'
+              : 'Delivery service unavailable'}
+            autoComplete="off"
+          />
+          <datalist id="profile-upaya-locations">
             {upayaLocations.map(l => (
-              <option key={l.locationId} value={l.locationId}>
-                {l.locationName}{l.address ? ` — ${l.address}` : ''}
+              <option key={l.locationId} value={l.locationName}>
+                {l.address || ''}
               </option>
             ))}
-          </select>
+          </datalist>
+          {form.city && !form.upayaLocationId && !errs.city && (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>
+              Pick a city from the list (type to search).
+            </div>
+          )}
           {errs.city && <div className="field-error">{errs.city}</div>}
           {!upayaLoading && !upayaLocations.length && (
             <div className="field-error">Couldn't load delivery locations. Try refreshing the page.</div>

@@ -51,20 +51,25 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
       .finally(() => setUpayaLoading(false));
   }, []);
 
-  const handleCityChange = (e) => {
-    const id = e.target.value;
-    if (!id) {
-      setForm(f => ({ ...f, city: '', upayaLocationId: null, upayaAreaId: null }));
-      return;
+  // Typable city autocomplete — input + datalist so the user can either
+  // scroll the list or start typing to filter. Resolves typed text back to
+  // a locationId; when nothing matches we clear the captured ids so the
+  // form fails validation until they pick a real Upaya city.
+  const handleCityInput = (e) => {
+    const text = e.target.value;
+    const match = upayaLocations.find(
+      l => (l.locationName || l.city || '').toLowerCase() === text.toLowerCase()
+    );
+    if (match) {
+      setForm(f => ({
+        ...f,
+        city: match.locationName || match.city || '',
+        upayaLocationId: Number(match.locationId),
+        upayaAreaId:     match.areaId != null ? Number(match.areaId) : Number(match.locationId),
+      }));
+    } else {
+      setForm(f => ({ ...f, city: text, upayaLocationId: null, upayaAreaId: null }));
     }
-    const loc = upayaLocations.find(l => String(l.locationId) === String(id));
-    if (!loc) return;
-    setForm(f => ({
-      ...f,
-      city: loc.locationName || loc.city || '',
-      upayaLocationId: Number(loc.locationId),
-      upayaAreaId:     loc.areaId != null ? Number(loc.areaId) : Number(loc.locationId),
-    }));
   };
 
   const phoneValid = isValidPhone(form.phone);
@@ -88,15 +93,27 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
           <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 5 }}>
             City / Delivery Location * <span style={{ color: '#007185', fontWeight: 400 }}>(from Upaya)</span>
           </label>
-          <select value={form.upayaLocationId || ''} onChange={handleCityChange} disabled={upayaLoading || !upayaLocations.length}
-            style={{ width: '100%', height: 38, border: '1px solid #a0a0a0', borderRadius: 4, padding: '0 10px', fontSize: 13, outline: 'none', background: 'white', cursor: 'pointer' }}>
-            <option value="">
-              {upayaLoading ? 'Loading serviceable cities…' : upayaLocations.length ? '— Select your city —' : 'Delivery service unavailable'}
-            </option>
+          <input
+            list="checkout-upaya-locations"
+            value={form.city}
+            onChange={handleCityInput}
+            disabled={upayaLoading || !upayaLocations.length}
+            placeholder={upayaLoading ? 'Loading serviceable cities…'
+              : upayaLocations.length ? 'Type or select your city'
+              : 'Delivery service unavailable'}
+            autoComplete="off"
+            style={{ width: '100%', height: 38, border: '1px solid #a0a0a0', borderRadius: 4, padding: '0 10px', fontSize: 13, outline: 'none', background: 'white', boxSizing: 'border-box' }}
+          />
+          <datalist id="checkout-upaya-locations">
             {upayaLocations.map(l => (
-              <option key={l.locationId} value={l.locationId}>{l.locationName}{l.address ? ` — ${l.address}` : ''}</option>
+              <option key={l.locationId} value={l.locationName}>
+                {l.address || ''}
+              </option>
             ))}
-          </select>
+          </datalist>
+          {form.city && !form.upayaLocationId && (
+            <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>Pick a city from the list (type to search).</div>
+          )}
           {!upayaLoading && !upayaLocations.length && (
             <div style={{ fontSize: 11, color: '#b12704', marginTop: 3 }}>Couldn't load delivery locations. Try refreshing the page.</div>
           )}
