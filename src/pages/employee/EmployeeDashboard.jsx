@@ -3084,6 +3084,7 @@ export default function SellerDashboard() {
   }, [profile, visibleTabs, tab]);
   const navigate                = useNavigate();
   const { user, logout }        = useAuth();
+  const { isLight, toggle: toggleTheme } = useDashboardTheme();
   const { notifications, unreadCount, markRead, markAllRead, remove } = useNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
