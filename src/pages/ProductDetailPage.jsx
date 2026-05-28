@@ -83,20 +83,23 @@ export default function ProductDetailPage() {
   const [reviewLoading, setReviewLoading]     = useState(false);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
 
-  // Upaya-first delivery check. We try Upaya (live network); if Upaya isn't
-  // configured / reachable, fall back to our manual delivery-areas list so the
-  // page still works.
+  // Delivery check — looks up the typed city in the merged suggestions list
+  // (Upaya + custom DeliveryAreas), then falls back to a server-side check
+  // for cities the autocomplete didn't pre-load.
   const checkLocation = async (loc) => {
     const q = (loc || location).trim();
     if (!q) return;
     setLocationChecking(true);
     try {
-      const match = areaSuggestions.find(a =>
-        (a.locationName || a.city || '').toLowerCase() === q.toLowerCase()
-      ) || areaSuggestions.find(a =>
-        (a.locationName || a.city || '').toLowerCase().startsWith(q.toLowerCase())
-      );
-      if (match?.locationId) {
+      const ql = q.toLowerCase();
+      const matchName = (a) => (a.locationName || a.city || '').toLowerCase();
+      // Three-tier match: exact → startsWith → includes
+      const match = areaSuggestions.find(a => matchName(a) === ql)
+                 || areaSuggestions.find(a => matchName(a).startsWith(ql))
+                 || areaSuggestions.find(a => matchName(a).includes(ql));
+
+      // Upaya match → get live rate
+      if (match?.source === 'upaya' && match.locationId) {
         try {
           const rateRes = await upayaApi.getRate({
             location_id: match.locationId,
@@ -115,36 +118,80 @@ export default function ProductDetailPage() {
           return;
         } catch { /* fall through to legacy check */ }
       }
+
+      // Custom DeliveryArea match → static charge
+      if (match?.source === 'custom') {
+        setLocationResult({
+          available: true,
+          city: match.city,
+          deliveryCharge: Number(match.deliveryCharge) || 0,
+          source: 'custom',
+        });
+        return;
+      }
+
+      // No local match — ask the backend (covers cities not in pre-loaded list)
       const { data } = await deliveryAreasApi.check(q);
       setLocationResult(data.data);
     } catch { setLocationResult({ available: false }); }
     finally { setLocationChecking(false); }
   };
 
-  // Pull the list of serviceable cities once so we can power the autocomplete.
-  // Prefer Upaya — it's the source of truth — and gracefully fall back to our
-  // own list if Upaya is unreachable.
+  // Pull the list of serviceable cities so we can power the autocomplete.
+  // Load Upaya AND our custom DeliveryArea list and merge — Upaya entries
+  // get a locationId (for live rates), custom entries keep their static
+  // `deliveryCharge`. De-duplicated by lowercased city name.
   useEffect(() => {
-    upayaApi.getLocations()
-      .then(({ data }) => {
-        const list = data.data?.locations || [];
-        if (list.length) {
-          setAreaSuggestions(list.map(l => ({
-            locationId:   l.locationId,
-            locationName: l.locationName,
-            city:         l.locationName,
-            address:      l.address,
-            areaId:       l.areaId,
-          })));
-          return;
-        }
-        throw new Error('no upaya locations');
-      })
-      .catch(() => {
-        deliveryAreasApi.getAll()
-          .then(({ data }) => setAreaSuggestions(data.data?.areas || []))
-          .catch(() => {});
+    let mounted = true;
+    Promise.allSettled([
+      upayaApi.getLocations(),
+      deliveryAreasApi.getAll(),
+    ]).then(([upayaRes, areasRes]) => {
+      if (!mounted) return;
+      const upayaList = upayaRes.status === 'fulfilled'
+        ? (upayaRes.value.data?.data?.locations || [])
+        : [];
+      const customList = areasRes.status === 'fulfilled'
+        ? (areasRes.value.data?.data?.areas || [])
+        : [];
+
+      const merged = [];
+      const seen = new Set();
+      // Upaya first — gives us live rates when matched.
+      upayaList.forEach(l => {
+        const name = (l.locationName || l.city || '').trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push({
+          id:           `upaya-${l.locationId || name}`,
+          locationId:   l.locationId,
+          locationName: name,
+          city:         name,
+          state:        l.address || '',
+          areaId:       l.areaId,
+          source:       'upaya',
+        });
       });
+      // Custom areas — only add ones Upaya doesn't already cover.
+      customList.forEach(a => {
+        const name = (a.city || '').trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push({
+          id:             `area-${a._id || name}`,
+          city:           name,
+          state:          a.state || '',
+          deliveryCharge: a.deliveryCharge,
+          source:         'custom',
+        });
+      });
+      setAreaSuggestions(merged);
+    });
+    return () => { mounted = false; };
   }, []);
 
   // Auto-check using saved address city when user is logged in
@@ -603,7 +650,7 @@ export default function ProductDetailPage() {
                   />
                   <datalist id="delivery-areas-options">
                     {areaSuggestions.map(a => (
-                      <option key={a._id} value={a.city}>
+                      <option key={a.id || a._id || a.locationId || a.city} value={a.city}>
                         {a.state ? `${a.city}, ${a.state}` : a.city}
                       </option>
                     ))}

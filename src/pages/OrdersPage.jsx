@@ -328,7 +328,8 @@ export default function OrdersPage() {
     // Uses the shared axios client → inherits the configured base URL and the
     // 401-refresh interceptor. (Previously a raw fetch tied to /api/v1, which
     // only worked behind the dev proxy.)
-    client.get('/config/order-timeout')
+    // Non-critical — silently fall back to the default if it fails.
+    client.get('/config/order-timeout', { skipErrorToast: true })
       .then(({ data }) => { if (data?.data?.timeoutMinutes) setPaymentTimeoutMin(data.data.timeoutMinutes); })
       .catch(() => {});
   }, [user]);

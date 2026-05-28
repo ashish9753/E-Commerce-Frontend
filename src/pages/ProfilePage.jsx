@@ -4,17 +4,18 @@ import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Ch
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usersApi } from '../api/users';
+import { upayaApi } from '../api/upaya';
 import { validators, cleanPhone, isValidPhone } from '../utils/validators';
 
-const STATES = [
-  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
-  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
-  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan',
-  'Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal',
-  'Delhi','Jammu & Kashmir','Ladakh','Chandigarh','Puducherry',
+// Common Nepali provinces — used as datalist suggestions, not enforced.
+const NEPAL_PROVINCES = [
+  'Koshi','Madhesh','Bagmati','Gandaki','Lumbini','Karnali','Sudurpashchim',
 ];
 
-const EMPTY_ADDR = { fullName:'', phone:'', houseNo:'', area:'', city:'', state:'', pincode:'', landmark:'' };
+const EMPTY_ADDR = {
+  fullName:'', phone:'', houseNo:'', area:'', city:'', state:'',
+  pincode:'', landmark:'', upayaLocationId: null, upayaAreaId: null,
+};
 
 function AddrField({ k, label, placeholder, type = 'text', half, form, errs, onSet }) {
   return (
@@ -28,13 +29,43 @@ function AddrField({ k, label, placeholder, type = 'text', half, form, errs, onS
 }
 
 function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
-  const [form, setForm] = useState(initial);
+  const [form, setForm] = useState({ ...EMPTY_ADDR, ...initial });
   const [errs, setErrs] = useState({});
+
+  // Upaya-managed serviceable cities — load once on mount so the City picker
+  // captures locationId/areaId for downstream dispatch.
+  const [upayaLocations, setUpayaLocations] = useState([]);
+  const [upayaLoading, setUpayaLoading]     = useState(true);
+  useEffect(() => {
+    upayaApi.getLocations()
+      .then(({ data }) => setUpayaLocations(data.data?.locations || []))
+      .catch(() => setUpayaLocations([]))
+      .finally(() => setUpayaLoading(false));
+  }, []);
 
   const set = (k, v) => {
     const value = k === 'phone' ? cleanPhone(v) : v;
     setForm(f => ({ ...f, [k]: value }));
     setErrs(e => ({ ...e, [k]: '' }));
+  };
+
+  // Picking a city from the Upaya dropdown auto-fills the city name and
+  // captures the locationId + areaId needed by the courier integration.
+  const handleCityChange = (e) => {
+    const id = e.target.value;
+    if (!id) {
+      setForm(f => ({ ...f, city: '', upayaLocationId: null, upayaAreaId: null }));
+      return;
+    }
+    const loc = upayaLocations.find(l => String(l.locationId) === String(id));
+    if (!loc) return;
+    setForm(f => ({
+      ...f,
+      city: loc.locationName || loc.city || '',
+      upayaLocationId: Number(loc.locationId),
+      upayaAreaId:     loc.areaId != null ? Number(loc.areaId) : Number(loc.locationId),
+    }));
+    setErrs(er => ({ ...er, city: '' }));
   };
 
   const validate = () => {
@@ -43,9 +74,10 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
     if (!isValidPhone(form.phone)) e.phone = 'Enter a 10-digit phone number';
     if (!form.houseNo.trim())  e.houseNo  = 'Required';
     if (!form.area.trim())     e.area     = 'Required';
-    if (!form.city.trim())     e.city     = 'Required';
-    if (!form.state)           e.state    = 'Required';
-    if (!/^\d{6}$/.test(form.pincode)) e.pincode = '6-digit pincode required';
+    if (!form.city.trim() || !form.upayaLocationId) e.city = 'Please pick a city from the list';
+    if (!form.state.trim())    e.state    = 'Required';
+    // Pincode is optional (Nepal-first store) — only validate when entered.
+    if (form.pincode && !/^\d{4,6}$/.test(form.pincode)) e.pincode = '4–6 digit code';
     return e;
   };
 
@@ -60,18 +92,52 @@ function AddressForm({ initial = EMPTY_ADDR, onSave, onCancel, saving }) {
       <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
         <AddrField k="fullName" label="Full Name *" placeholder="Recipient name" half form={form} errs={errs} onSet={set} />
         <AddrField k="phone"    label="Phone *"     placeholder="10-digit mobile" half form={form} errs={errs} onSet={set} />
-        <AddrField k="houseNo"  label="House / Flat / Block *" placeholder="e.g. 12B, 3rd Floor" half form={form} errs={errs} onSet={set} />
-        <AddrField k="area"     label="Street / Area / Locality *" placeholder="Colony or area name" half form={form} errs={errs} onSet={set} />
-        <AddrField k="city"     label="City *" placeholder="City" half form={form} errs={errs} onSet={set} />
+        <AddrField k="houseNo"  label="House / Tole / Block *" placeholder="e.g. House 12, Ward 5" half form={form} errs={errs} onSet={set} />
+        <AddrField k="area"     label="Street / Area / Tole *" placeholder="Street or tole name" half form={form} errs={errs} onSet={set} />
+
+        {/* City / Delivery Location — driven by Upaya */}
         <div className="field col-span-1">
-          <label>State *</label>
-          <select className={`input${errs.state ? ' error' : ''}`} value={form.state} onChange={e => set('state', e.target.value)}>
-            <option value="">— Select State —</option>
-            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+          <label>City / Delivery Location * <span style={{ color:'#007185', fontWeight: 400 }}>(from Upaya)</span></label>
+          <select
+            className={`input${errs.city ? ' error' : ''}`}
+            value={form.upayaLocationId || ''}
+            onChange={handleCityChange}
+            disabled={upayaLoading || !upayaLocations.length}
+          >
+            <option value="">
+              {upayaLoading ? 'Loading serviceable cities…'
+                : upayaLocations.length ? '— Select your city —'
+                : 'Delivery service unavailable'}
+            </option>
+            {upayaLocations.map(l => (
+              <option key={l.locationId} value={l.locationId}>
+                {l.locationName}{l.address ? ` — ${l.address}` : ''}
+              </option>
+            ))}
           </select>
+          {errs.city && <div className="field-error">{errs.city}</div>}
+          {!upayaLoading && !upayaLocations.length && (
+            <div className="field-error">Couldn't load delivery locations. Try refreshing the page.</div>
+          )}
+        </div>
+
+        {/* Province / State — free text + datalist suggestions (Nepal) */}
+        <div className="field col-span-1">
+          <label>Province / State *</label>
+          <input
+            list="np-provinces"
+            className={`input${errs.state ? ' error' : ''}`}
+            value={form.state}
+            onChange={e => set('state', e.target.value)}
+            placeholder="e.g. Bagmati"
+          />
+          <datalist id="np-provinces">
+            {NEPAL_PROVINCES.map(p => <option key={p} value={p} />)}
+          </datalist>
           {errs.state && <div className="field-error">{errs.state}</div>}
         </div>
-        <AddrField k="pincode"  label="Pincode *" placeholder="6-digit code" half form={form} errs={errs} onSet={set} />
+
+        <AddrField k="pincode"  label="Postal Code (optional)" placeholder="e.g. 44600" half form={form} errs={errs} onSet={set} />
         <AddrField k="landmark" label="Landmark (optional)" placeholder="Near school, temple…" half form={form} errs={errs} onSet={set} />
       </div>
       <div className="flex gap-3 mt-5">

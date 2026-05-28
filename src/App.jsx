@@ -145,7 +145,9 @@ export default function App() {
         <Route path="/cart" element={<Layout><CartPage /></Layout>} />
 
         {/* Protected pages */}
-        <Route path="/checkout" element={<Layout><PrivateRoute><CheckoutPage /></PrivateRoute></Layout>} />
+        {/* Checkout has its own minimal header (logo + "Secure checkout"),
+            so we skip the site Layout to keep the flow focused. */}
+        <Route path="/checkout" element={<PrivateRoute><CheckoutPage /></PrivateRoute>} />
         <Route path="/profile" element={<Layout><PrivateRoute><ProfilePage /></PrivateRoute></Layout>} />
         <Route path="/orders" element={<Layout><PrivateRoute><OrdersPage /></PrivateRoute></Layout>} />
         <Route path="/wishlist" element={<Layout><PrivateRoute><WishlistPage /></PrivateRoute></Layout>} />
