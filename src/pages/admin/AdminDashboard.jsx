@@ -26,29 +26,7 @@ import { settingsApi } from '../../api/settings';
 import { paymentsApi } from '../../api/payments';
 import { useFormDraft } from '../../hooks/useFormDraft';
 import { useCatalog } from '../../context/CatalogContext';
-
-/* ── Palette — matches HTML mockup exactly ── */
-const C = {
-  accent:  '#f97316',
-  blue:    '#3b82f6',
-  green:   '#22c55e',
-  yellow:  '#eab308',
-  purple:  '#8b5cf6',
-  red:     '#ef4444',
-  cyan:    '#06b6d4',
-  pink:    '#ec4899',
-  mute:    '#6b7280',
-  sub:     '#9ca3af',
-  line:    '#252b3b',
-  card:    '#161a22',
-  card2:   '#1b2030',
-  text:    '#e8eaf2',
-  bg:      '#0d0f14',
-  sidebar: '#111318',
-  active:  '#1e2535',
-};
-/* legacy aliases so existing code keeps working */
-const surf = C.bg;
+import { C, useDashboardTheme } from '../../theme/dashboardTheme';
 
 const STATUS_COLORS = {
   PLACED: C.yellow, CONFIRMED: C.blue, PACKED: C.purple,
@@ -3769,6 +3747,7 @@ const TABS = NAV_SECTIONS.flatMap(s => s.tabs);
 
 export default function AdminDashboard() {
   const { isMobile, isTablet } = useResponsive();
+  const { isLight, toggle: toggleTheme } = useDashboardTheme();
   const [tab, setTab]               = useState('Overview');
   // Keep-alive: track which tabs have ever been visited so we can CSS-hide instead of unmount
   const [mountedTabs, setMountedTabs] = useState(() => new Set(['Overview']));
@@ -4017,6 +3996,24 @@ export default function AdminDashboard() {
 
           {/* Right actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 'auto' }}>
+            {/* Day/Night theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title={isLight ? 'Switch to dark theme' : 'Switch to day theme'}
+              aria-label="Toggle theme"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.mute, display: 'flex', alignItems: 'center', padding: 4 }}
+            >
+              {isLight ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                </svg>
+              )}
+            </button>
             {/* Notification bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button

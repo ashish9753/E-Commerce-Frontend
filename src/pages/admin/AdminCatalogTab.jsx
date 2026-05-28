@@ -2,13 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import { brandsApi, categoriesApi, attributesApi, eventsApi } from '../../api/catalog';
 import { useCatalog } from '../../context/CatalogContext';
 import { useFormDraft } from '../../hooks/useFormDraft';
-
-const C = {
-  accent: '#f97316', mute: '#6b7280', sub: '#9ca3af',
-  border: '#252b3b', card: '#161a22', card2: '#1b2030',
-  text: '#e8eaf2', bg: '#0d0f14', surface: '#111318',
-  red: '#ef4444', green: '#22c55e',
-};
+import { C } from '../../theme/dashboardTheme';
 
 const SECTIONS = [
   { id: 'brands',     label: 'Brands',            icon: '🏷️' },
@@ -885,7 +879,7 @@ export default function AdminCatalogTab() {
           {SECTIONS.map(s => (
             <button key={s.id} onClick={() => setSection(s.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px',
-                background: section === s.id ? '#1e2535' : 'transparent',
+                background: section === s.id ? C.active : 'transparent',
                 border: 'none', borderRadius: 8, cursor: 'pointer', marginBottom: 2,
                 fontSize: 13.5, fontWeight: section === s.id ? 600 : 400,
                 color: section === s.id ? C.text : C.sub, textAlign: 'left',

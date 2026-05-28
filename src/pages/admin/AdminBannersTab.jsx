@@ -1,13 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { bannersApi } from '../../api/banners';
 import { productsApi } from '../../api/products';
-
-const C = {
-  accent: '#f97316', mute: '#6b7280', sub: '#9ca3af',
-  line: '#252b3b', card: '#161a22', card2: '#1b2030',
-  text: '#e8eaf2', bg: '#0d0f14', surface: '#111318',
-  red: '#ef4444', green: '#22c55e', yellow: '#eab308',
-};
+import { C } from '../../theme/dashboardTheme';
 
 const POSITIONS = [
   { v: 'left',   label: '⬅ Left' },
@@ -58,10 +52,11 @@ function Field({ label, hint, children }) {
   );
 }
 
-const inpStyle = {
+/* Build fresh each call so theme changes apply immediately. */
+const inpStyle = () => ({
   width:'100%', height:36, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px',
   fontSize:13, outline:'none', background:C.bg, color:C.text, boxSizing:'border-box', fontFamily:'inherit',
-};
+});
 
 function BannerPreview({ draft, imagePreview }) {
   const align = draft.textPosition === 'center' ? 'center' : draft.textPosition === 'right' ? 'flex-end' : 'flex-start';
@@ -73,7 +68,7 @@ function BannerPreview({ draft, imagePreview }) {
       border:`1px solid ${C.line}`,
     }}>
       {imagePreview && (
-        <img src={imagePreview} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity:0.85 }} />
+        <img src={imagePreview} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }} />
       )}
       <div style={{
         position:'relative', height:'100%', display:'flex', flexDirection:'column', justifyContent:'center',
@@ -263,39 +258,39 @@ export default function AdminBannersTab() {
           </div>
 
           <Field label="Title *">
-            <input value={draft.title} onChange={e => set('title', e.target.value)} placeholder="Big Tech Carnival" style={inpStyle} required />
+            <input value={draft.title} onChange={e => set('title', e.target.value)} placeholder="Big Tech Carnival" style={inpStyle()} required />
           </Field>
           <Field label="Subtitle" hint="optional, shown under the title">
-            <input value={draft.subtitle} onChange={e => set('subtitle', e.target.value)} placeholder="Smartphones & audio essentials" style={inpStyle} />
+            <input value={draft.subtitle} onChange={e => set('subtitle', e.target.value)} placeholder="Smartphones & audio essentials" style={inpStyle()} />
           </Field>
 
           <Field label="Overlay Tag" hint="like 'Min 40% Off' shown above the title">
-            <input value={draft.overlayText} onChange={e => set('overlayText', e.target.value)} placeholder="Min 40% Off" style={inpStyle} />
+            <input value={draft.overlayText} onChange={e => set('overlayText', e.target.value)} placeholder="Min 40% Off" style={inpStyle()} />
           </Field>
           <Field label="CTA Button Label">
-            <input value={draft.ctaLabel} onChange={e => set('ctaLabel', e.target.value)} placeholder="Shop Now" style={inpStyle} />
+            <input value={draft.ctaLabel} onChange={e => set('ctaLabel', e.target.value)} placeholder="Shop Now" style={inpStyle()} />
           </Field>
 
           <Field label="Text Color">
             <div style={{ display:'flex', gap:8, alignItems:'center' }}>
               <input type="color" value={draft.textColor} onChange={e => set('textColor', e.target.value)} style={{ width:46, height:36, border:`1px solid ${C.line}`, borderRadius:6, background:C.bg, cursor:'pointer', padding:2 }} />
-              <input value={draft.textColor} onChange={e => set('textColor', e.target.value)} style={{ ...inpStyle, flex:1, fontFamily:'monospace' }} />
+              <input value={draft.textColor} onChange={e => set('textColor', e.target.value)} style={{ ...inpStyle(), flex:1, fontFamily:'monospace' }} />
             </div>
           </Field>
           <Field label="Text Position">
-            <select value={draft.textPosition} onChange={e => set('textPosition', e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
+            <select value={draft.textPosition} onChange={e => set('textPosition', e.target.value)} style={{ ...inpStyle(), cursor:'pointer' }}>
               {POSITIONS.map(p => <option key={p.v} value={p.v}>{p.label}</option>)}
             </select>
           </Field>
 
           <Field label="Font Family">
             <select value={draft.fontFamily} onChange={e => set('fontFamily', e.target.value)}
-              style={{ ...inpStyle, cursor:'pointer', fontFamily: `'${draft.fontFamily}', sans-serif` }}>
+              style={{ ...inpStyle(), cursor:'pointer', fontFamily: `'${draft.fontFamily}', sans-serif` }}>
               {FONT_FAMILIES.map(f => <option key={f} value={f} style={{ fontFamily: `'${f}', sans-serif` }}>{f}</option>)}
             </select>
           </Field>
           <Field label="Font Weight">
-            <select value={draft.fontWeight} onChange={e => set('fontWeight', e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
+            <select value={draft.fontWeight} onChange={e => set('fontWeight', e.target.value)} style={{ ...inpStyle(), cursor:'pointer' }}>
               {FONT_WEIGHTS.map(w => <option key={w.v} value={w.v}>{w.label}</option>)}
             </select>
           </Field>
@@ -307,7 +302,7 @@ export default function AdminBannersTab() {
                 style={{ flex:1, accentColor: C.accent }} />
               <input type="number" min="12" max="120" value={draft.fontSize}
                 onChange={e => set('fontSize', Number(e.target.value) || 48)}
-                style={{ ...inpStyle, width:80 }} />
+                style={{ ...inpStyle(), width:80 }} />
             </div>
           </Field>
           <Field label="Font Style">
@@ -328,17 +323,17 @@ export default function AdminBannersTab() {
           </Field>
 
           <Field label="Linked Product" hint="banner click jumps to this product">
-            <select value={draft.product} onChange={e => set('product', e.target.value)} style={{ ...inpStyle, cursor:'pointer' }}>
+            <select value={draft.product} onChange={e => set('product', e.target.value)} style={{ ...inpStyle(), cursor:'pointer' }}>
               <option value="">— No product —</option>
               {products.map(p => <option key={p._id} value={p._id}>{p.title}</option>)}
             </select>
           </Field>
           <Field label="Or Custom Link URL" hint="used when no product is selected">
-            <input value={draft.link} onChange={e => set('link', e.target.value)} placeholder="/products?category=Electronics" style={inpStyle} />
+            <input value={draft.link} onChange={e => set('link', e.target.value)} placeholder="/products?category=Electronics" style={inpStyle()} />
           </Field>
 
           <Field label="Display Order">
-            <input type="number" value={draft.position} onChange={e => set('position', e.target.value)} placeholder="0" style={inpStyle} />
+            <input type="number" value={draft.position} onChange={e => set('position', e.target.value)} placeholder="0" style={inpStyle()} />
           </Field>
           <div>
             <label style={{ display:'block', fontSize:11, fontWeight:700, color:C.mute, marginBottom:5, textTransform:'uppercase', letterSpacing:'.06em' }}>Status</label>
@@ -349,10 +344,10 @@ export default function AdminBannersTab() {
           </div>
 
           <Field label="Start Date" hint="optional schedule">
-            <input type="date" value={draft.startDate} onChange={e => set('startDate', e.target.value)} style={inpStyle} />
+            <input type="date" value={draft.startDate} onChange={e => set('startDate', e.target.value)} style={inpStyle()} />
           </Field>
           <Field label="End Date" hint="optional schedule">
-            <input type="date" value={draft.endDate} onChange={e => set('endDate', e.target.value)} style={inpStyle} />
+            <input type="date" value={draft.endDate} onChange={e => set('endDate', e.target.value)} style={inpStyle()} />
           </Field>
 
           <div style={{ gridColumn:'1/-1', display:'flex', gap:10, marginTop:6 }}>
