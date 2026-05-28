@@ -61,6 +61,16 @@ function PageTitle() {
   return null;
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [pathname]);
+  return null;
+}
+
 const Spinner = () => <div className="min-h-screen flex items-center justify-center"><div className="spinner" style={{ width: 40, height: 40 }} /></div>;
 
 function getStoredAuthUser() {
@@ -116,6 +126,7 @@ function GuestRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <PageTitle />
       <Routes>
         {/* Guest-only auth pages */}

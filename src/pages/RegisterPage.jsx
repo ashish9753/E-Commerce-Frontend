@@ -145,11 +145,8 @@ export default function RegisterPage() {
         <div style={{ position: 'absolute', bottom: -60, left: -60, width: 280, height: 280, borderRadius: '50%', background: 'radial-gradient(circle,rgba(1,102,178,.15) 0%,transparent 65%)', pointerEvents: 'none' }} />
 
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => navigate('/')}>
-          <div className="logo-mark" />
-          <span style={{ fontWeight: 900, fontSize: 20, color: '#fff', letterSpacing: -.4 }}>
-            Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => navigate('/')}>
+          <img src="/LOGO.png" alt="TradeEngine" style={{ height: 44, width: 'auto', display: 'block' }} />
         </div>
 
         {/* Main content */}

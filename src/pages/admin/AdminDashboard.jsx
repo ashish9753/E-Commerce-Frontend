@@ -6,6 +6,7 @@ import { adminApi } from '../../api/admin';
 import { ordersApi } from '../../api/orders';
 import { returnsApi } from '../../api/returns';
 import { couponsApi } from '../../api/coupons';
+import { productsApi } from '../../api/products';
 import { notificationsApi } from '../../api/notifications';
 import { supportApi } from '../../api/support';
 import {
@@ -1920,18 +1921,81 @@ function OrdersTab({ globalSearch = '' }) {
                           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                             {o.orderItems?.map(item => (
                               <div key={item._id} style={{ display:'flex', alignItems:'center', gap:10 }}>
-                                <div style={{ width:28, height:28, borderRadius:5, background:C.card2, overflow:'hidden', flexShrink:0, border:`1px solid ${C.line}` }}>
+                                <div style={{ width:28, height:28, borderRadius:5, background:C.card2, overflow:'hidden', flexShrink:0, border:`1px solid ${item.isFreebie ? C.green : C.line}` }}>
                                   {item.image
                                     ? <img src={item.image} style={{ width:'100%', height:'100%', objectFit:'contain' }} alt="" />
-                                    : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:C.mute }}><SvgAt el={Icon.bag} size={13}/></div>}
+                                    : <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:C.mute }}>{item.isFreebie ? '🎁' : <SvgAt el={Icon.bag} size={13}/>}</div>}
                                 </div>
                                 <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontSize:12, color:C.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.title}</div>
+                                  <div style={{ fontSize:12, color:C.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6 }}>
+                                    {item.title}
+                                    {item.isFreebie && <span style={{ fontSize:9, fontWeight:800, letterSpacing:'.1em', color:C.green, background:C.green+'22', padding:'1px 6px', borderRadius:99 }}>FREE GIFT</span>}
+                                  </div>
                                   <div style={{ fontSize:11, color:C.mute }}>Qty: {item.quantity}</div>
                                 </div>
-                                <span style={{ fontSize:13, fontWeight:700, color:C.text, flexShrink:0 }}>{fmtRs(item.price)}</span>
+                                <span style={{ fontSize:13, fontWeight:700, color: item.isFreebie ? C.green : C.text, flexShrink:0 }}>
+                                  {item.isFreebie || (item.price === 0) ? 'FREE' : fmtRs(item.price)}
+                                </span>
                               </div>
                             ))}
+                          </div>
+                        </div>
+
+                        {/* Price Breakdown — itemized totals + coupon + tax + delivery */}
+                        <div style={{ marginBottom:14, border:`1px solid ${C.line}`, borderRadius:8, padding:'12px 14px', background:C.bg }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:10 }}>Price Breakdown</div>
+                          <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:12 }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
+                              <span>Items subtotal</span>
+                              <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.itemsPrice ?? 0)}</span>
+                            </div>
+                            {(o.taxPrice ?? 0) > 0 && (
+                              <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
+                                <span>Tax {o.taxLabel ? `(${o.taxLabel})` : ''}</span>
+                                <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.taxPrice)}</span>
+                              </div>
+                            )}
+                            <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
+                              <span>Delivery charge</span>
+                              <span style={{ color: o.shippingPrice === 0 ? C.green : C.text, fontWeight:600 }}>
+                                {o.shippingPrice === 0
+                                  ? (o.coupon?.discountType === 'FREE_SHIPPING' ? 'FREE (coupon)' : 'FREE')
+                                  : fmtRs(o.shippingPrice ?? 0)}
+                              </span>
+                            </div>
+                            {o.coupon && (
+                              <div style={{
+                                marginTop:6, padding:'8px 10px', borderRadius:6,
+                                border:`1px dashed ${C.green}66`, background:C.green+'12',
+                                display:'flex', flexDirection:'column', gap:4,
+                              }}>
+                                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                    <span style={{ fontSize:11, color:C.mute, fontWeight:700, textTransform:'uppercase', letterSpacing:'.05em' }}>Coupon</span>
+                                    <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:12, color:C.green, background:C.green+'22', padding:'2px 8px', borderRadius:4, letterSpacing:'.06em' }}>
+                                      {o.coupon.code}
+                                    </span>
+                                  </div>
+                                  <span style={{ fontSize:11, fontWeight:700, color:C.green }}>
+                                    {o.coupon.discountType === 'PERCENTAGE'    ? `${o.coupon.discountValue}% off`
+                                      : o.coupon.discountType === 'FIXED'      ? `Rs. ${o.coupon.discountValue} off`
+                                      : o.coupon.discountType === 'FREEBIE'    ? '🎁 Free Gift'
+                                      : o.coupon.discountType === 'FREE_SHIPPING' ? '🚚 Free Shipping'
+                                      : ''}
+                                  </span>
+                                </div>
+                                {(o.discountAmount ?? 0) > 0 && (
+                                  <div style={{ display:'flex', justifyContent:'space-between', color:C.green, fontSize:12 }}>
+                                    <span>Discount applied</span>
+                                    <span style={{ fontWeight:700 }}>− {fmtRs(o.discountAmount)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div style={{ borderTop:`1px solid ${C.line}`, marginTop:4, paddingTop:8, display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                              <span style={{ fontWeight:700, color:C.text }}>Order total</span>
+                              <span style={{ fontWeight:800, color:C.accent, fontSize:14 }}>{fmtRs(o.totalPrice ?? 0)}</span>
+                            </div>
                           </div>
                         </div>
 
@@ -2520,7 +2584,7 @@ function AdminReturnsTab({ globalSearch = '' }) {
 /* ══════════════════════════════════════════════════════
    COUPONS TAB
 ══════════════════════════════════════════════════════ */
-const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true, visibility:'hidden', applicableBrands:[], applicableCategories:[], applicableSubcategories:[] };
+const EMPTY_COUPON = { code:'', discountType:'PERCENTAGE', discountValue:'', minimumAmount:'', maximumDiscount:'', expiryDate:'', usageLimit:'', isActive:true, visibility:'hidden', applicableBrands:[], applicableCategories:[], applicableSubcategories:[], freebieProduct:'', freebieQuantity:1 };
 
 function AdminCouponsTab({ globalSearch = '' }) {
   const { brands, topCategories, subCategories } = useCatalog();
@@ -2533,6 +2597,13 @@ function AdminCouponsTab({ globalSearch = '' }) {
   const [showForm, setShowForm] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [search, setSearch]     = useState('');
+  // Product list for the FREEBIE picker — loaded once on mount.
+  const [products, setProducts] = useState([]);
+  useEffect(() => {
+    productsApi.getAll({ limit: 500 })
+      .then(r => setProducts(r.data?.data?.data || r.data?.data?.products || []))
+      .catch(() => {});
+  }, []);
 
   // Auto-save draft while in create mode; cleared on successful create
   useEffect(() => {
@@ -2570,20 +2641,31 @@ function AdminCouponsTab({ globalSearch = '' }) {
       applicableBrands:       (c.applicableBrands       || []).map(x => x?._id || x),
       applicableCategories:   (c.applicableCategories   || []).map(x => x?._id || x),
       applicableSubcategories:(c.applicableSubcategories|| []).map(x => x?._id || x),
+      freebieProduct:  c.freebieProduct?._id || c.freebieProduct || '',
+      freebieQuantity: c.freebieQuantity || 1,
     });
     setEditId(c._id); setError(''); setShowForm(true);
   };
 
   const handleSubmit = async () => {
-    if (!form.code || !form.discountValue || !form.expiryDate) {
-      setError('Code, discount value and expiry date are required.'); return;
+    const isFreebie      = form.discountType === 'FREEBIE';
+    const isFreeShipping = form.discountType === 'FREE_SHIPPING';
+    const needsValue     = !isFreebie && !isFreeShipping;
+    if (!form.code || !form.expiryDate) {
+      setError('Code and expiry date are required.'); return;
+    }
+    if (needsValue && !form.discountValue) {
+      setError('Discount value is required.'); return;
+    }
+    if (isFreebie && !form.freebieProduct) {
+      setError('Pick a free gift product for this coupon.'); return;
     }
     setSaving(true); setError('');
     try {
       const payload = {
         code: form.code.toUpperCase(),
         discountType: form.discountType,
-        discountValue: Number(form.discountValue),
+        discountValue: needsValue ? Number(form.discountValue) : 0,
         minimumAmount: form.minimumAmount ? Number(form.minimumAmount) : 0,
         maximumDiscount: form.maximumDiscount ? Number(form.maximumDiscount) : undefined,
         expiryDate: form.expiryDate,
@@ -2593,6 +2675,8 @@ function AdminCouponsTab({ globalSearch = '' }) {
         applicableBrands:        form.applicableBrands.length       ? form.applicableBrands       : [],
         applicableCategories:    form.applicableCategories.length   ? form.applicableCategories   : [],
         applicableSubcategories: form.applicableSubcategories.length? form.applicableSubcategories: [],
+        freebieProduct:  isFreebie ? form.freebieProduct          : null,
+        freebieQuantity: isFreebie ? (Number(form.freebieQuantity) || 1) : 1,
       };
       if (editId) await couponsApi.update(editId, payload);
       else {
@@ -2661,13 +2745,43 @@ function AdminCouponsTab({ globalSearch = '' }) {
                 style={{ ...InpStyle, cursor:'pointer' }}>
                 <option value="PERCENTAGE">Percentage (%)</option>
                 <option value="FIXED">Fixed Amount (Rs.)</option>
+                <option value="FREEBIE">Freebie (free product)</option>
+                <option value="FREE_SHIPPING">Free Shipping (waive delivery)</option>
               </select>
             </div>
-            <div>
-              <label style={LabelStyle}>Discount Value * {form.discountType==='PERCENTAGE'?'(%)':'(Rs.)'}</label>
-              <input type="number" min="0" value={form.discountValue} onChange={e=>set('discountValue',e.target.value)}
-                placeholder={form.discountType==='PERCENTAGE'?'e.g. 20':'e.g. 500'} style={InpStyle} />
-            </div>
+            {form.discountType === 'FREEBIE' ? (
+              <div>
+                <label style={LabelStyle}>Free Gift Product *</label>
+                <select value={form.freebieProduct} onChange={e=>set('freebieProduct',e.target.value)} style={{ ...InpStyle, cursor:'pointer' }}>
+                  <option value="">— Select a product —</option>
+                  {products.map(p => (
+                    <option key={p._id} value={p._id}>
+                      {p.title} {typeof p.stock === 'number' ? `(stock: ${p.stock})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : form.discountType === 'FREE_SHIPPING' ? (
+              <div>
+                <label style={LabelStyle}>Coupon Effect</label>
+                <div style={{ ...InpStyle, display:'flex', alignItems:'center', gap:8, background:C.bg, color:C.text }}>
+                  🚚 Waives the delivery charge on this order
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label style={LabelStyle}>Discount Value * {form.discountType==='PERCENTAGE'?'(%)':'(Rs.)'}</label>
+                <input type="number" min="0" value={form.discountValue} onChange={e=>set('discountValue',e.target.value)}
+                  placeholder={form.discountType==='PERCENTAGE'?'e.g. 20':'e.g. 500'} style={InpStyle} />
+              </div>
+            )}
+            {form.discountType === 'FREEBIE' && (
+              <div>
+                <label style={LabelStyle}>Free Gift Quantity</label>
+                <input type="number" min="1" max="10" value={form.freebieQuantity} onChange={e=>set('freebieQuantity',e.target.value)}
+                  placeholder="1" style={InpStyle} />
+              </div>
+            )}
             <div>
               <label style={LabelStyle}>Expiry Date *</label>
               <input type="date" value={form.expiryDate} onChange={e=>set('expiryDate',e.target.value)}
@@ -2678,11 +2792,13 @@ function AdminCouponsTab({ globalSearch = '' }) {
               <input type="number" min="0" value={form.minimumAmount} onChange={e=>set('minimumAmount',e.target.value)}
                 placeholder="0 = no minimum" style={InpStyle} />
             </div>
-            <div>
-              <label style={LabelStyle}>Max Discount Cap (Rs.) <span style={{color:C.mute,fontWeight:400}}>— for % coupons</span></label>
-              <input type="number" min="0" value={form.maximumDiscount} onChange={e=>set('maximumDiscount',e.target.value)}
-                placeholder="Leave blank = no cap" style={InpStyle} />
-            </div>
+            {form.discountType !== 'FREEBIE' && form.discountType !== 'FREE_SHIPPING' && (
+              <div>
+                <label style={LabelStyle}>Max Discount Cap (Rs.) <span style={{color:C.mute,fontWeight:400}}>— for % coupons</span></label>
+                <input type="number" min="0" value={form.maximumDiscount} onChange={e=>set('maximumDiscount',e.target.value)}
+                  placeholder="Leave blank = no cap" style={InpStyle} />
+              </div>
+            )}
             <div>
               <label style={LabelStyle}>Usage Limit</label>
               <input type="number" min="1" value={form.usageLimit} onChange={e=>set('usageLimit',e.target.value)}
@@ -2781,10 +2897,18 @@ function AdminCouponsTab({ globalSearch = '' }) {
                         </span>
                       </td>
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
-                        {c.discountType === 'PERCENTAGE' ? 'Percentage' : 'Fixed'}
+                        {c.discountType === 'PERCENTAGE'    ? 'Percentage'
+                          : c.discountType === 'FIXED'      ? 'Fixed'
+                          : c.discountType === 'FREE_SHIPPING' ? '🚚 Free Shipping'
+                          : '🎁 Freebie'}
                       </td>
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontWeight:700, fontSize:13, color:C.green }}>
-                        {c.discountType === 'PERCENTAGE' ? `${c.discountValue}%` : `Rs. ${c.discountValue}`}
+                        {c.discountType === 'PERCENTAGE'       ? `${c.discountValue}%`
+                          : c.discountType === 'FIXED'         ? `Rs. ${c.discountValue}`
+                          : c.discountType === 'FREE_SHIPPING' ? 'Waives delivery'
+                          : (c.freebieProduct?.title
+                              ? `${c.freebieQuantity || 1}× ${c.freebieProduct.title}`
+                              : '— gift unavailable')}
                       </td>
                       <td style={{ padding:'10px 12px', borderBottom:`1px solid ${C.line}`, fontSize:12, color:C.mute }}>
                         {c.minimumAmount > 0 ? `Rs. ${c.minimumAmount}` : '—'}
@@ -3763,11 +3887,9 @@ export default function AdminDashboard() {
       }}>
 
         {/* Logo */}
-        <div style={{ padding: '20px 18px 18px', borderBottom: `1px solid ${C.line}` }}>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 19, color: C.text, letterSpacing: '-.4px', lineHeight: 1 }}>
-            <span style={{ color: C.accent }}>Trade</span>Engine
-          </div>
-          <div style={{ fontSize: 11, color: C.mute, marginTop: 4, fontWeight: 500, letterSpacing: '.02em' }}>Admin Panel</div>
+        <div style={{ padding: '16px 18px 14px', borderBottom: `1px solid ${C.line}` }}>
+          <img src="/LOGO.png" alt="TradeEngine" style={{ height: 40, width: 'auto', display: 'block' }} />
+          <div style={{ fontSize: 11, color: C.mute, marginTop: 6, fontWeight: 500, letterSpacing: '.02em' }}>Admin Panel</div>
         </div>
 
         {/* Nav sections */}

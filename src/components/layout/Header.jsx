@@ -304,12 +304,11 @@ export default function Header() {
               display: 'grid', gridTemplateColumns: 'auto auto 1fr auto', gap: 16, alignItems: 'center', height: 76 }}>
 
               {/* Logo */}
-              <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: 8,
-                fontWeight: 800, fontSize: 22, letterSpacing: '-.02em', cursor: 'pointer', color: 'white',
-                padding: '6px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
+              <div onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center',
+                cursor: 'pointer', padding: '4px 10px', borderRadius: 4, border: '1px solid transparent', flexShrink: 0 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'white'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
-                Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
+                <img src="/LOGO.png" alt="TradeEngine" style={{ height: 48, width: 'auto', display: 'block' }} />
               </div>
 
               {/* Deliver to widget */}
@@ -512,10 +511,9 @@ export default function Header() {
               {/* Logo (center, takes remaining space) */}
               <div
                 onClick={() => navigate('/')}
-                style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.02em',
-                  cursor: 'pointer', color: 'white', flex: 1, textAlign: 'center' }}
+                style={{ cursor: 'pointer', flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
               >
-                Trade<span style={{ color: '#FF5A1F' }}>Engine</span>
+                <img src="/LOGO.png" alt="TradeEngine" style={{ height: 36, width: 'auto', display: 'block' }} />
               </div>
 
               {/* Bell (right) — only when logged in */}

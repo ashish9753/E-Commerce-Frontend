@@ -13,11 +13,15 @@ const PIPELINE = ['PLACED','CONFIRMED','PACKED','SHIPPED','OUT_FOR_DELIVERY','DE
 const LABELS = {
   PLACED:           'Placed',
   CONFIRMED:        'Confirmed',
-  PACKED:           'Packed',
-  SHIPPED:          'Shipped',
+  PACKED:           'Ready to Ship',
+  SHIPPED:          'Picked Up',
   OUT_FOR_DELIVERY: 'Out for Delivery',
   DELIVERED:        'Delivered',
 };
+
+// Only PLACED → CONFIRMED is an employee action.
+// Everything after CONFIRMED is updated automatically by Upaya.
+const EMPLOYEE_ACTIONABLE = ['PLACED'];
 
 export default function OrderPipeline({ status, onAdvance, busy = false, theme }) {
   const t = {
@@ -62,7 +66,8 @@ export default function OrderPipeline({ status, onAdvance, busy = false, theme }
           const done   = i < currentIdx;
           const active = i === currentIdx;
           const nextStep = i === currentIdx + 1;
-          const clickable = nextStep && typeof onAdvance === 'function' && !busy;
+          const clickable = nextStep && typeof onAdvance === 'function' && !busy
+            && EMPLOYEE_ACTIONABLE.includes(status);
           const col = done ? t.green : active ? t.accent : t.line;
           return (
             <div key={step} style={{ display:'flex', alignItems:'center', flex: i < PIPELINE.length-1 ? 1 : 'none' }}>
@@ -95,9 +100,14 @@ export default function OrderPipeline({ status, onAdvance, busy = false, theme }
           );
         })}
       </div>
-      {typeof onAdvance === 'function' && currentIdx < PIPELINE.length - 1 && (
+      {typeof onAdvance === 'function' && EMPLOYEE_ACTIONABLE.includes(status) && currentIdx < PIPELINE.length - 1 && (
         <div style={{ fontSize:10, color:t.mute, marginTop:6, textAlign:'center' }}>
-          Click the next step to advance the order
+          Click <strong style={{ color:t.accent }}>Confirmed</strong> to approve this order
+        </div>
+      )}
+      {currentIdx >= 1 && currentIdx < PIPELINE.length - 1 && (
+        <div style={{ fontSize:10, color:t.mute, marginTop:6, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+          <span>🚚</span> Remaining steps updated automatically by <strong style={{ color:'#94a3b8' }}>Upaya</strong>
         </div>
       )}
     </div>

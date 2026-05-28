@@ -2,16 +2,18 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useOrders } from '../context/OrderContext';
 import { useAuth } from '../context/AuthContext';
 import { usersApi } from '../api/users';
+import { upayaApi } from '../api/upaya';
 import { formatPriceShort, formatDate } from '../utils/formatters';
 import { useState, useEffect } from 'react';
+import { ClipboardList, BadgeCheck, Package, Truck, MapPin, CheckCircle2 } from 'lucide-react';
 
 const STEPS = [
-  { key:'PLACED',           label:'Order Placed',       icon:'📋', desc:'We have received your order' },
-  { key:'CONFIRMED',        label:'Confirmed',          icon:'✅', desc:'Employee has confirmed your order' },
-  { key:'PACKED',           label:'Packed',             icon:'📦', desc:'Your items have been packed' },
-  { key:'SHIPPED',          label:'Shipped',            icon:'🚚', desc:'Your order is on its way' },
-  { key:'OUT_FOR_DELIVERY', label:'Out for Delivery',   icon:'🛵', desc:'Your order is out for delivery' },
-  { key:'DELIVERED',        label:'Delivered',          icon:'🏠', desc:'Package delivered successfully' },
+  { key:'PLACED',           label:'Order Placed',     sublabel:'Order received',           Icon: ClipboardList },
+  { key:'CONFIRMED',        label:'Confirmed',        sublabel:'Seller confirmed',          Icon: BadgeCheck    },
+  { key:'PACKED',           label:'Ready to Ship',    sublabel:'Handed to Upaya',           Icon: Package       },
+  { key:'SHIPPED',          label:'Picked Up',        sublabel:'Upaya en route',            Icon: Truck         },
+  { key:'OUT_FOR_DELIVERY', label:'Out for Delivery', sublabel:'Courier is nearby',         Icon: MapPin        },
+  { key:'DELIVERED',        label:'Delivered',        sublabel:'Package delivered',         Icon: CheckCircle2  },
 ];
 
 const STATUS_COLOR = {
@@ -22,42 +24,67 @@ const STATUS_COLOR = {
 
 function ProgressTracker({ currentStatus }) {
   const stepIdx = STEPS.findIndex(s => s.key === currentStatus);
+  const progress = stepIdx < 0 ? 0 : (stepIdx / (STEPS.length - 1)) * 100;
 
   return (
-    <div style={{ padding:'28px 32px 24px', background:'white', border:'1px solid #ddd', borderRadius:8, marginBottom:16 }}>
-      <div style={{ display:'flex', alignItems:'flex-start', position:'relative' }}>
-        {/* connecting line */}
-        <div style={{ position:'absolute', top:20, left:20, right:20, height:3, background:'#e5e7eb', zIndex:0 }} />
+    <div style={{ padding:'28px 24px 24px', background:'white', border:'1px solid #e5e7eb', borderRadius:12, marginBottom:16, boxShadow:'0 1px 4px rgba(0,0,0,.05)' }}>
+      {/* Progress bar */}
+      <div style={{ position:'relative', marginBottom:8 }}>
+        {/* Track line */}
+        <div style={{ position:'absolute', top:22, left:'calc(100%/12)', right:'calc(100%/12)', height:3, background:'#e5e7eb', borderRadius:99, zIndex:0 }} />
+        {/* Filled line */}
         <div style={{
-          position:'absolute', top:20, left:20,
-          width: stepIdx < 0 ? 0 : `calc(${(stepIdx/(STEPS.length-1))*100}% - 0px)`,
-          height:3, background:'#007600', zIndex:1, transition:'width .6s ease'
+          position:'absolute', top:22, left:'calc(100%/12)',
+          width:`calc(${progress}% * (10/12))`,
+          height:3, background:'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius:99, zIndex:1,
+          transition:'width .7s cubic-bezier(.4,0,.2,1)'
         }} />
 
-        {STEPS.map((step, i) => {
-          const done    = i < stepIdx;
-          const active  = i === stepIdx;
-          const future  = i > stepIdx;
-          return (
-            <div key={step.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', position:'relative', zIndex:2 }}>
-              <div style={{
-                width:40, height:40, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:16, fontWeight:700, transition:'all .3s',
-                background: done ? '#007600' : active ? '#FF5A1F' : 'white',
-                border: done ? '3px solid #007600' : active ? '3px solid #FF5A1F' : '3px solid #e5e7eb',
-                color: (done || active) ? 'white' : '#aaa',
-                boxShadow: active ? '0 0 0 4px rgba(255,90,31,.2)' : 'none',
-              }}>
-                {done ? '✓' : step.icon}
-              </div>
-              <div style={{ marginTop:10, textAlign:'center' }}>
-                <div style={{ fontSize:12, fontWeight:active?800:done?600:400, color:active?'#FF5A1F':done?'#007600':'#aaa', whiteSpace:'nowrap' }}>
-                  {step.label}
+        {/* Steps */}
+        <div style={{ display:'flex', position:'relative', zIndex:2 }}>
+          {STEPS.map((step, i) => {
+            const done   = i < stepIdx;
+            const active = i === stepIdx;
+            const IconEl = step.Icon;
+            return (
+              <div key={step.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                {/* Circle */}
+                <div style={{
+                  width:44, height:44, borderRadius:'50%',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  transition:'all .3s',
+                  background: done ? '#16a34a' : active ? '#FF5A1F' : '#f3f4f6',
+                  border: done ? '2.5px solid #16a34a' : active ? '2.5px solid #FF5A1F' : '2.5px solid #d1d5db',
+                  boxShadow: active ? '0 0 0 5px rgba(255,90,31,.15)' : done ? '0 0 0 3px rgba(22,163,74,.1)' : 'none',
+                  color: (done || active) ? 'white' : '#9ca3af',
+                }}>
+                  {done
+                    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    : <IconEl size={18} strokeWidth={2} />
+                  }
+                </div>
+
+                {/* Labels */}
+                <div style={{ textAlign:'center' }}>
+                  <div style={{
+                    fontSize:12, fontWeight: active ? 800 : done ? 600 : 500,
+                    color: active ? '#FF5A1F' : done ? '#16a34a' : '#9ca3af',
+                    lineHeight:1.3, whiteSpace:'nowrap',
+                  }}>
+                    {step.label}
+                  </div>
+                  <div style={{
+                    fontSize:10, marginTop:2, whiteSpace:'nowrap',
+                    color: active ? '#f97316' : done ? '#4ade80' : '#d1d5db',
+                    fontWeight: active ? 600 : 400,
+                  }}>
+                    {step.sublabel}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -82,6 +109,8 @@ export default function OrderTrackingPage() {
   const [cancelUpiConfirm, setCancelUpiConfirm] = useState('');
   const [cancelUpiMismatch, setCancelUpiMismatch] = useState(false);
   const [savedRefund, setSavedRefund] = useState({});
+  const [upayaTracking, setUpayaTracking] = useState(null); // { available, ref, tracking, error }
+  const [upayaLoading, setUpayaLoading]   = useState(false);
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -110,6 +139,20 @@ export default function OrderTrackingPage() {
     const r = await getOrderById(id.trim());
     setLoading(false);
     setOrder(r.success ? r.order : null);
+    setUpayaTracking(null);
+    if (r.success && r.order) {
+      setUpayaLoading(true);
+      try {
+        const { data } = await upayaApi.trackOrder(r.order._id);
+        const live = data.data || null;
+        setUpayaTracking(live);
+        if (live?.order) {
+          setOrder(prev => prev ? { ...prev, ...live.order } : prev);
+        }
+      } catch {
+        setUpayaTracking({ available: false });
+      } finally { setUpayaLoading(false); }
+    }
   };
 
   const handleCancel = async () => {
@@ -140,7 +183,10 @@ export default function OrderTrackingPage() {
   const isCancelled = order?.orderStatus === 'CANCELLED';
   const isDelivered = order?.orderStatus === 'DELIVERED';
   const isReturned  = order?.orderStatus === 'RETURNED';
-  const canCancel   = ['PLACED','CONFIRMED'].includes(order?.orderStatus);
+  // Once the order is CONFIRMED, the shipment is booked on Upaya and the
+  // customer can no longer cancel from the storefront — only admin/employee
+  // can cancel post-confirmation.
+  const canCancel   = order?.orderStatus === 'PLACED';
 
   const addr = order?.shippingAddress;
   const statusColor = STATUS_COLOR[order?.orderStatus] || '#666';
@@ -301,6 +347,44 @@ export default function OrderTrackingPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Live courier tracking (Upaya) */}
+                {(upayaLoading || upayaTracking?.available) && (
+                  <div style={{ background:'white', border:'1px solid #ddd', borderRadius:8, overflow:'hidden' }}>
+                    <div style={{ padding:'14px 20px', borderBottom:'1px solid #eee', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                      <span style={{ fontWeight:700, fontSize:15 }}>🚚 Live Courier Tracking <span style={{ fontWeight:400, fontSize:12, color:'#888' }}>(via Upaya)</span></span>
+                      {upayaTracking?.ref && (
+                        <span style={{ fontFamily:'monospace', fontSize:12, color:'#007185', background:'#f0f7ff', padding:'3px 10px', borderRadius:99, border:'1px solid #cfe5ff' }}>
+                          {upayaTracking.ref}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ padding:'16px 20px', fontSize:13, color:'#333', lineHeight:1.7 }}>
+                      {upayaLoading ? 'Loading live tracking…' : (() => {
+                        const t = upayaTracking?.tracking || {};
+                        const status = t.status || t.tracking?.status || '—';
+                        const eta    = t.estimatedDeliveryDate || t.tracking?.estimatedDeliveryDate;
+                        const upayaItems = t.items || t.tracking?.items || [];
+                        return (
+                          <>
+                            <div><strong>Status:</strong> <span style={{ color:'#FF5A1F', fontWeight:700 }}>{String(status).replace(/_/g,' ')}</span></div>
+                            {eta && <div><strong>Estimated delivery:</strong> {formatDate(eta)}</div>}
+                            {upayaItems.length > 0 && (
+                              <div style={{ marginTop:8 }}>
+                                <strong>Items on dispatch:</strong>
+                                <ul style={{ margin:'4px 0 0 18px', padding:0 }}>
+                                  {upayaItems.map((it, i) => (
+                                    <li key={i} style={{ fontSize:12, color:'#555' }}>{it.name} × {it.quantity}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
 
                 {/* Status timeline */}
                 {(order.statusHistory || []).length > 0 && (

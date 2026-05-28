@@ -601,7 +601,10 @@ export default function HomePage() {
         }
 
         /* Banner-style hero — full-width image with text overlay (Amazon-style) */
-        .myn-hero-banner { display: block; }
+        .myn-hero-banner {
+          display: block;
+          height: clamp(330px, 38vw, 510px);
+        }
 
         .myn-hero-bgmedia {
           position: absolute;
@@ -1138,6 +1141,44 @@ export default function HomePage() {
             grid-template-columns: 1fr;
             grid-template-rows: clamp(190px, 52vw, 300px) auto;
             height: auto;
+          }
+
+          /* Banner-style hero uses display:block + position:absolute children,
+             so it has no in-flow content to give it height. Give it an
+             explicit mobile height so the banner doesn't collapse to 0px. */
+          .myn-hero-banner {
+            height: clamp(220px, 58vw, 360px);
+          }
+
+          /* Cap the banner title/subtitle/CTA on phones. The h1 carries an
+             inline font-size from the admin's banner setting, so we need
+             !important to win against the inline style. */
+          .myn-hero-banner .myn-hero-overlay {
+            padding: 16px 18px;
+            gap: 6px;
+          }
+          .myn-hero-banner .myn-hero-overlay h1 {
+            font-size: clamp(14px, 3.6vw, 18px) !important;
+            line-height: 1.1 !important;
+            max-width: 60%;
+          }
+          .myn-hero-banner .myn-hero-overlay p {
+            font-size: 11px;
+            max-width: 60%;
+          }
+          .myn-hero-banner .myn-hero-tag {
+            font-size: 10px;
+            padding: 3px 9px;
+          }
+          .myn-hero-banner .myn-hero-cta {
+            height: 30px;
+            padding: 0 12px;
+            font-size: 11px;
+            gap: 4px;
+          }
+          .myn-hero-banner .myn-hero-cta svg {
+            width: 14px;
+            height: 14px;
           }
 
           .myn-hero-copy {

@@ -31,9 +31,8 @@ export default function ForgotPasswordPage() {
       <div className="bg-ink text-white px-15 py-15 flex flex-col justify-between relative overflow-hidden max-md:hidden">
         <div className="absolute -right-50 -bottom-50 w-125 h-125 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle,rgba(255,90,31,.2) 0%,transparent 60%)' }} />
-        <div className="flex items-center gap-2.5 font-extrabold tracking-[-0.02em] text-[19px] cursor-pointer text-white" onClick={() => navigate('/')}>
-          <div className="logo-mark" />
-          Trade<span className="text-accent">Engine</span>
+        <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
+          <img src="/LOGO.png" alt="TradeEngine" style={{ height: 44, width: 'auto', display: 'block' }} />
         </div>
         <div>
           <div className="font-serif text-[80px] leading-[0.5] text-accent">"</div>

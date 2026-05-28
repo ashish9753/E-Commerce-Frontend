@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Package, Heart, LogOut, Lock, MapPin, Plus, Pencil, Trash2, X, Check, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -92,11 +92,25 @@ export default function ProfilePage() {
   const toast = useToast();
 
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+  const contentRef = useRef(null);
+  const isFirstTabRender = useRef(true);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) setActiveTab(tab);
   }, [searchParams]);
+
+  // On mobile, the sidebar stacks above the content — scroll the content into
+  // view when the user picks a tab so they don't have to scroll manually.
+  useEffect(() => {
+    if (isFirstTabRender.current) {
+      isFirstTabRender.current = false;
+      return;
+    }
+    if (window.matchMedia('(max-width: 768px)').matches && contentRef.current) {
+      contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeTab]);
   const [form, setForm]           = useState({ name: user?.name || '', phone: user?.phone || '' });
   const [pwForm, setPwForm]       = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [loading, setLoading]     = useState(false);
@@ -250,7 +264,7 @@ export default function ProfilePage() {
       <div className="grid grid-cols-[260px_1fr] gap-8 items-start max-md:grid-cols-1">
 
         {/* Sidebar */}
-        <div className="card p-6 sticky top-32.5 self-start">
+        <div className="card p-6 sticky top-32.5 self-start max-md:static">
           <div className="flex flex-col items-center text-center pb-6 border-b border-line mb-4">
             <div className="w-16 h-16 rounded-full bg-ink text-white flex items-center justify-center text-2xl font-bold mb-3">
               {user.name?.[0]?.toUpperCase()}
@@ -276,7 +290,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Content */}
-        <div className="card p-8 max-md:p-4">
+        <div ref={contentRef} className="card p-8 max-md:p-4 scroll-mt-20">
 
           {/* ── My Profile ─────────────────────────────────── */}
           {activeTab === 'profile' && (

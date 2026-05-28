@@ -755,7 +755,7 @@ function EventsSection({ onMutate }) {
         <form onSubmit={submit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Input label="Event Name *" value={draft.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dashain Mega Sale" required />
-            <Input label="Badge / Code" value={draft.badge} onChange={e => set('badge', e.target.value)} placeholder="e.g. DASHAIN50" />
+            <Input label="Badge / Code" value={draft.badge} onChange={e => set('badge', e.target.value.toUpperCase())} placeholder="e.g. DASHAIN50" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Input label="Discount %" type="number" min="0" max="100" value={draft.discount} onChange={e => set('discount', e.target.value)} placeholder="e.g. 50" />
@@ -835,7 +835,7 @@ function EventsSection({ onMutate }) {
                       <td colSpan={6} style={{ padding: '16px 14px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                           <Input value={editDraft.name} onChange={e => setE('name', e.target.value)} placeholder="Event name *" />
-                          <Input value={editDraft.badge} onChange={e => setE('badge', e.target.value)} placeholder="Badge / Code" />
+                          <Input value={editDraft.badge} onChange={e => setE('badge', e.target.value.toUpperCase())} placeholder="Badge / Code" />
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                           <Input type="number" min="0" max="100" value={editDraft.discount} onChange={e => setE('discount', e.target.value)} placeholder="Discount %" />

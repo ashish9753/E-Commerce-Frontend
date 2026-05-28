@@ -12,9 +12,8 @@ export default function Footer() {
       <div className="wrap">
         <div className="grid grid-cols-[1.6fr_.8fr_.8fr_.8fr_1fr] gap-12 py-18 pb-12 max-lg:grid-cols-[1fr_1fr] max-md:grid-cols-1">
           <div>
-            <div className="flex items-center gap-2.5 font-extrabold tracking-[-0.02em] text-2xl text-white">
-              <div className="logo-mark" />
-              Trade<span className="text-accent">Engine</span>
+            <div className="flex items-center">
+              <img src="/LOGO.png" alt="TradeEngine" style={{ height: 48, width: 'auto', display: 'block' }} />
             </div>
             <p className="text-white/55 text-sm mt-4.5 max-w-70 leading-relaxed">
               Nepal's most trusted destination for electronics and home appliances. Quality products, best prices, doorstep delivery.

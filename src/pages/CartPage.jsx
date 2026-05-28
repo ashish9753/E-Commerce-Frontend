@@ -6,10 +6,11 @@ import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { formatPriceShort } from '../utils/formatters';
+import FreebieDetailsModal from '../components/FreebieDetailsModal';
 
 export default function CartPage() {
   const navigate = useNavigate();
-  const { items, updateQty, removeFromCart, removeFromCartNow, subtotal, discountAmount, deliveryCharge, total, finalPrice, applyCoupon, removeCoupon, cart, loading, syncCart } = useCart();
+  const { items, updateQty, removeFromCart, removeFromCartNow, subtotal, discountAmount, deliveryCharge, total, finalPrice, applyCoupon, removeCoupon, cart, loading, syncCart, freebie, freeShipping } = useCart();
   const { toggle } = useWishlist();
   const { user } = useAuth();
   const toast = useToast();
@@ -17,6 +18,7 @@ export default function CartPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [stockIssues, setStockIssues] = useState([]);
+  const [freebieModal, setFreebieModal] = useState(false);
 
   if (!user) {
     return (
@@ -38,8 +40,13 @@ export default function CartPage() {
     setCouponLoading(true);
     const result = await applyCoupon(couponCode.trim().toUpperCase());
     setCouponLoading(false);
-    if (result.success) toast(`Coupon applied! You saved ${formatPriceShort(result.discount)}`);
-    else toast(result.error, 'error');
+    if (result.success) {
+      toast(result.freebie
+        ? `Free gift unlocked: ${result.freebie.title}`
+        : result.freeShipping
+          ? `Free shipping unlocked!`
+          : `Coupon applied! You saved ${formatPriceShort(result.discount)}`);
+    } else toast(result.error, 'error');
   };
 
   const handleRemoveCoupon = async () => {
@@ -75,7 +82,7 @@ export default function CartPage() {
     navigate('/checkout');
   };
 
-  const hasCoupon = discountAmount > 0;
+  const hasCoupon = discountAmount > 0 || !!freebie || freeShipping;
 
   if (items.length === 0) return (
     <div className="wrap py-20 text-center">
@@ -165,7 +172,7 @@ export default function CartPage() {
           {[
             { label: `Subtotal (${items.reduce((s, i) => s + i.quantity, 0)} items)`, val: formatPriceShort(subtotal) },
             ...(discountAmount > 0 ? [{ label: 'Coupon discount', val: `−${formatPriceShort(discountAmount)}`, ok: true }] : []),
-            { label: 'Delivery', val: deliveryCharge === 0 ? 'FREE' : formatPriceShort(deliveryCharge) },
+            { label: 'Delivery', val: deliveryCharge === 0 ? (freeShipping ? 'FREE (coupon)' : 'FREE') : formatPriceShort(deliveryCharge), ok: freeShipping },
           ].map(r => (
             <div key={r.label} className="flex justify-between py-2.5 text-sm text-mute border-b border-dashed border-line">
               <span>{r.label}</span>
@@ -192,8 +199,36 @@ export default function CartPage() {
             </div>
           ) : (
             <div className="bg-ok-tint border border-dashed border-ok text-ok text-xs font-semibold px-3.5 py-2.5 rounded-[10px] flex justify-between items-center mt-4">
-              <span>✓ Coupon applied · saved {formatPriceShort(discountAmount)}</span>
+              <span>
+                {freebie       ? '🎁 Coupon applied · Free gift unlocked'
+                 : freeShipping ? '🚚 Coupon applied · Free shipping'
+                 :                `✓ Coupon applied · saved ${formatPriceShort(discountAmount)}`}
+              </span>
               <button onClick={handleRemoveCoupon} className="bg-transparent border-0 cursor-pointer text-ok font-bold">Remove</button>
+            </div>
+          )}
+
+          {freebie && (
+            <div className="mt-3 border border-dashed border-accent rounded-xl p-3 bg-accent/5 flex items-center gap-3">
+              <div className="w-14 h-14 rounded-lg bg-white border border-line flex items-center justify-center overflow-hidden shrink-0">
+                {freebie.image
+                  ? <img src={freebie.image} alt={freebie.title} className="w-full h-full object-contain p-1" />
+                  : <span className="text-2xl">🎁</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold tracking-widest uppercase text-accent">+ FREE</div>
+                <div className="text-sm font-bold leading-tight truncate">{freebie.title}</div>
+                <div className="text-[11px] text-mute mt-0.5">Added at checkout · Qty {freebie.quantity}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => freebie._id && setFreebieModal(true)}
+                title="View full product details"
+                aria-label="View free gift details"
+                className="shrink-0 w-7 h-7 rounded-full border border-accent bg-white text-accent font-serif font-bold text-sm cursor-pointer flex items-center justify-center hover:bg-accent hover:text-white transition-colors"
+              >
+                i
+              </button>
             </div>
           )}
 
@@ -213,6 +248,14 @@ export default function CartPage() {
           <div className="flex items-center justify-center gap-1.5 mt-3.5 text-xs text-mute">🔒 Secure checkout · SSL encrypted</div>
         </div>
       </div>
+
+      {freebieModal && freebie?._id && (
+        <FreebieDetailsModal
+          productId={freebie._id}
+          quantity={freebie.quantity || 1}
+          onClose={() => setFreebieModal(false)}
+        />
+      )}
     </div>
   );
 }

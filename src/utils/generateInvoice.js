@@ -43,7 +43,29 @@ function shortNum(orderNumber) {
   return orderNumber.toUpperCase();
 }
 
-export function generateInvoice(order, user) {
+// Fetch /LOGO.png once and cache the data URL so re-printing invoices in the
+// same session doesn't refetch. Returns null if the asset can't be loaded.
+let _logoDataUrl = null;
+async function loadLogoDataUrl() {
+  if (_logoDataUrl !== null) return _logoDataUrl;
+  try {
+    const res  = await fetch("/LOGO.png");
+    if (!res.ok) return (_logoDataUrl = "");
+    const blob = await res.blob();
+    _logoDataUrl = await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(r.result);
+      r.onerror   = () => resolve("");
+      r.readAsDataURL(blob);
+    });
+    return _logoDataUrl;
+  } catch {
+    return (_logoDataUrl = "");
+  }
+}
+
+export async function generateInvoice(order, user) {
+  const logoDataUrl = await loadLogoDataUrl();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W      = 210;
   const margin = 14;
@@ -57,14 +79,23 @@ export function generateInvoice(order, user) {
   doc.rect(0, 0, W, 30, "F");
 
   doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(STORE.name, margin, 13);
+
+  // Logo image (left) — falls back to the text name if the PNG can't load.
+  if (logoDataUrl) {
+    // 22mm tall keeps it inside the 30mm header band with breathing room.
+    doc.addImage(logoDataUrl, "PNG", margin, 4, 44, 22);
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text(STORE.name, margin, 13);
+  }
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(STORE.tagline, margin, 19);
-  doc.text(STORE.website, margin, 24);
+  // Push the tagline + website right of the logo so they don't overlap.
+  const taglineX = logoDataUrl ? margin + 48 : margin;
+  doc.text(STORE.tagline, taglineX, 19);
+  doc.text(STORE.website, taglineX, 24);
 
   // INVOICE / CANCELLED CREDIT NOTE label
   const docLabel = isCancelled ? "CREDIT NOTE" : "INVOICE";

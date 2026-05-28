@@ -125,7 +125,14 @@ export function CartProvider({ children }) {
     try {
       const { data } = await cartApi.applyCoupon(code);
       await fetchCart();
-      return { success: true, discount: data.data.discount, finalPrice: data.data.finalPrice, message: data.message };
+      return {
+        success: true,
+        discount:     data.data.discount,
+        finalPrice:   data.data.finalPrice,
+        freebie:      data.data.freebie || null,
+        freeShipping: !!data.data.freeShipping,
+        message:      data.message,
+      };
     } catch (err) {
       return { success: false, error: getErrorMessage(err) };
     }
@@ -147,12 +154,24 @@ export function CartProvider({ children }) {
   const subtotal       = items.reduce((sum, i) => sum + (i.price ?? 0) * (i.quantity ?? 0), 0);
   const discountAmount = cart?.discountAmount || 0;
   const finalPrice     = Math.max(0, subtotal - discountAmount);
-  const deliveryCharge = subtotal >= 5000 ? 0 : 120;
+  // Derive the active freebie / free-shipping flag from the populated coupon
+  // so they survive page reloads.
+  const freebie = cart?.coupon?.discountType === 'FREEBIE' && cart?.coupon?.freebieProduct
+    ? {
+        _id:      cart.coupon.freebieProduct._id,
+        title:    cart.coupon.freebieProduct.title,
+        image:    cart.coupon.freebieProduct.images?.[0] || '',
+        quantity: cart.coupon.freebieQuantity || 1,
+      }
+    : null;
+  const freeShipping   = cart?.coupon?.discountType === 'FREE_SHIPPING';
+  const baseDelivery   = subtotal >= 5000 ? 0 : 120;
+  const deliveryCharge = freeShipping ? 0 : baseDelivery;
   const total          = finalPrice + deliveryCharge;
 
   return (
     <CartContext.Provider value={{
-      cart, items, count, subtotal, discountAmount, finalPrice, deliveryCharge, total, loading,
+      cart, items, count, subtotal, discountAmount, finalPrice, deliveryCharge, total, loading, freebie, freeShipping,
       addToCart, removeFromCart, removeFromCartNow, updateQty, clearCart,
       applyCoupon, removeCoupon, fetchCart, syncCart,
     }}>

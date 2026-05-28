@@ -8,6 +8,7 @@ import { usersApi } from '../api/users';
 import { settingsApi } from '../api/settings';
 import { paymentsApi } from '../api/payments';
 import { deliveryAreasApi } from '../api/deliveryAreas';
+import { upayaApi } from '../api/upaya';
 import { couponsApi } from '../api/coupons';
 import { formatPriceShort } from '../utils/formatters';
 import { cleanPhone, isValidPhone } from '../utils/validators';
@@ -31,14 +32,44 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
     pincode:  initial.pincode  || '', state: initial.state  || '',
     city:     initial.city     || '', houseNo: initial.houseNo || '',
     area:     initial.area     || '', landmark: initial.landmark || '',
+    upayaLocationId: initial.upayaLocationId || null,
+    upayaAreaId:     initial.upayaAreaId || null,
   });
   const set = (k, v) => {
     const value = k === 'phone' ? cleanPhone(v) : v;
     setForm(f => ({ ...f, [k]: value }));
   };
 
+  // Upaya-managed serviceable cities. We use a dropdown so users can only pick
+  // a deliverable location → automatic dispatch on order placement.
+  const [upayaLocations, setUpayaLocations] = useState([]);
+  const [upayaLoading,   setUpayaLoading]   = useState(true);
+  useEffect(() => {
+    upayaApi.getLocations()
+      .then(({ data }) => setUpayaLocations(data.data?.locations || []))
+      .catch(() => setUpayaLocations([]))
+      .finally(() => setUpayaLoading(false));
+  }, []);
+
+  const handleCityChange = (e) => {
+    const id = e.target.value;
+    if (!id) {
+      setForm(f => ({ ...f, city: '', upayaLocationId: null, upayaAreaId: null }));
+      return;
+    }
+    const loc = upayaLocations.find(l => String(l.locationId) === String(id));
+    if (!loc) return;
+    setForm(f => ({
+      ...f,
+      city: loc.locationName || loc.city || '',
+      upayaLocationId: Number(loc.locationId),
+      upayaAreaId:     loc.areaId != null ? Number(loc.areaId) : Number(loc.locationId),
+    }));
+  };
+
   const phoneValid = isValidPhone(form.phone);
-  const valid = form.fullName && phoneValid && form.city && form.state && form.pincode;
+  // Pincode is optional now (Nepal-first store)
+  const valid = form.fullName && phoneValid && form.city && form.state && form.upayaLocationId;
 
   return (
     <div style={{ border: '1px solid #e77600', borderRadius: 6, padding: '18px 20px', background: '#fffdf5', marginTop: 12 }}>
@@ -53,12 +84,28 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
         </div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-        <Inp label="Pincode *" value={form.pincode} onChange={e=>set('pincode',e.target.value)} placeholder="110001" half />
-        <Inp label="City *" value={form.city} onChange={e=>set('city',e.target.value)} placeholder="New Delhi" half />
+        <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#555', marginBottom: 5 }}>
+            City / Delivery Location * <span style={{ color: '#007185', fontWeight: 400 }}>(from Upaya)</span>
+          </label>
+          <select value={form.upayaLocationId || ''} onChange={handleCityChange} disabled={upayaLoading || !upayaLocations.length}
+            style={{ width: '100%', height: 38, border: '1px solid #a0a0a0', borderRadius: 4, padding: '0 10px', fontSize: 13, outline: 'none', background: 'white', cursor: 'pointer' }}>
+            <option value="">
+              {upayaLoading ? 'Loading serviceable cities…' : upayaLocations.length ? '— Select your city —' : 'Delivery service unavailable'}
+            </option>
+            {upayaLocations.map(l => (
+              <option key={l.locationId} value={l.locationId}>{l.locationName}{l.address ? ` — ${l.address}` : ''}</option>
+            ))}
+          </select>
+          {!upayaLoading && !upayaLocations.length && (
+            <div style={{ fontSize: 11, color: '#b12704', marginTop: 3 }}>Couldn't load delivery locations. Try refreshing the page.</div>
+          )}
+        </div>
+        <Inp label="State *" value={form.state} onChange={e=>set('state',e.target.value)} placeholder="Province / State" half />
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-        <Inp label="State *" value={form.state} onChange={e=>set('state',e.target.value)} placeholder="Delhi" half />
         <Inp label="House / Flat No." value={form.houseNo} onChange={e=>set('houseNo',e.target.value)} placeholder="House No., Building" half />
+        <Inp label="Pincode (optional)" value={form.pincode} onChange={e=>set('pincode',e.target.value)} placeholder="Optional" half />
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <Inp label="Area / Colony / Locality" value={form.area} onChange={e=>set('area',e.target.value)} placeholder="Street, Locality" half />
@@ -82,7 +129,7 @@ function AddressForm({ onSave, onCancel, initial = {} }) {
 }
 
 /* ── Order summary sidebar ── */
-function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, onPlace, loading, canPlace, step, codBookingAmount, bookingConfirmed, paymentMethod }) {
+function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, onPlace, loading, canPlace, step, codBookingAmount, bookingConfirmed, paymentMethod, freeShipping, freebie }) {
   // `total` is the order grand total — also used by the COD-booking breakdown
   // below to compute "Pay on delivery" = total − booking. Kept as a local alias
   // so the markup reads clearly; the parent doesn't pass `checkoutTotal`.
@@ -120,7 +167,9 @@ function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Delivery:</span>
             <span style={{ color: deliveryCharge === 0 ? '#007600' : undefined }}>
-              {deliveryCharge === 0 ? 'FREE' : formatPriceShort(deliveryCharge)}
+              {deliveryCharge === 0
+                ? (freeShipping ? 'FREE (coupon)' : 'FREE')
+                : formatPriceShort(deliveryCharge)}
             </span>
           </div>
           <div style={{ borderTop: '1px solid #ddd', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 17, color: '#B12704' }}>
@@ -190,6 +239,34 @@ function OrderSummary({ items, subtotal, deliveryCharge, discountAmount, total, 
             </div>
           );
         })}
+
+        {freebie && (
+          <div style={{
+            display: 'flex', gap: 10, marginTop: 4, paddingTop: 12,
+            borderTop: '1px dashed #bbf7d0', alignItems: 'flex-start',
+            background: '#f0fdf4', borderRadius: 6, padding: 10,
+          }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{ width: 56, height: 56, border: '1px solid #bbf7d0', borderRadius: 4, background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {freebie.image
+                  ? <img src={freebie.image} alt={freebie.title} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: 24 }}>🎁</span>}
+              </div>
+              <div style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: '#15803d', color: 'white', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {freebie.quantity || 1}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#15803d', marginBottom: 2 }}>
+                + FREE GIFT
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, marginBottom: 3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                {freebie.title}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d' }}>FREE</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -212,40 +289,43 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const buyNow   = location.state?.buyNow || null;          // set when coming from "Buy Now"
-  const { items, subtotal, total, deliveryCharge, discountAmount, clearCart, cart } = useCart();
+  const { items, subtotal, total, deliveryCharge, discountAmount, clearCart, cart, freeShipping, freebie } = useCart();
 
   // For Buy Now, the coupon may come from either the PDP "Have a coupon?"
   // (passed via navigation state) or the user's cart-level coupon. We ask the
   // backend to compute the actual discount for this single product — the
   // server is the source of truth for coupon math.
-  const [buyNowDiscount, setBuyNowDiscount] = useState(0);
+  const [buyNowDiscount, setBuyNowDiscount]         = useState(0);
+  const [buyNowFreeShipping, setBuyNowFreeShipping] = useState(false);
+  const [buyNowFreebie, setBuyNowFreebie]           = useState(null);
   const buyNowCouponCode = buyNow ? (buyNow.couponCode || cart?.coupon?.code || null) : null;
   useEffect(() => {
-    if (!buyNow || !buyNowCouponCode) { setBuyNowDiscount(0); return; }
+    if (!buyNow || !buyNowCouponCode) {
+      setBuyNowDiscount(0);
+      setBuyNowFreeShipping(false);
+      setBuyNowFreebie(null);
+      return;
+    }
     let cancelled = false;
     couponsApi.validate({
       code: buyNowCouponCode,
       directItem: { productId: buyNow.productId, quantity: buyNow.quantity },
     })
-      .then(({ data }) => { if (!cancelled) setBuyNowDiscount(Number(data?.data?.discount) || 0); })
-      .catch(() => { if (!cancelled) setBuyNowDiscount(0); });
+      .then(({ data }) => {
+        if (cancelled) return;
+        setBuyNowDiscount(Number(data?.data?.discount) || 0);
+        setBuyNowFreeShipping(!!data?.data?.freeShipping);
+        setBuyNowFreebie(data?.data?.freebie || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBuyNowDiscount(0);
+        setBuyNowFreeShipping(false);
+        setBuyNowFreebie(null);
+      });
     return () => { cancelled = true; };
   }, [buyNow, buyNowCouponCode, buyNow?.productId, buyNow?.quantity]);
 
-  // Buy-now: synthetic display items + totals (bypasses cart entirely)
-  const checkoutItems    = buyNow
-    ? [{ _id: 'buy-now', product: { _id: buyNow.productId, title: buyNow.title, images: buyNow.image ? [buyNow.image] : [] }, quantity: buyNow.quantity, price: buyNow.price }]
-    : items;
-  const checkoutSubtotal = buyNow ? buyNow.price * buyNow.quantity : subtotal;
-  const checkoutDelivery = buyNow ? (checkoutSubtotal >= 5000 ? 0 : 120) : deliveryCharge;
-  const checkoutDiscount = buyNow ? buyNowDiscount : discountAmount;
-  const checkoutTotal    = buyNow
-    ? Math.max(0, checkoutSubtotal + checkoutDelivery - buyNowDiscount)
-    : total;
-  // Extra payload fields forwarded to every placeOrder call when buy-now
-  const buyNowExtra      = buyNow
-    ? { useCart: false, directItem: { productId: buyNow.productId, quantity: buyNow.quantity }, couponCode: buyNowCouponCode || undefined }
-    : {};
   const { user } = useAuth();
   const { placeOrder } = useOrders();
   const toast = useToast();
@@ -265,6 +345,33 @@ export default function CheckoutPage() {
   const [deliveryCheck, setDeliveryCheck]       = useState(null); // { available, city, deliveryCharge } | null
   const [deliveryChecking, setDeliveryChecking] = useState(false);
   const [orderSubmitted, setOrderSubmitted]     = useState(false);
+
+  // Buy-now: synthetic display items + totals (bypasses cart entirely)
+  const checkoutItems    = buyNow
+    ? [{ _id: 'buy-now', product: { _id: buyNow.productId, title: buyNow.title, images: buyNow.image ? [buyNow.image] : [] }, quantity: buyNow.quantity, price: buyNow.price }]
+    : items;
+  const checkoutSubtotal = buyNow ? buyNow.price * buyNow.quantity : subtotal;
+  // Resolve the actual delivery charge in priority order:
+  //   1. FREE_SHIPPING coupon (cart-level OR buy-now) overrides everything → 0
+  //   2. The address-level deliveryCheck (custom DeliveryArea or Upaya rate)
+  //   3. The cart context's default / Buy-Now threshold fallback
+  const effectiveFreeShipping = freeShipping || buyNowFreeShipping;
+  const effectiveFreebie      = buyNow ? buyNowFreebie : freebie;
+  const cartLevelDelivery = buyNow ? (checkoutSubtotal >= 5000 ? 0 : 120) : deliveryCharge;
+  const addressDelivery   = deliveryCheck?.available && typeof deliveryCheck.deliveryCharge === 'number'
+    ? deliveryCheck.deliveryCharge
+    : null;
+  const checkoutDelivery  = effectiveFreeShipping ? 0
+    : addressDelivery !== null ? addressDelivery
+    : cartLevelDelivery;
+  const checkoutDiscount = buyNow ? buyNowDiscount : discountAmount;
+  const checkoutTotal    = buyNow
+    ? Math.max(0, checkoutSubtotal + checkoutDelivery - buyNowDiscount)
+    : Math.max(0, checkoutSubtotal + checkoutDelivery - checkoutDiscount);
+  // Extra payload fields forwarded to every placeOrder call when buy-now
+  const buyNowExtra      = buyNow
+    ? { useCart: false, directItem: { productId: buyNow.productId, quantity: buyNow.quantity }, couponCode: buyNowCouponCode || undefined }
+    : {};
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -310,17 +417,35 @@ export default function CheckoutPage() {
         : codCfg.bookingValue)
     : 0;
 
-  const checkDelivery = async (city) => {
-    // Surface a clear, actionable state instead of leaving the user with a
-    // permanently-disabled "Use this address" button and no explanation.
-    if (!city || !city.trim()) {
-      setDeliveryCheck({ available: false, reason: 'no_city', message: 'This address has no city. Please edit it.' });
+  // Upaya-first delivery check. Address picked from Upaya's location dropdown
+  // gets a live rate from Upaya. Legacy addresses (no upayaLocationId) fall
+  // back to the manual city lookup so existing customers still work.
+  const checkDelivery = async (addr) => {
+    if (!addr) {
+      setDeliveryCheck({ available: false, reason: 'no_address', message: 'Please select an address.' });
       return;
     }
     setDeliveryChecking(true);
     try {
-      const { data } = await deliveryAreasApi.check(city.trim());
-      setDeliveryCheck(data.data);
+      if (addr.upayaLocationId) {
+        const { data } = await upayaApi.getRate({
+          location_id: addr.upayaLocationId,
+          initial_weight: 1,
+          service_type_id: 3,
+          order_type: 'delivery_order',
+        });
+        const rate = data.data?.rate || {};
+        const charge = Number(rate.total ?? rate.amount ?? rate.rate ?? rate.deliveryCharge ?? 0);
+        setDeliveryCheck({ available: true, city: addr.city, deliveryCharge: charge, source: 'upaya' });
+      } else if (addr.city && addr.city.trim()) {
+        const { data } = await deliveryAreasApi.check(addr.city.trim());
+        const fallback = data.data;
+        setDeliveryCheck(fallback?.available
+          ? fallback
+          : { available: false, reason: 'no_upaya_location', message: 'Please edit this address and pick a city from the delivery list.' });
+      } else {
+        setDeliveryCheck({ available: false, reason: 'no_city', message: 'This address has no city. Please edit it.' });
+      }
     } catch (err) {
       setDeliveryCheck({
         available: false,
@@ -335,7 +460,7 @@ export default function CheckoutPage() {
   // Check delivery whenever selected address changes
   useEffect(() => {
     const addr = addresses.find(a => a._id === selectedAddressId);
-    if (addr?.city) checkDelivery(addr.city);
+    if (addr) checkDelivery(addr);
     else setDeliveryCheck(null);
   }, [selectedAddressId, addresses]);
 
@@ -496,8 +621,8 @@ export default function CheckoutPage() {
     <div style={{ background: '#f0f2f2', minHeight: '100vh' }}>
       {/* Checkout header */}
       <div style={{ background: '#131921', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 20, borderBottom: '1px solid #3a4553' }}>
-        <div style={{ fontWeight: 800, fontSize: 22, color: 'white', cursor: 'pointer' }} onClick={() => navigate('/')}>
-          <span style={{ color: '#FF9900' }}>Trade</span><span style={{ color: 'white' }}>Engine</span>
+        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => navigate('/')}>
+          <img src="/LOGO.png" alt="TradeEngine" style={{ height: 44, width: 'auto', display: 'block' }} />
         </div>
         <div style={{ color: '#aaa', fontSize: 18, fontWeight: 300 }}>|</div>
         <div style={{ color: '#ddd', fontSize: 16, fontWeight: 600 }}>Checkout</div>
@@ -628,6 +753,7 @@ export default function CheckoutPage() {
                             <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 6 }}>
                               <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 14, marginBottom: 4 }}>
                                 {deliveryCheck.reason === 'no_city' ? '⚠ Missing city'
+                                  : deliveryCheck.reason === 'no_upaya_location' ? '⚠ Pick a delivery city'
                                   : deliveryCheck.reason === 'check_failed' ? '⚠ Could not verify delivery'
                                   : '🚫 Delivery not available in this area'}
                               </div>
@@ -636,7 +762,7 @@ export default function CheckoutPage() {
                                   <>We currently do not deliver to <strong>{addresses.find(a => a._id === selectedAddressId)?.city || 'this location'}</strong>. Please use a different address or contact support.</>
                                 )}
                               </div>
-                              {deliveryCheck.reason === 'no_city' && (
+                              {(deliveryCheck.reason === 'no_city' || deliveryCheck.reason === 'no_upaya_location') && (
                                 <button
                                   onClick={() => { setEditingAddrId(selectedAddressId); setShowAddForm(false); }}
                                   style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: '#dc2626', background: 'white', border: '1px solid #fca5a5', borderRadius: 4, padding: '6px 12px', cursor: 'pointer' }}>
@@ -1047,6 +1173,8 @@ export default function CheckoutPage() {
           codBookingAmount={codBookingAmount}
           bookingConfirmed={bookingConfirmed}
           paymentMethod={paymentMethod}
+          freeShipping={effectiveFreeShipping}
+          freebie={effectiveFreebie}
         />
       </div>
     </div>

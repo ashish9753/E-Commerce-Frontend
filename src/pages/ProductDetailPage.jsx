@@ -9,9 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import { productsApi } from '../api/products';
 import { reviewsApi } from '../api/reviews';
 import { deliveryAreasApi } from '../api/deliveryAreas';
+import { upayaApi } from '../api/upaya';
 import { normalizeProduct, normalizeProducts } from '../utils/normalizers';
 import { formatPriceShort, stars } from '../utils/formatters';
 import ProductCard from '../components/product/ProductCard';
+import FreebieDetailsModal from '../components/FreebieDetailsModal';
 
 /* ── helpers ── */
 const Rs = (n) => `Rs. ${Math.round(Number(n || 0)).toLocaleString('en-IN')}`;
@@ -71,7 +73,8 @@ export default function ProductDetailPage() {
   const [couponLoading, setCouponLoading] = useState(false);
   // Coupon validated for THIS product (independent of cart). Carried into the
   // Buy Now flow via navigation state.
-  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discount }
+  const [appliedCoupon, setAppliedCoupon] = useState(null); // { code, discount, freebie? }
+  const [freebieModal, setFreebieModal] = useState(false);
 
   const [reviewRating, setReviewRating]       = useState(0);
   const [reviewHover, setReviewHover]         = useState(0);
@@ -80,11 +83,38 @@ export default function ProductDetailPage() {
   const [reviewLoading, setReviewLoading]     = useState(false);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
 
+  // Upaya-first delivery check. We try Upaya (live network); if Upaya isn't
+  // configured / reachable, fall back to our manual delivery-areas list so the
+  // page still works.
   const checkLocation = async (loc) => {
     const q = (loc || location).trim();
     if (!q) return;
     setLocationChecking(true);
     try {
+      const match = areaSuggestions.find(a =>
+        (a.locationName || a.city || '').toLowerCase() === q.toLowerCase()
+      ) || areaSuggestions.find(a =>
+        (a.locationName || a.city || '').toLowerCase().startsWith(q.toLowerCase())
+      );
+      if (match?.locationId) {
+        try {
+          const rateRes = await upayaApi.getRate({
+            location_id: match.locationId,
+            initial_weight: 1,
+            service_type_id: 3,
+            order_type: 'delivery_order',
+          });
+          const rate = rateRes.data?.data?.rate || {};
+          const charge = Number(rate.total ?? rate.amount ?? rate.rate ?? rate.deliveryCharge ?? 0);
+          setLocationResult({
+            available: true,
+            city: match.locationName || match.city,
+            deliveryCharge: charge,
+            source: 'upaya',
+          });
+          return;
+        } catch { /* fall through to legacy check */ }
+      }
       const { data } = await deliveryAreasApi.check(q);
       setLocationResult(data.data);
     } catch { setLocationResult({ available: false }); }
@@ -92,10 +122,29 @@ export default function ProductDetailPage() {
   };
 
   // Pull the list of serviceable cities once so we can power the autocomplete.
+  // Prefer Upaya — it's the source of truth — and gracefully fall back to our
+  // own list if Upaya is unreachable.
   useEffect(() => {
-    deliveryAreasApi.getAll()
-      .then(({ data }) => setAreaSuggestions(data.data?.areas || []))
-      .catch(() => {});
+    upayaApi.getLocations()
+      .then(({ data }) => {
+        const list = data.data?.locations || [];
+        if (list.length) {
+          setAreaSuggestions(list.map(l => ({
+            locationId:   l.locationId,
+            locationName: l.locationName,
+            city:         l.locationName,
+            address:      l.address,
+            areaId:       l.areaId,
+          })));
+          return;
+        }
+        throw new Error('no upaya locations');
+      })
+      .catch(() => {
+        deliveryAreasApi.getAll()
+          .then(({ data }) => setAreaSuggestions(data.data?.areas || []))
+          .catch(() => {});
+      });
   }, []);
 
   // Auto-check using saved address city when user is logged in
@@ -238,10 +287,14 @@ export default function ProductDetailPage() {
         code,
         directItem: { productId: product._id, quantity: qty },
       });
-      const discount = Number(data?.data?.discount) || 0;
-      setAppliedCoupon({ code, discount });
+      const discount     = Number(data?.data?.discount) || 0;
+      const freebie      = data?.data?.freebie || null;
+      const freeShipping = !!data?.data?.freeShipping;
+      setAppliedCoupon({ code, discount, freebie, freeShipping });
       setCouponCode('');
-      toast(`Coupon applied! You saved ${formatPriceShort(discount)}`);
+      toast(freebie       ? `Coupon applied! Free gift: ${freebie.title}`
+          : freeShipping  ? `Coupon applied! Free shipping unlocked.`
+          :                 `Coupon applied! You saved ${formatPriceShort(discount)}`);
     } catch (err) {
       const msg = err?.response?.data?.message || 'Could not apply coupon';
       toast(msg, 'error');
@@ -630,15 +683,52 @@ export default function ProductDetailPage() {
               <div style={{ marginBottom:14 }}>
                 <div style={{ fontSize:12, fontWeight:600, color:'#555', marginBottom:6 }}>Have a coupon?</div>
                 {appliedCouponCode ? (
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-                    background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:6, padding:'8px 12px' }}>
-                    <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
-                      ✓ <span style={{ fontFamily:'monospace', letterSpacing:'.05em' }}>{appliedCouponCode}</span> applied · saved {formatPriceShort(appliedCoupon?.discount || 0)}
-                    </span>
-                    <button onClick={handleRemoveCoupon}
-                      style={{ fontSize:11, color:'#CC0C39', background:'none', border:'none', cursor:'pointer', fontWeight:700, padding:0 }}>
-                      Remove
-                    </button>
+                  <div style={{ background:'#f0fdf4', border:'1px dashed #86efac', borderRadius:6, padding:'8px 12px' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                      <span style={{ fontSize:12, color:'#166534', fontWeight:600 }}>
+                        {appliedCoupon?.freebie
+                          ? <>🎁 <span style={{ fontFamily:'monospace', letterSpacing:'.05em' }}>{appliedCouponCode}</span> applied · free gift unlocked</>
+                          : appliedCoupon?.freeShipping
+                            ? <>🚚 <span style={{ fontFamily:'monospace', letterSpacing:'.05em' }}>{appliedCouponCode}</span> applied · free shipping</>
+                            : <>✓ <span style={{ fontFamily:'monospace', letterSpacing:'.05em' }}>{appliedCouponCode}</span> applied · saved {formatPriceShort(appliedCoupon?.discount || 0)}</>
+                        }
+                      </span>
+                      <button onClick={handleRemoveCoupon}
+                        style={{ fontSize:11, color:'#CC0C39', background:'none', border:'none', cursor:'pointer', fontWeight:700, padding:0 }}>
+                        Remove
+                      </button>
+                    </div>
+                    {appliedCoupon?.freebie && (
+                      <div style={{ marginTop:8, display:'flex', alignItems:'center', gap:10, padding:'6px 8px', background:'white', border:'1px solid #bbf7d0', borderRadius:6 }}>
+                        <div style={{ width:40, height:40, borderRadius:4, background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 }}>
+                          {appliedCoupon.freebie.image
+                            ? <img src={appliedCoupon.freebie.image} alt={appliedCoupon.freebie.title} style={{ width:'100%', height:'100%', objectFit:'contain', padding:2 }} />
+                            : <span style={{ fontSize:18 }}>🎁</span>}
+                        </div>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontSize:10, fontWeight:800, letterSpacing:'.1em', color:'#15803d', textTransform:'uppercase' }}>+ FREE</div>
+                          <div style={{ fontSize:12, fontWeight:700, color:'#0F1111', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {appliedCoupon.freebie.title}
+                          </div>
+                          <div style={{ fontSize:10, color:'#666' }}>Added at checkout · Qty {appliedCoupon.freebie.quantity || 1}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => appliedCoupon.freebie._id && setFreebieModal(true)}
+                          title="View full product details"
+                          aria-label="View free gift details"
+                          style={{
+                            flexShrink:0, width:26, height:26, borderRadius:'50%',
+                            border:'1px solid #86efac', background:'#f0fdf4', color:'#15803d',
+                            fontWeight:800, fontSize:13, fontFamily:'Georgia, serif',
+                            cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                            lineHeight:1, padding:0,
+                          }}
+                        >
+                          i
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ display:'flex', gap:6 }}>
@@ -663,9 +753,9 @@ export default function ProductDetailPage() {
 
               {/* Seller info */}
               <div style={{ fontSize:12, color:'#555', display:'flex', flexDirection:'column', gap:5 }}>
-                <div><span style={{ display:'inline-block', width:80 }}>Ships from</span><span style={{ color:'#0F1111', fontWeight:500 }}>TradeEngine</span></div>
+                <div><span style={{ display:'inline-block', width:80 }}>Delivery</span><span style={{ color:'#0F1111', fontWeight:500 }}>Upaya</span></div>
                 <div><span style={{ display:'inline-block', width:80 }}>Sold by</span><span style={{ color:'#007185', fontWeight:500, cursor:'pointer' }}>TradeEngine</span></div>
-                <div><span style={{ display:'inline-block', width:80 }}>Payment</span><span style={{ color:'#0F1111', fontWeight:500 }}>Secure transaction</span></div>
+                <div><span style={{ display:'inline-block', width:80 }}>Payment</span><span style={{ color:'#0F1111', fontWeight:500 }}>Fonepay</span></div>
               </div>
 
               {/* Return policy */}
@@ -880,6 +970,14 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {freebieModal && appliedCoupon?.freebie?._id && (
+        <FreebieDetailsModal
+          productId={appliedCoupon.freebie._id}
+          quantity={appliedCoupon.freebie.quantity || 1}
+          onClose={() => setFreebieModal(false)}
+        />
+      )}
     </div>
   );
 }
