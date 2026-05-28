@@ -49,6 +49,11 @@ const fireErrorToast = (error) => {
   }
 };
 
+// Tag returned by the backend when an admin/employee account was used to
+// sign in elsewhere — the previously-open browser must be logged out
+// immediately, without attempting a refresh (which would also fail).
+const SESSION_REPLACED_TAG = 'SESSION_REPLACED';
+
 // On 401: try to refresh, then replay request
 client.interceptors.response.use(
   (res) => res,
@@ -57,6 +62,24 @@ client.interceptors.response.use(
     if (!original) { fireErrorToast(error); return Promise.reject(error); }
 
     const originalToken = original.headers?.Authorization?.replace('Bearer ', '') || null;
+    const serverMessage = error.response?.data?.message || '';
+
+    // Server-side single-session enforcement: the account was just used to
+    // log in on another device. Skip the refresh dance and force a clean
+    // logout with a clear toast so the user knows what happened.
+    if (error.response?.status === 401 && serverMessage.includes(SESSION_REPLACED_TAG)) {
+      localStorage.removeItem('accessToken');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:toast', {
+          detail: {
+            message: 'Your account was used to sign in elsewhere. You have been logged out.',
+            type: 'warn',
+          },
+        }));
+        window.dispatchEvent(new CustomEvent('auth:logout', { detail: { token: originalToken, reason: 'session_replaced' } }));
+      }
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
