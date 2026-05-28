@@ -5,12 +5,19 @@ import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
 
+// How long to wait after the last +/- click before firing the PATCH. Short
+// enough to feel real-time, long enough to collapse rapid clicks (1→5 in
+// half a second) into a single request.
+const DEBOUNCE_MS = 350;
+
 export function CartProvider({ children }) {
   const { user } = useAuth();
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(false);
-  // pending[productId] = new qty (0 = remove) — never sent to server until syncCart()
-  const pendingRef = useRef({});
+  // Per-product debounce timers + latest pending value, keyed by productId.
+  // We send `latest` after DEBOUNCE_MS of inactivity, then clear the entry.
+  // 0 means "remove this line" — fired immediately, no debounce.
+  const pendingRef = useRef({});  // pid -> { qty, timer }
 
   const fetchCart = useCallback(async () => {
     if (!user) { setCart(null); return; }
@@ -18,7 +25,9 @@ export function CartProvider({ children }) {
     try {
       const { data } = await cartApi.get();
       setCart(data.data.cart);
-      pendingRef.current = {}; // server is now the source of truth
+      // Cancel any in-flight debounce — server is the source of truth now.
+      Object.values(pendingRef.current).forEach(p => p?.timer && clearTimeout(p.timer));
+      pendingRef.current = {};
     } catch {
       setCart(null);
     } finally {
@@ -32,7 +41,8 @@ export function CartProvider({ children }) {
     try {
       const { data } = await cartApi.addItem(productId, quantity);
       setCart(data.data.cart);
-      // server has canonical state for this item now
+      const entry = pendingRef.current[productId];
+      if (entry?.timer) clearTimeout(entry.timer);
       delete pendingRef.current[productId];
       return { success: true };
     } catch (err) {
@@ -40,7 +50,25 @@ export function CartProvider({ children }) {
     }
   };
 
-  // Local-only — no API call. Pending is flushed when user clicks Proceed to Checkout.
+  // Fire the queued PATCH for a single product. Called from the debounce
+  // timer below. On failure we re-fetch the cart so the UI lands on the
+  // server's truth instead of an inconsistent optimistic value.
+  const flushOne = async (productId) => {
+    const entry = pendingRef.current[productId];
+    if (!entry) return;
+    const qty = entry.qty;
+    delete pendingRef.current[productId];
+    try {
+      if (qty === 0) await cartApi.removeItem(productId);
+      else           await cartApi.updateItem(productId, qty);
+    } catch {
+      // Server rejected (stock issue, deleted product, etc.) — reload truth.
+      fetchCart();
+    }
+  };
+
+  // Optimistic local update + debounced PATCH. The user sees the change
+  // immediately; the database catches up DEBOUNCE_MS after their last click.
   const updateQty = (productId, quantity) => {
     if (quantity < 1) return; // minimum is 1 — use Remove button to delete
     setCart(prev => {
@@ -51,11 +79,16 @@ export function CartProvider({ children }) {
       });
       return { ...prev, items };
     });
-    pendingRef.current[productId] = quantity;
+
+    const existing = pendingRef.current[productId];
+    if (existing?.timer) clearTimeout(existing.timer);
+    const timer = setTimeout(() => flushOne(productId), DEBOUNCE_MS);
+    pendingRef.current[productId] = { qty: quantity, timer };
   };
 
-  // Local-only remove — flushed on Proceed to Checkout.
-  const removeFromCart = (productId) => {
+  // Optimistic local removal + immediate API call — no debounce because
+  // delete is a deliberate one-shot action (Trash icon click).
+  const removeFromCart = async (productId) => {
     setCart(prev => {
       if (!prev) return prev;
       const items = prev.items.filter(i => {
@@ -64,19 +97,8 @@ export function CartProvider({ children }) {
       });
       return { ...prev, items };
     });
-    pendingRef.current[productId] = 0;
-  };
-
-  // Immediate API remove — used for "Save for later" which must persist right away.
-  const removeFromCartNow = async (productId) => {
-    setCart(prev => {
-      if (!prev) return prev;
-      const items = prev.items.filter(i => {
-        const id = i.product?._id || i.product;
-        return id?.toString() !== productId?.toString();
-      });
-      return { ...prev, items };
-    });
+    const existing = pendingRef.current[productId];
+    if (existing?.timer) clearTimeout(existing.timer);
     delete pendingRef.current[productId];
     try {
       const { data } = await cartApi.removeItem(productId);
@@ -88,13 +110,20 @@ export function CartProvider({ children }) {
     }
   };
 
-  // Flush all pending local changes to the server, then return the fresh server cart items.
-  // Called by CartPage when user clicks "Proceed to Checkout".
+  // Same behaviour as removeFromCart now — kept as a separate name for
+  // existing callers (e.g. "Save for later" in CartPage).
+  const removeFromCartNow = removeFromCart;
+
+  // Force-flush any in-flight debounced PATCHes, then return the fresh
+  // server cart. Called by CartPage when the user clicks Proceed to
+  // Checkout — guarantees the order placement sees the latest quantities.
   const syncCart = async () => {
     const entries = Object.entries(pendingRef.current);
     if (entries.length > 0) {
+      // Cancel timers and fire everything in parallel.
+      entries.forEach(([, p]) => p?.timer && clearTimeout(p.timer));
       await Promise.all(
-        entries.map(([pid, qty]) =>
+        entries.map(([pid, { qty }]) =>
           qty === 0
             ? cartApi.removeItem(pid).catch(() => {})
             : cartApi.updateItem(pid, qty).catch(() => {})
@@ -102,7 +131,6 @@ export function CartProvider({ children }) {
       );
       pendingRef.current = {};
     }
-    // Always fetch fresh so we get server-validated quantities and stock info
     try {
       const { data } = await cartApi.get();
       const freshCart = data.data.cart;
