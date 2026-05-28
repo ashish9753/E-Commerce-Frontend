@@ -182,7 +182,7 @@ function Btn({ children, onClick, disabled, variant = 'ghost', style }) {
 /* ══════════════════════════════════════════════════════
    OVERVIEW TAB
 ══════════════════════════════════════════════════════ */
-const NOTIF_ICONS = { ORDER: '🛒', SYSTEM: '⚠️', PROMO: '🎉', SUPPORT: '💬' };
+const NOTIF_ICONS = { ORDER: '🛒', PAYMENT: '💳', OFFER: '🎁', REFUND: '↩️', SYSTEM: '⚠️' };
 
 function timeAgo(date) {
   const diff = Date.now() - new Date(date).getTime();
