@@ -376,7 +376,7 @@ function HeroMyntraStyle({ banners = [] }) {
 
 function RisingStars({ products }) {
   const navigate = useNavigate();
-  const items = products.slice(0, 5);
+  const items = products.slice(0, 15);
   if (!items.length) return null;
 
   return (
@@ -867,6 +867,20 @@ export default function HomePage() {
           gap: 10px;
           overflow-x: auto;
           padding-bottom: 22px;
+        }
+
+        /* Rising Stars: horizontal carousel so all items are reachable by
+           scrolling sideways instead of being squeezed into a fixed grid. */
+        .myn-brand-row {
+          display: flex;
+          grid-template-columns: none;
+          scroll-snap-type: x mandatory;
+          scroll-behavior: smooth;
+        }
+
+        .myn-brand-row .myn-star-card {
+          flex: 0 0 clamp(190px, 18vw, 220px);
+          scroll-snap-align: start;
         }
 
         .myn-medal-row {
