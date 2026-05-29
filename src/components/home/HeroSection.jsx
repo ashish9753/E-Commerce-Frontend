@@ -6,7 +6,7 @@ const SLIDES = [
     src: '/Banner1.png',
     offers: [
       { label: 'Up to 40% OFF', sub: 'On Top Electronics', color: '#FF5A1F' },
-      { label: 'Free Delivery', sub: 'Orders above ₹499', color: '#16a34a' },
+      { label: 'Free Delivery', sub: 'Orders above Rs. 499', color: '#16a34a' },
       { label: 'No Cost EMI', sub: 'On Select Products', color: '#2563eb' },
     ],
     badge: 'ELECTRONICS',
@@ -16,7 +16,7 @@ const SLIDES = [
     src: '/Banner2.png',
     offers: [
       { label: 'Up to 35% OFF', sub: 'Home Appliances', color: '#7c3aed' },
-      { label: 'Exchange Offer', sub: 'Up to ₹15,000 off', color: '#d97706' },
+      { label: 'Exchange Offer', sub: 'Up to Rs. 15,000 off', color: '#d97706' },
       { label: '1-Year Warranty', sub: 'On All Products', color: '#0891b2' },
     ],
     badge: 'HOME APPLIANCES',

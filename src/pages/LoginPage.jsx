@@ -7,7 +7,7 @@ import { validators } from '../utils/validators';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const BENEFITS = [
-  { icon: <Truck size={16} />,       text: 'Free delivery on orders above ₹499' },
+  { icon: <Truck size={16} />,       text: 'Free delivery on orders above Rs. 499' },
   { icon: <RefreshCw size={16} />,   text: 'Hassle-free 7-day easy returns' },
   { icon: <ShieldCheck size={16} />, text: '100% genuine & warranty-backed products' },
   { icon: <Star size={16} />,        text: 'Exclusive member-only deals & offers' },

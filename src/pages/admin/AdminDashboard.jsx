@@ -1209,7 +1209,7 @@ function EmployeesTab({ globalSearch = '' }) {
                   { l:'Designation',        k:'designation',    t:'text',     p:'e.g. Sales Manager',                 ac:'off' },
                   { l:'Department',         k:'department',     t:'text',     p:'e.g. Sales',                         ac:'off' },
                   { l:'Joining Date',       k:'joiningDate',    t:'date',     p:'',                                   ac:'off' },
-                  { l:'Monthly Salary (₹)', k:'monthlySalary',  t:'number',   p:'e.g. 25000',                         ac:'off' },
+                  { l:'Monthly Salary (Rs.)', k:'monthlySalary',  t:'number',   p:'e.g. 25000',                         ac:'off' },
                   { l:'Work Address',       k:'businessAddress', t:'text',    p:'Office / work location', col:'1/-1', ac:'off' },
                 ].map(({ l, k, t, p, col, ac }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
@@ -1279,7 +1279,7 @@ function EmployeesTab({ globalSearch = '' }) {
                   { l:'Designation',        k:'designation',    t:'text',   p:'e.g. Sales Manager' },
                   { l:'Department',         k:'department',     t:'text',   p:'e.g. Sales' },
                   { l:'Joining Date',       k:'joiningDate',    t:'date',   p:'' },
-                  { l:'Monthly Salary (₹)', k:'monthlySalary',  t:'number', p:'e.g. 25000' },
+                  { l:'Monthly Salary (Rs.)', k:'monthlySalary',  t:'number', p:'e.g. 25000' },
                   { l:'Work Address',       k:'businessAddress',t:'text',   p:'Office address', col:'1/-1' },
                 ].map(({ l, k, t, p, col }) => (
                   <div key={k} style={col ? { gridColumn:col } : {}}>
@@ -1331,7 +1331,7 @@ function EmployeesTab({ globalSearch = '' }) {
               {/* Summary strip */}
               <div style={{ display:'flex', gap:10, marginBottom:18, flexWrap:'wrap' }}>
                 {[
-                  { l:'Base Salary', v:`₹${(salaryEmpInfo?.monthlySalary||salaryEmp.monthlySalary||0).toLocaleString('en-IN')}`, color:C.blue },
+                  { l:'Base Salary', v:`Rs. ${(salaryEmpInfo?.monthlySalary||salaryEmp.monthlySalary||0).toLocaleString('en-IN')}`, color:C.blue },
                   { l:'Records',     v:salaryRecords.length,                                           color:C.yellow },
                   { l:'Paid',        v:salaryRecords.filter(r=>r.status==='PAID').length,              color:C.green },
                   { l:'Pending',     v:salaryRecords.filter(r=>r.status==='PENDING').length,           color:C.red },
@@ -1358,7 +1358,7 @@ function EmployeesTab({ globalSearch = '' }) {
                     <input value={String(salaryForm.year)} onChange={e=>setSalaryForm(f=>({...f,year:e.target.value}))} type="number" placeholder="2024" style={EI} />
                   </div>
                   <div>
-                    {EL('Base Salary (₹) *')}
+                    {EL('Base Salary (Rs.) *')}
                     <input value={String(salaryForm.baseSalary)} onChange={e=>setSalaryForm(f=>({...f,baseSalary:e.target.value}))} type="number" placeholder="25000" style={EI} />
                   </div>
                 </div>
@@ -1372,7 +1372,7 @@ function EmployeesTab({ globalSearch = '' }) {
                   {salaryForm.deductions.map((d,i)=>(
                     <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
                       <input value={d.reason} onChange={e=>setDF(i,'reason',e.target.value)} placeholder="Reason (e.g. Late fine)" style={{ ...EI, flex:2 }} />
-                      <input value={d.amount} onChange={e=>setDF(i,'amount',e.target.value)} type="number" placeholder="₹" style={{ ...EI, flex:1 }} />
+                      <input value={d.amount} onChange={e=>setDF(i,'amount',e.target.value)} type="number" placeholder="Rs." style={{ ...EI, flex:1 }} />
                       <button onClick={()=>rmDed(i)} style={{ background:C.red+'18', border:`1px solid ${C.red}40`, borderRadius:7, padding:'0 10px', color:C.red, cursor:'pointer' }}>✕</button>
                     </div>
                   ))}
@@ -1387,7 +1387,7 @@ function EmployeesTab({ globalSearch = '' }) {
                   {salaryForm.bonuses.map((b,i)=>(
                     <div key={i} style={{ display:'flex', gap:8, marginBottom:6 }}>
                       <input value={b.reason} onChange={e=>setBF(i,'reason',e.target.value)} placeholder="Reason (e.g. Diwali bonus)" style={{ ...EI, flex:2 }} />
-                      <input value={b.amount} onChange={e=>setBF(i,'amount',e.target.value)} type="number" placeholder="₹" style={{ ...EI, flex:1 }} />
+                      <input value={b.amount} onChange={e=>setBF(i,'amount',e.target.value)} type="number" placeholder="Rs." style={{ ...EI, flex:1 }} />
                       <button onClick={()=>rmBon(i)} style={{ background:C.red+'18', border:`1px solid ${C.red}40`, borderRadius:7, padding:'0 10px', color:C.red, cursor:'pointer' }}>✕</button>
                     </div>
                   ))}
@@ -1402,7 +1402,7 @@ function EmployeesTab({ globalSearch = '' }) {
                   </div>
                   <div>
                     {EL('Net Salary (auto)')}
-                    <div style={{ height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', display:'flex', alignItems:'center', fontWeight:800, fontSize:14, color:C.green, background:C.card }}>₹{salNet().toLocaleString('en-IN')}</div>
+                    <div style={{ height:38, border:`1px solid ${C.line}`, borderRadius:8, padding:'0 12px', display:'flex', alignItems:'center', fontWeight:800, fontSize:14, color:C.green, background:C.card }}>Rs. {salNet().toLocaleString('en-IN')}</div>
                   </div>
                   <div>
                     {EL('Notes')}
@@ -1434,13 +1434,13 @@ function EmployeesTab({ globalSearch = '' }) {
                           </div>
                         </div>
                         <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:13 }}>
-                          <span>Base: <strong>₹{rec.baseSalary.toLocaleString('en-IN')}</strong></span>
-                          {dt>0 && <span style={{color:C.red}}>Ded: <strong>-₹{dt.toLocaleString('en-IN')}</strong></span>}
-                          {bt>0 && <span style={{color:C.green}}>Bon: <strong>+₹{bt.toLocaleString('en-IN')}</strong></span>}
-                          <span style={{color:C.blue}}>Net: <strong>₹{rec.netSalary.toLocaleString('en-IN')}</strong></span>
+                          <span>Base: <strong>Rs. {rec.baseSalary.toLocaleString('en-IN')}</strong></span>
+                          {dt>0 && <span style={{color:C.red}}>Ded: <strong>-Rs. {dt.toLocaleString('en-IN')}</strong></span>}
+                          {bt>0 && <span style={{color:C.green}}>Bon: <strong>+Rs. {bt.toLocaleString('en-IN')}</strong></span>}
+                          <span style={{color:C.blue}}>Net: <strong>Rs. {rec.netSalary.toLocaleString('en-IN')}</strong></span>
                         </div>
-                        {rec.deductions.map((d,i)=><div key={i} style={{ fontSize:11, color:C.mute, marginTop:2 }}>↓ {d.reason}: ₹{d.amount.toLocaleString('en-IN')}</div>)}
-                        {rec.bonuses.map((b,i)   =><div key={i} style={{ fontSize:11, color:C.green+'cc', marginTop:2 }}>↑ {b.reason}: ₹{b.amount.toLocaleString('en-IN')}</div>)}
+                        {rec.deductions.map((d,i)=><div key={i} style={{ fontSize:11, color:C.mute, marginTop:2 }}>↓ {d.reason}: Rs. {d.amount.toLocaleString('en-IN')}</div>)}
+                        {rec.bonuses.map((b,i)   =><div key={i} style={{ fontSize:11, color:C.green+'cc', marginTop:2 }}>↑ {b.reason}: Rs. {b.amount.toLocaleString('en-IN')}</div>)}
                         {rec.notes && <div style={{ fontSize:11, color:C.mute, fontStyle:'italic', marginTop:4 }}>Note: {rec.notes}</div>}
                         {rec.paidAt && <div style={{ fontSize:11, color:C.mute, marginTop:2 }}>Paid: {new Date(rec.paidAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>}
                       </div>
@@ -1458,7 +1458,7 @@ function EmployeesTab({ globalSearch = '' }) {
         <KpiCard label="Total Employees" value={fmt(all.length)}     sub="All staff"          colorKey="yellow" iconEl={Icon.person} />
         <KpiCard label="Active"          value={fmt(active)}         sub="Access granted"     colorKey="green"  iconEl={Icon.shield} />
         <KpiCard label="Blocked"         value={fmt(blocked)}        sub="Access suspended"   colorKey="red"    iconEl={Icon.bell} />
-        <KpiCard label="Monthly Payroll" value={`₹${totalPayroll.toLocaleString('en-IN')}`} sub="Total salaries" colorKey="blue" iconEl={Icon.dollar} />
+        <KpiCard label="Monthly Payroll" value={`Rs. ${totalPayroll.toLocaleString('en-IN')}`} sub="Total salaries" colorKey="blue" iconEl={Icon.dollar} />
       </div>
 
       {/* ── Filter + Add bar ── */}
@@ -1508,7 +1508,7 @@ function EmployeesTab({ globalSearch = '' }) {
                     <Td style={{ fontSize:12, color:C.mute }}>
                       {s.joiningDate ? new Date(s.joiningDate).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}
                     </Td>
-                    <Td><span style={{ fontWeight:700, color:C.green }}>₹{(s.monthlySalary||0).toLocaleString('en-IN')}</span></Td>
+                    <Td><span style={{ fontWeight:700, color:C.green }}>Rs. {(s.monthlySalary||0).toLocaleString('en-IN')}</span></Td>
                     <Td>
                       <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                         <Badge text={s.isVerified ? 'Verified' : 'Pending'} color={s.isVerified ? C.green : C.yellow} />
@@ -3113,13 +3113,13 @@ function AdminNotificationsTab() {
               {/* Amount inputs */}
               <div style={{ display:'flex', gap:10, alignItems:'flex-end', flexWrap:'wrap' }}>
                 <div style={{ flex:'1 1 140px' }}>
-                  <label style={LabelStyle}>{form.spendFilter==='between' ? 'Min Amount (₹) *' : 'Amount (₹) *'}</label>
+                  <label style={LabelStyle}>{form.spendFilter==='between' ? 'Min Amount (Rs.) *' : 'Amount (Rs.) *'}</label>
                   <input value={form.minSpend} onChange={e=>{ set('minSpend',e.target.value); setPreview(null); }}
                     type="number" min="0" placeholder="e.g. 5000" style={InpStyle} />
                 </div>
                 {form.spendFilter === 'between' && (
                   <div style={{ flex:'1 1 140px' }}>
-                    <label style={LabelStyle}>Max Amount (₹) *</label>
+                    <label style={LabelStyle}>Max Amount (Rs.) *</label>
                     <input value={form.maxSpend} onChange={e=>{ set('maxSpend',e.target.value); setPreview(null); }}
                       type="number" min="0" placeholder="e.g. 20000" style={InpStyle} />
                   </div>

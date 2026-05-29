@@ -2318,9 +2318,9 @@ function MySalaryTab() {
 
       {/* KPI cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
-        <KpiCard label="Monthly Salary"  value={`₹${monthlySalary.toLocaleString('en-IN')}`}  sub="Base amount"        colorKey="blue"   iconEl={Icon.dollar} />
-        <KpiCard label="Total Received"  value={`₹${totalPaid.toLocaleString('en-IN')}`}       sub="All-time paid"      colorKey="green"  iconEl={Icon.check} />
-        <KpiCard label="Pending"         value={`₹${totalPending.toLocaleString('en-IN')}`}    sub="Awaiting payment"   colorKey="yellow" iconEl={Icon.bell} />
+        <KpiCard label="Monthly Salary"  value={`Rs. ${monthlySalary.toLocaleString('en-IN')}`}  sub="Base amount"        colorKey="blue"   iconEl={Icon.dollar} />
+        <KpiCard label="Total Received"  value={`Rs. ${totalPaid.toLocaleString('en-IN')}`}       sub="All-time paid"      colorKey="green"  iconEl={Icon.check} />
+        <KpiCard label="Pending"         value={`Rs. ${totalPending.toLocaleString('en-IN')}`}    sub="Awaiting payment"   colorKey="yellow" iconEl={Icon.bell} />
       </div>
 
       {/* Salary records */}
@@ -2339,23 +2339,23 @@ function MySalaryTab() {
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:14, marginBottom: (rec.deductions.length||rec.bonuses.length||rec.notes)?16:0 }}>
                   <div>
                     <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Base Salary</div>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.text }}>₹{rec.baseSalary.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:C.text }}>Rs. {rec.baseSalary.toLocaleString('en-IN')}</div>
                   </div>
                   {dedTotal>0 && (
                     <div>
                       <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Deductions</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:'#f87171' }}>-₹{dedTotal.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:'#f87171' }}>-Rs. {dedTotal.toLocaleString('en-IN')}</div>
                     </div>
                   )}
                   {bonTotal>0 && (
                     <div>
                       <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Bonuses</div>
-                      <div style={{ fontSize:18, fontWeight:800, color:C.green }}>+₹{bonTotal.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize:18, fontWeight:800, color:C.green }}>+Rs. {bonTotal.toLocaleString('en-IN')}</div>
                     </div>
                   )}
                   <div>
                     <div style={{ fontSize:10, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:3 }}>Net Salary</div>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.blue }}>₹{rec.netSalary.toLocaleString('en-IN')}</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:C.blue }}>Rs. {rec.netSalary.toLocaleString('en-IN')}</div>
                   </div>
                 </div>
 
@@ -2365,7 +2365,7 @@ function MySalaryTab() {
                     {rec.deductions.map((d,i)=>(
                       <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 0', borderBottom:`1px solid ${C.line}` }}>
                         <span style={{ color:C.sub }}>{d.reason}</span>
-                        <span style={{ fontWeight:700, color:'#f87171' }}>-₹{d.amount.toLocaleString('en-IN')}</span>
+                        <span style={{ fontWeight:700, color:'#f87171' }}>-Rs. {d.amount.toLocaleString('en-IN')}</span>
                       </div>
                     ))}
                   </div>
@@ -2376,7 +2376,7 @@ function MySalaryTab() {
                     {rec.bonuses.map((b,i)=>(
                       <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 0', borderBottom:`1px solid ${C.line}` }}>
                         <span style={{ color:C.sub }}>{b.reason}</span>
-                        <span style={{ fontWeight:700, color:C.green }}>+₹{b.amount.toLocaleString('en-IN')}</span>
+                        <span style={{ fontWeight:700, color:C.green }}>+Rs. {b.amount.toLocaleString('en-IN')}</span>
                       </div>
                     ))}
                   </div>

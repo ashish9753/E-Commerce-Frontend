@@ -1,10 +1,13 @@
 import axios from 'axios';
 
-// Single source of truth for the backend URL. Override via VITE_API_BASE_URL
-// in `.env` (e.g. for local development against localhost:5000).
+// Single source of truth for the backend URL. Used by every src/api/* module
+// (axios baseURL) and by NotificationContext (EventSource). Override via
+// VITE_API_BASE_URL in `.env`. The VPS now redirects :80 → :443, so the
+// fallback uses https:// — the refresh-token cookie also needs this to flow
+// with Secure + SameSite=None.
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  'http://82.29.164.26/api/v1';
+  'https://82.29.164.26/api/v1';
 
 const BASE_URL = API_BASE_URL;
 

@@ -646,7 +646,7 @@ function CancelOrderModal({
         {isPaidOnline && (
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:16, marginBottom:16 }}>
             <div style={{ fontWeight:700, fontSize:13, marginBottom:12, color:'#333' }}>
-              💳 Refund details — ₹{order.refundAmount || order.totalPrice}
+              💳 Refund details — Rs. {order.refundAmount || order.totalPrice}
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
               {[
