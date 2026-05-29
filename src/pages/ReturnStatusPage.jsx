@@ -52,11 +52,11 @@ const REASONS = {
 };
 
 /* ── standalone input — must live OUTSIDE RefundMethodCard to avoid remount on every render ── */
-const BankInp = ({ label, value, onChange, placeholder, disabled }) => (
+const BankInp = ({ label, value, onChange, placeholder, disabled, error, onPaste }) => (
   <div>
     <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#888', marginBottom: 4, textTransform: 'uppercase' }}>{label}</label>
-    <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
-      style={{ width: '100%', height: 36, border: '1px solid #ddd', borderRadius: 6, padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+    <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} onPaste={onPaste}
+      style={{ width: '100%', height: 36, border: `1px solid ${error ? '#dc2626' : '#ddd'}`, borderRadius: 6, padding: '0 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
   </div>
 );
 
@@ -66,6 +66,8 @@ function RefundMethodCard({ ret, onUpdate }) {
 
   const [mode, setMode]     = useState(defaultMode);
   const [bank, setBank]     = useState(ret.bankDetails || {});
+  const [accountConfirm, setAccountConfirm] = useState(ret.bankDetails?.accountNumber || '');
+  const [accountMismatch, setAccountMismatch] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const alreadySaved = ret.refundMethod && (
@@ -76,13 +78,22 @@ function RefundMethodCard({ ret, onUpdate }) {
   const [done, setDone] = useState(!!alreadySaved);
   const [edit, setEdit] = useState(!alreadySaved);
 
-  const setB = (k, v) => setBank(b => ({ ...b, [k]: v }));
+  const setB = (k, v) => {
+    setBank(b => ({ ...b, [k]: v }));
+    if (k === 'accountNumber') {
+      setAccountMismatch(accountConfirm !== '' && v !== accountConfirm);
+    }
+  };
 
   const canSave =
-    (mode === 'bank_transfer' && bank.accountName && bank.accountNumber && bank.ifscCode) ||
+    (mode === 'bank_transfer' && bank.accountName && bank.accountNumber && bank.ifscCode && bank.accountNumber === accountConfirm) ||
     (mode === 'upi' && bank.upiId);
 
   const save = async () => {
+    if (mode === 'bank_transfer' && bank.accountNumber !== accountConfirm) {
+      setAccountMismatch(true);
+      return;
+    }
     setSaving(true);
     try {
       await returnsApi.updateRefundMethod(ret._id, { refundMethod: mode, bankDetails: bank });
@@ -146,11 +157,29 @@ function RefundMethodCard({ ret, onUpdate }) {
         <div style={{ background: '#f8fafc', borderRadius: 8, padding: '14px 16px', marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}><BankInp label="Account Holder Name *" value={bank.accountName || ''} onChange={e => setB('accountName', e.target.value)} placeholder="As per bank records" disabled={blocked} /></div>
-            <div style={{ flex: 1 }}><BankInp label="Bank Name *" value={bank.bankName || ''} onChange={e => setB('bankName', e.target.value)} placeholder="State Bank of India" disabled={blocked} /></div>
+            <div style={{ flex: 1 }}><BankInp label="Bank Name *" value={bank.bankName || ''} onChange={e => setB('bankName', e.target.value)} placeholder="Everest Bank Limited" disabled={blocked} /></div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}><BankInp label="Account Number *" value={bank.accountNumber || ''} onChange={e => setB('accountNumber', e.target.value)} placeholder="1234567890" disabled={blocked} /></div>
-            <div style={{ flex: 1 }}><BankInp label="IFSC Code *" value={bank.ifscCode || ''} onChange={e => setB('ifscCode', e.target.value)} placeholder="SBIN0001234" disabled={blocked} /></div>
+            <div style={{ flex: 1 }}><BankInp label="Account Number *" value={bank.accountNumber || ''} onChange={e => setB('accountNumber', e.target.value)} placeholder="00100456789012" disabled={blocked} error={accountMismatch} /></div>
+            <div style={{ flex: 1 }}><BankInp label="Branch Name *" value={bank.ifscCode || ''} onChange={e => setB('ifscCode', e.target.value)} placeholder="Putalisadak Branch" disabled={blocked} /></div>
+          </div>
+          <div>
+            <BankInp
+              label="Confirm Account Number *"
+              value={accountConfirm}
+              onChange={e => {
+                const v = e.target.value;
+                setAccountConfirm(v);
+                setAccountMismatch(v !== '' && (bank.accountNumber || '') !== v);
+              }}
+              onPaste={e => e.preventDefault()}
+              placeholder="Re-enter account number"
+              disabled={blocked}
+              error={accountMismatch}
+            />
+            {accountMismatch && (
+              <div style={{ color:'#dc2626', fontSize:11, marginTop:4 }}>Account numbers do not match.</div>
+            )}
           </div>
         </div>
       )}
@@ -480,7 +509,7 @@ export default function ReturnStatusPage() {
                       <div style={{ color: '#888' }}>Bank Account</div>
                       <div style={{ fontWeight: 600 }}>{ret.bankDetails?.accountName}</div>
                       <div>{ret.bankDetails?.bankName} — ···{ret.bankDetails?.accountNumber?.slice(-4)}</div>
-                      <div style={{ color: '#888', fontSize: 12 }}>IFSC: {ret.bankDetails?.ifscCode}</div>
+                      <div style={{ color: '#888', fontSize: 12 }}>Branch: {ret.bankDetails?.ifscCode}</div>
                     </>
                   )}
                   {ret.refundMethod === 'upi' && (

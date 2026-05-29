@@ -210,6 +210,8 @@ export default function ProfilePage() {
   // Refund details
   const [refundTab, setRefundTab]       = useState('bank'); // 'bank' | 'upi'
   const [bankForm, setBankForm]         = useState({ accountName:'', accountNumber:'', ifscCode:'', bankName:'' });
+  const [accountConfirm, setAccountConfirm]     = useState('');
+  const [accountMismatch, setAccountMismatch]   = useState(false);
   const [upiForm, setUpiForm]           = useState({ upiId:'' });
   const [upiConfirm, setUpiConfirm]     = useState('');
   const [upiMismatch, setUpiMismatch]   = useState(false);
@@ -225,6 +227,7 @@ export default function ProfilePage() {
           const bt = s.bankTransfer || {};
           const up = s.upi || {};
           setBankForm({ accountName: bt.accountName||'', accountNumber: bt.accountNumber||'', ifscCode: bt.ifscCode||'', bankName: bt.bankName||'' });
+          setAccountConfirm(bt.accountNumber||'');
           setUpiForm({ upiId: up.upiId||'' });
           setUpiConfirm(up.upiId||'');
           if (s.lastRefundMethod === 'upi') setRefundTab('upi');
@@ -238,6 +241,12 @@ export default function ProfilePage() {
     if (!bankForm.accountName || !bankForm.accountNumber || !bankForm.ifscCode || !bankForm.bankName) {
       toast('Please fill in all bank details.', 'error'); return;
     }
+    if (bankForm.accountNumber !== accountConfirm) {
+      setAccountMismatch(true);
+      toast('Account numbers do not match.', 'error');
+      return;
+    }
+    setAccountMismatch(false);
     setRefundSaving(true);
     try {
       await usersApi.updateRefundDetails({ method: 'bank_transfer', bankTransfer: bankForm });
@@ -508,16 +517,42 @@ export default function ProfilePage() {
                       <div className="grid grid-cols-2 gap-5 mb-5 max-md:grid-cols-1">
                         {[
                           { k:'accountName',   label:'Account Holder Name *', placeholder:'As per bank records' },
-                          { k:'bankName',      label:'Bank Name *',            placeholder:'State Bank of India' },
-                          { k:'accountNumber', label:'Account Number *',       placeholder:'1234567890' },
-                          { k:'ifscCode',      label:'IFSC Code *',            placeholder:'SBIN0001234' },
+                          { k:'bankName',      label:'Bank Name *',            placeholder:'Everest Bank Limited' },
+                          { k:'accountNumber', label:'Account Number *',       placeholder:'00100456789012' },
+                          { k:'ifscCode',      label:'Branch Name *',          placeholder:'Putalisadak Branch' },
                         ].map(({ k, label, placeholder }) => (
                           <div key={k} className="field">
                             <label>{label}</label>
-                            <input className="input" value={bankForm[k]} placeholder={placeholder}
-                              onChange={e => setBankForm(f => ({ ...f, [k]: e.target.value }))} />
+                            <input
+                              className="input"
+                              value={bankForm[k]}
+                              placeholder={placeholder}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setBankForm(f => ({ ...f, [k]: v }));
+                                if (k === 'accountNumber') setAccountMismatch(accountConfirm !== '' && v !== accountConfirm);
+                              }}
+                            />
                           </div>
                         ))}
+                        <div className="field">
+                          <label>Confirm Account Number *</label>
+                          <input
+                            className="input"
+                            value={accountConfirm}
+                            placeholder="Re-enter account number"
+                            onChange={e => {
+                              const v = e.target.value;
+                              setAccountConfirm(v);
+                              setAccountMismatch(v !== '' && bankForm.accountNumber !== v);
+                            }}
+                            onPaste={e => e.preventDefault()}
+                            style={accountMismatch ? { borderColor: '#dc2626' } : undefined}
+                          />
+                          {accountMismatch && (
+                            <div className="text-xs text-red-600 mt-1">Account numbers do not match.</div>
+                          )}
+                        </div>
                       </div>
                       <button className="btn btn-primary" onClick={handleSaveBank} disabled={refundSaving}>
                         {refundSaving ? <span className="spinner" /> : 'Save Bank Details'}

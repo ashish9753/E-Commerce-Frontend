@@ -305,6 +305,8 @@ export default function ReturnsPage() {
   const [resolution, setResolution] = useState('refund');
   const [refundMethod, setRefundMethod] = useState('bank_transfer');
   const [bankDetails, setBankDetails]   = useState({});
+  const [accountConfirm, setAccountConfirm] = useState('');
+  const [accountMismatch, setAccountMismatch] = useState(false);
   const [upiConfirm, setUpiConfirm]     = useState('');
   const [upiMismatch, setUpiMismatch]   = useState(false);
   const [savedRefundDetails, setSavedRefundDetails] = useState({});
@@ -336,6 +338,7 @@ export default function ReturnsPage() {
         setRefundMethod(method);
         setBankDetails(method === 'upi' ? (saved.upi || {}) : (saved.bankTransfer || {}));
         if (method === 'upi' && saved.upi?.upiId) setUpiConfirm(saved.upi.upiId);
+        if (method === 'bank_transfer' && saved.bankTransfer?.accountNumber) setAccountConfirm(saved.bankTransfer.accountNumber);
       })
       .catch(() => {});
   }, [user]);
@@ -356,6 +359,11 @@ export default function ReturnsPage() {
       if (resolution === 'refund') {
         if (refundMethod === 'bank_transfer' && (!bankDetails.accountName || !bankDetails.bankName || !bankDetails.accountNumber || !bankDetails.ifscCode)) {
           toast('Please enter complete bank details.', 'error');
+          return;
+        }
+        if (refundMethod === 'bank_transfer' && bankDetails.accountNumber !== accountConfirm) {
+          setAccountMismatch(true);
+          toast('Account numbers do not match. Please re-enter.', 'error');
           return;
         }
         if (refundMethod === 'upi') {
@@ -775,19 +783,26 @@ export default function ReturnsPage() {
                     {/* Refund method — shown only when Refund is selected */}
                     {resolution === 'refund' && (() => {
                       const effectiveMethod = refundMethod || 'bank_transfer';
-                      const setB = (k, v) => setBankDetails(b => ({ ...b, [k]: v }));
+                      const setB = (k, v) => {
+                        setBankDetails(b => ({ ...b, [k]: v }));
+                        if (k === 'accountNumber') {
+                          setAccountMismatch(accountConfirm !== '' && v !== accountConfirm);
+                        }
+                      };
                       const chooseMethod = (method) => {
                         setRefundMethod(method);
                         setUpiMismatch(false);
+                        setAccountMismatch(false);
                         const saved = method === 'upi' ? (savedRefundDetails.upi || {}) : (savedRefundDetails.bankTransfer || {});
                         setBankDetails(saved);
                         if (method === 'upi') setUpiConfirm(saved.upiId || '');
+                        if (method === 'bank_transfer') setAccountConfirm(saved.accountNumber || '');
                       };
                       const inp = (label, key, placeholder) => (
-                        <div>
+                        <div style={{ flex:1 }}>
                           <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>{label}</label>
                           <input value={bankDetails[key]||''} onChange={e=>setB(key,e.target.value)} placeholder={placeholder}
-                            style={{ width:'100%', height:36, border:'1px solid #ddd', borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
+                            style={{ width:'100%', height:36, border:`1px solid ${key==='accountNumber' && accountMismatch ? '#dc2626' : '#ddd'}`, borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }} />
                         </div>
                       );
                       return (
@@ -821,11 +836,28 @@ export default function ReturnsPage() {
                             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                               <div style={{ display:'flex', gap:10 }}>
                                 {inp('Account Holder Name *', 'accountName', 'As per bank records')}
-                                {inp('Bank Name *', 'bankName', 'State Bank of India')}
+                                {inp('Bank Name *', 'bankName', 'Everest Bank Limited')}
                               </div>
                               <div style={{ display:'flex', gap:10 }}>
-                                {inp('Account Number *', 'accountNumber', '1234567890')}
-                                {inp('IFSC Code *', 'ifscCode', 'SBIN0001234')}
+                                {inp('Account Number *', 'accountNumber', '00100456789012')}
+                                {inp('Branch Name *', 'ifscCode', 'Putalisadak Branch')}
+                              </div>
+                              <div>
+                                <label style={{ display:'block', fontSize:11, fontWeight:700, color:'#888', marginBottom:4, textTransform:'uppercase' }}>Confirm Account Number *</label>
+                                <input
+                                  value={accountConfirm}
+                                  onChange={e=>{
+                                    const v = e.target.value;
+                                    setAccountConfirm(v);
+                                    setAccountMismatch(v !== '' && (bankDetails.accountNumber || '') !== v);
+                                  }}
+                                  onPaste={e => e.preventDefault()}
+                                  placeholder="Re-enter account number"
+                                  style={{ width:'100%', height:36, border:`1px solid ${accountMismatch?'#dc2626':'#ddd'}`, borderRadius:6, padding:'0 10px', fontSize:13, outline:'none', boxSizing:'border-box' }}
+                                />
+                                {accountMismatch && (
+                                  <div style={{ color:'#dc2626', fontSize:11, marginTop:4 }}>Account numbers do not match.</div>
+                                )}
                               </div>
                             </div>
                           )}

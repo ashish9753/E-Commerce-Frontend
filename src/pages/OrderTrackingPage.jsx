@@ -106,6 +106,8 @@ export default function OrderTrackingPage() {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelRefundMethod, setCancelRefundMethod] = useState('bank_transfer');
   const [cancelBankDetails, setCancelBankDetails] = useState({});
+  const [cancelAccountConfirm, setCancelAccountConfirm] = useState('');
+  const [cancelAccountMismatch, setCancelAccountMismatch] = useState(false);
   const [cancelUpiConfirm, setCancelUpiConfirm] = useState('');
   const [cancelUpiMismatch, setCancelUpiMismatch] = useState(false);
   const [savedRefund, setSavedRefund] = useState({});
@@ -128,6 +130,7 @@ export default function OrderTrackingPage() {
         setCancelRefundMethod(method);
         setCancelBankDetails(method === 'upi' ? (s.upi || {}) : (s.bankTransfer || {}));
         if (method === 'upi' && s.upi?.upiId) setCancelUpiConfirm(s.upi.upiId);
+        if (method === 'bank_transfer' && s.bankTransfer?.accountNumber) setCancelAccountConfirm(s.bankTransfer.accountNumber);
       })
       .catch(() => {});
   }, [cancelModal]);
@@ -163,6 +166,7 @@ export default function OrderTrackingPage() {
       if (cancelRefundMethod === 'bank_transfer') {
         const b = cancelBankDetails;
         if (!b.accountName || !b.accountNumber || !b.ifscCode || !b.bankName) return;
+        if (b.accountNumber !== cancelAccountConfirm) { setCancelAccountMismatch(true); return; }
       }
       if (cancelRefundMethod === 'upi') {
         if (!cancelBankDetails.upiId) return;
@@ -552,6 +556,10 @@ export default function OrderTrackingPage() {
           setCancelRefundMethod={setCancelRefundMethod}
           cancelBankDetails={cancelBankDetails}
           setCancelBankDetails={setCancelBankDetails}
+          cancelAccountConfirm={cancelAccountConfirm}
+          setCancelAccountConfirm={setCancelAccountConfirm}
+          cancelAccountMismatch={cancelAccountMismatch}
+          setCancelAccountMismatch={setCancelAccountMismatch}
           cancelUpiConfirm={cancelUpiConfirm}
           setCancelUpiConfirm={setCancelUpiConfirm}
           cancelUpiMismatch={cancelUpiMismatch}
@@ -571,6 +579,8 @@ function CancelOrderModal({
   cancelReason, setCancelReason,
   cancelRefundMethod, setCancelRefundMethod,
   cancelBankDetails, setCancelBankDetails,
+  cancelAccountConfirm, setCancelAccountConfirm,
+  cancelAccountMismatch, setCancelAccountMismatch,
   cancelUpiConfirm, setCancelUpiConfirm,
   cancelUpiMismatch, setCancelUpiMismatch,
   savedRefund,
@@ -596,7 +606,7 @@ function CancelOrderModal({
     if (!isPaidOnline) return true;
     if (cancelRefundMethod === 'bank_transfer') {
       const b = cancelBankDetails;
-      return !!(b.accountName && b.accountNumber && b.ifscCode && b.bankName);
+      return !!(b.accountName && b.accountNumber && b.ifscCode && b.bankName && b.accountNumber === cancelAccountConfirm);
     }
     if (cancelRefundMethod === 'upi') {
       return !!(cancelBankDetails.upiId && cancelBankDetails.upiId === cancelUpiConfirm);
@@ -648,9 +658,11 @@ function CancelOrderModal({
                   onClick={() => {
                     setCancelRefundMethod(id);
                     setCancelUpiMismatch(false);
+                    setCancelAccountMismatch(false);
                     const s = id === 'upi' ? (savedRefund.upi || {}) : (savedRefund.bankTransfer || {});
                     setCancelBankDetails(s);
                     if (id === 'upi') setCancelUpiConfirm(s.upiId || '');
+                    if (id === 'bank_transfer') setCancelAccountConfirm(s.accountNumber || '');
                   }}
                   style={{
                     border: `2px solid ${cancelRefundMethod === id ? '#FF5A1F' : '#ddd'}`,
@@ -680,18 +692,44 @@ function CancelOrderModal({
                   </div>
                   <div style={{ flex:1 }}>
                     <label style={labelStyle}>Bank Name *</label>
-                    <input value={cancelBankDetails.bankName||''} onChange={e=>setB('bankName',e.target.value)} placeholder="SBI" style={fieldStyle} />
+                    <input value={cancelBankDetails.bankName||''} onChange={e=>setB('bankName',e.target.value)} placeholder="Everest Bank Limited" style={fieldStyle} />
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:10 }}>
                   <div style={{ flex:1 }}>
                     <label style={labelStyle}>Account Number *</label>
-                    <input value={cancelBankDetails.accountNumber||''} onChange={e=>setB('accountNumber',e.target.value)} placeholder="1234567890" style={fieldStyle} />
+                    <input
+                      value={cancelBankDetails.accountNumber||''}
+                      onChange={e=>{
+                        const v = e.target.value;
+                        setB('accountNumber', v);
+                        setCancelAccountMismatch(cancelAccountConfirm !== '' && v !== cancelAccountConfirm);
+                      }}
+                      placeholder="00100456789012"
+                      style={{ ...fieldStyle, borderColor: cancelAccountMismatch ? '#dc2626' : '#ddd' }}
+                    />
                   </div>
                   <div style={{ flex:1 }}>
-                    <label style={labelStyle}>IFSC Code *</label>
-                    <input value={cancelBankDetails.ifscCode||''} onChange={e=>setB('ifscCode',e.target.value)} placeholder="SBIN0001234" style={fieldStyle} />
+                    <label style={labelStyle}>Branch Name *</label>
+                    <input value={cancelBankDetails.ifscCode||''} onChange={e=>setB('ifscCode',e.target.value)} placeholder="Putalisadak Branch" style={fieldStyle} />
                   </div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Confirm Account Number *</label>
+                  <input
+                    value={cancelAccountConfirm}
+                    onChange={e=>{
+                      const v = e.target.value;
+                      setCancelAccountConfirm(v);
+                      setCancelAccountMismatch(v !== '' && (cancelBankDetails.accountNumber || '') !== v);
+                    }}
+                    onPaste={e => e.preventDefault()}
+                    placeholder="Re-enter account number"
+                    style={{ ...fieldStyle, borderColor: cancelAccountMismatch ? '#dc2626' : '#ddd' }}
+                  />
+                  {cancelAccountMismatch && (
+                    <div style={{ color:'#dc2626', fontSize:11, marginTop:4 }}>Account numbers do not match.</div>
+                  )}
                 </div>
               </div>
             )}
