@@ -18,9 +18,6 @@ export const COMPANY = {
   hours:   'Sun – Fri · 10am – 6pm',
   hoursShort: 'Sun – Fri 10–6',
 
-  // Used by the invoice PDF only; safe to override per market.
-  gstin:   '',
-  pan:     '',
   website: 'tradengine.com',
 };
 

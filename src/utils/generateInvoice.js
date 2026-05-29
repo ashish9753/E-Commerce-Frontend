@@ -10,12 +10,8 @@ const STORE = {
   address: COMPANY.office,
   email:   COMPANY.email,
   phone:   `Sales ${COMPANY.salesPhone} · Support ${COMPANY.supportPhone}`,
-  gstin:   COMPANY.gstin,
-  pan:     COMPANY.pan,
   website: COMPANY.website,
 };
-
-const GST_RATE = 0.18;
 
 function fmtRs(n) {
   return "Rs. " + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -173,9 +169,8 @@ export async function generateInvoice(order, user) {
   doc.setFontSize(8);
   doc.text(STORE.name,    margin, y + 5);
   doc.text(STORE.address, margin, y + 10, { maxWidth: 88 });
-  doc.text(`GSTIN: ${STORE.gstin}`, margin, y + 20);
-  doc.text(`Email: ${STORE.email}`, margin, y + 25);
-  doc.text(`Phone: ${STORE.phone}`, margin, y + 30);
+  doc.text(`Email: ${STORE.email}`, margin, y + 20);
+  doc.text(`Phone: ${STORE.phone}`, margin, y + 25);
 
   // Invoice meta box — two tight columns inside
   doc.setDrawColor(200, 200, 200);
@@ -237,8 +232,6 @@ export async function generateInvoice(order, user) {
 
   const tableBody = items.map((item, i) => {
     const lineTotal = item.price * item.quantity;
-    const taxable   = lineTotal / (1 + GST_RATE);
-    const gstAmt    = lineTotal - taxable;
 
     // Strikethrough style for cancelled items
     const cellStyle = isCancelled ? { textColor: [150, 150, 150] } : {};
@@ -246,8 +239,6 @@ export async function generateInvoice(order, user) {
     return [
       { content: String(i + 1), styles: cellStyle },
       { content: item.title,    styles: cellStyle },
-      { content: "999999",      styles: { ...cellStyle, halign: "center" } },
-      { content: `${GST_RATE * 100}%`, styles: { ...cellStyle, halign: "center" } },
       { content: String(item.quantity), styles: { ...cellStyle, halign: "center" } },
       { content: fmtRs(item.price),     styles: { ...cellStyle, halign: "right" } },
       { content: fmtRs(lineTotal),      styles: { ...cellStyle, halign: "right" } },
@@ -256,7 +247,7 @@ export async function generateInvoice(order, user) {
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "Product Description", "HSN/SAC", "GST", "Qty", "Unit Price", "Amount"]],
+    head: [["#", "Product Description", "Qty", "Unit Price", "Amount"]],
     body: tableBody,
     theme: "grid",
     headStyles: {
@@ -268,12 +259,10 @@ export async function generateInvoice(order, user) {
     },
     columnStyles: {
       0: { halign: "center", cellWidth: 9 },
-      1: { cellWidth: 72 },
-      2: { halign: "center", cellWidth: 19 },
-      3: { halign: "center", cellWidth: 13 },
-      4: { halign: "center", cellWidth: 10 },
-      5: { halign: "right",  cellWidth: 25 },
-      6: { halign: "right",  cellWidth: 28 },
+      1: { cellWidth: 104 },
+      2: { halign: "center", cellWidth: 10 },
+      3: { halign: "right",  cellWidth: 25 },
+      4: { halign: "right",  cellWidth: 28 },
     },
     bodyStyles: { fontSize: 7.5, textColor: [30, 30, 30] },
     alternateRowStyles: { fillColor: [250, 251, 252] },
@@ -287,17 +276,13 @@ export async function generateInvoice(order, user) {
   const bw = W - bx - margin;
 
   const itemsPrice  = order.itemsPrice ?? items.reduce((s, it) => s + it.price * it.quantity, 0);
-  const taxableBase = itemsPrice / (1 + GST_RATE);
-  const gstTotal    = itemsPrice - taxableBase;
   const shipping    = order.shippingPrice  ?? 0;
   const discount    = order.discountAmount ?? 0;
   const total       = order.totalPrice ?? (itemsPrice + shipping - discount);
 
   const summaryRows = [
-    ["Subtotal (incl. GST)", fmtRs(itemsPrice)],
-    ["Taxable Value",        fmtRs(taxableBase)],
-    ["GST (18% IGST)",      fmtRs(gstTotal)],
-    ["Shipping",             shipping === 0 ? "FREE" : fmtRs(shipping)],
+    ["Subtotal", fmtRs(itemsPrice)],
+    ["Shipping", shipping === 0 ? "FREE" : fmtRs(shipping)],
   ];
   if (discount > 0) summaryRows.push(["Discount / Coupon", `- ${fmtRs(discount)}`]);
   if (isRefunded)   summaryRows.push(["Amount Refunded",  `- ${fmtRs(order.refundAmount || total)}`]);
@@ -380,42 +365,12 @@ export async function generateInvoice(order, user) {
     y = doc.lastAutoTable.finalY + 6;
   }
 
-  // ── GST Breakdown table ───────────────────────────────────────────────
-  y += (isCancelled || isRefunded) ? 0 : 6;
-  const gstRows = items.map(item => {
-    const base = (item.price * item.quantity) / (1 + GST_RATE);
-    const gst  = item.price * item.quantity - base;
-    return ["999999", fmtRs(base), "18%", fmtRs(gst), fmtRs(gst), fmtRs(item.price * item.quantity)];
-  });
-
-  autoTable(doc, {
-    startY: y,
-    head: [["HSN/SAC", "Taxable Value", "IGST Rate", "IGST Amt", "Total Tax", "Total"]],
-    body: gstRows,
-    foot: [["Total", fmtRs(taxableBase), "", fmtRs(gstTotal), fmtRs(gstTotal), fmtRs(itemsPrice)]],
-    theme: "grid",
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 30, 30], fontStyle: "bold", fontSize: 7 },
-    footStyles: { fillColor: [19, 25, 33], textColor: 255, fontStyle: "bold", fontSize: 7 },
-    bodyStyles: { fontSize: 7, textColor: [50, 50, 50] },
-    columnStyles: {
-      0: { halign: "center" },
-      1: { halign: "right"  },
-      2: { halign: "center" },
-      3: { halign: "right"  },
-      4: { halign: "right"  },
-      5: { halign: "right"  },
-    },
-    margin: { left: margin, right: margin },
-  });
-
-  y = doc.lastAutoTable.finalY + 8;
-
   // ── Declaration + Signature ───────────────────────────────────────────
+  y += (isCancelled || isRefunded) ? 2 : 8;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(100, 100, 100);
   [
-    "Tax is payable under Reverse Charge: No",
     "We declare that this invoice shows the actual price of the goods / services described",
     "and that all particulars are true and correct.",
   ].forEach((line, i) => doc.text(line, margin, y + i * 4.5));

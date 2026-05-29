@@ -1919,7 +1919,7 @@ function OrdersTab({ globalSearch = '' }) {
                           </div>
                         </div>
 
-                        {/* Price Breakdown — itemized totals + coupon + tax + delivery */}
+                        {/* Price Breakdown — itemized totals + coupon + delivery */}
                         <div style={{ marginBottom:14, border:`1px solid ${C.line}`, borderRadius:8, padding:'12px 14px', background:C.bg }}>
                           <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:10 }}>Price Breakdown</div>
                           <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:12 }}>
@@ -1927,12 +1927,6 @@ function OrdersTab({ globalSearch = '' }) {
                               <span>Items subtotal</span>
                               <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.itemsPrice ?? 0)}</span>
                             </div>
-                            {(o.taxPrice ?? 0) > 0 && (
-                              <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
-                                <span>Tax {o.taxLabel ? `(${o.taxLabel})` : ''}</span>
-                                <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.taxPrice)}</span>
-                              </div>
-                            )}
                             <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
                               <span>Delivery charge</span>
                               <span style={{ color: o.shippingPrice === 0 ? C.green : C.text, fontWeight:600 }}>
@@ -4458,10 +4452,6 @@ function InventoryTab({ globalSearch = '' }) {
   const [catSortBy, setCatSort]   = useState('sold_desc');
   const [catStockF, setCatStockF] = useState('ALL');
   const [catSearch, setCatSearch] = useState('');
-  const [showTax, setShowTax]     = useState(false);
-  const [taxSearch, setTaxSearch] = useState('');
-  const [taxCatFilter, setTaxCat] = useState('ALL');
-  const [taxRateFilter, setTaxRate] = useState('ALL');
   const [chartPeriod, setChartPeriod] = useState('month');
   const [expandedCat, setExpandedCat] = useState(null);   // category name string
   const [detailProduct, setDetailProduct] = useState(null); // product object for modal
@@ -4625,7 +4615,6 @@ function InventoryTab({ globalSearch = '' }) {
         const p = detailProduct;
         const effPrice = p.discountPrice || p.price || 0;
         const grossRev = effPrice * p.sold;
-        const taxAmt   = grossRev * (p.taxRate || 0) / 100;
         const st = p.stock === 0 ? { label:'Out of Stock', color:C.red } : p.stock <= 10 ? { label:'Low Stock', color:C.yellow } : { label:'In Stock', color:C.green };
         return (
           <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.7)', zIndex:999, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}
@@ -4652,9 +4641,6 @@ function InventoryTab({ globalSearch = '' }) {
                   { label:'Units Sold', val: fmt(p.sold), color:C.green },
                   { label:'Stock Left', val: fmt(p.stock), color:st.color },
                   { label:'Gross Revenue', val: fmtRs(grossRev), color:C.blue },
-                  { label:'Tax Amount', val: fmtRs(taxAmt), color:C.purple },
-                  { label:'Net Revenue', val: fmtRs(grossRev - taxAmt), color:C.green },
-                  { label:'Tax Rate', val: p.taxRate ? `${p.taxLabel || p.taxRate+'%'}` : 'No Tax', color:C.mute },
                 ].map(({ label, val, color }) => (
                   <div key={label} style={{ background:C.card2, borderRadius:10, padding:'10px 12px' }}>
                     <div style={{ fontSize:10, color:C.mute, marginBottom:3, textTransform:'uppercase', letterSpacing:'.05em' }}>{label}</div>
@@ -4737,106 +4723,8 @@ function InventoryTab({ globalSearch = '' }) {
             color={C.green} accent={C.green}
             rawValue={Math.max(0, orderSummary.totalRevenue - orderSummary.totalRefunded - (orderSummary.totalShipping || 0))}
             sub="After refunds & delivery" />
-          {/* Clickable tax card */}
-          <div onClick={() => setShowTax(v => !v)}
-            style={{ background: C.card, border: `1px solid ${showTax ? C.purple : C.purple + '44'}`, borderLeft: `3px solid ${C.purple}`, borderRadius: 12, padding: '16px 18px', cursor: 'pointer', transition: 'all .15s', position: 'relative' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.mute, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>Total Tax Collected</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, lineHeight: 1 }} title={fmtRs(orderSummary.totalTax || 0)}>{fmtShort(orderSummary.totalTax || 0)}</div>
-            <div style={{ fontSize: 11, color: C.purple, marginTop: 4, fontWeight: 600 }}>{showTax ? '▴ Hide breakdown' : '▾ See per-product'}</div>
-          </div>
         </div>
       </div>
-
-      {/* ── Tax Breakdown (expanded) ── */}
-      {showTax && (() => {
-        const taxProducts = (allProducts || []).map(p => {
-          const effPrice = p.discountPrice || p.price || 0;
-          const grossRev = effPrice * p.sold;
-          const taxAmt   = grossRev * (p.taxRate || 0) / 100;
-          const netRev   = grossRev - taxAmt;
-          return { ...p, effPrice, grossRev, taxAmt, netRev };
-        });
-        const uniqueRates = ['ALL', ...new Set(taxProducts.map(p => p.taxRate || 0).sort((a,b)=>a-b).map(String))];
-        const taxCats = ['ALL', ...new Set(taxProducts.map(p => p.category?.name).filter(Boolean))];
-        const filtered = taxProducts
-          .filter(p => taxCatFilter === 'ALL' || p.category?.name === taxCatFilter)
-          .filter(p => taxRateFilter === 'ALL' || String(p.taxRate || 0) === taxRateFilter)
-          .filter(p => !taxSearch || p.title?.toLowerCase().includes(taxSearch.toLowerCase()))
-          .sort((a, b) => b.taxAmt - a.taxAmt);
-        const totalFiltered = filtered.reduce((s, p) => s + p.taxAmt, 0);
-        return (
-          <div style={{ background: C.card, border: `1px solid ${C.purple}44`, borderRadius: 14, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>
-                Tax Breakdown — Per Product
-                <span style={{ fontWeight: 400, fontSize: 12, color: C.mute, marginLeft: 8 }}>{filtered.length} products</span>
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: C.purple }}>
-                Total: {fmtRs(totalFiltered)}
-              </div>
-            </div>
-            {/* Filters */}
-            <div style={{ padding: '10px 20px', borderBottom: `1px solid ${C.line}`, display: 'flex', gap: 10, flexWrap: 'wrap', background: C.card2 + '66' }}>
-              <input value={taxSearch} onChange={e => setTaxSearch(e.target.value)} placeholder="Search product…"
-                style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-              <select value={taxCatFilter} onChange={e => setTaxCat(e.target.value)} style={inputStyle}>
-                {taxCats.map(c => <option key={c} value={c}>{c === 'ALL' ? 'All Categories' : c}</option>)}
-              </select>
-              <select value={taxRateFilter} onChange={e => setTaxRate(e.target.value)} style={inputStyle}>
-                {uniqueRates.map(r => <option key={r} value={r}>{r === 'ALL' ? 'All Tax Rates' : `${r}%`}</option>)}
-              </select>
-              {(taxSearch || taxCatFilter !== 'ALL' || taxRateFilter !== 'ALL') && (
-                <button onClick={() => { setTaxSearch(''); setTaxCat('ALL'); setTaxRate('ALL'); }}
-                  style={{ ...inputStyle, padding: '0 12px', cursor: 'pointer', color: C.sub, background: 'rgba(255,255,255,.06)' }}>Clear</button>
-              )}
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    <TH>Product</TH>
-                    <TH>Category</TH>
-                    <TH right>Tax Rate</TH>
-                    <TH right>Units Sold</TH>
-                    <TH right>Gross Revenue</TH>
-                    <TH right>Tax Amount</TH>
-                    <TH right>Net Revenue</TH>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: C.mute }}>No products match filters</td></tr>
-                  )}
-                  {filtered.map((p, i) => (
-                    <tr key={p._id} style={{ borderBottom: `1px solid ${C.line}22`, background: i % 2 === 0 ? 'transparent' : C.card2 + '44' }}>
-                      <td style={{ padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {p.images?.[0]
-                            ? <img src={p.images[0]} alt="" style={{ width: 30, height: 30, objectFit: 'contain', borderRadius: 5, border: `1px solid ${C.line}`, flexShrink: 0 }} />
-                            : <div style={{ width: 30, height: 30, borderRadius: 5, background: C.card2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>📦</div>
-                          }
-                          <span style={{ fontWeight: 600, color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '10px 12px', color: C.mute }}>{p.category?.name || '—'}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        {p.taxRate > 0
-                          ? <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: C.purple + '22', color: C.purple }}>{p.taxLabel || `${p.taxRate}%`}</span>
-                          : <span style={{ fontSize: 11, color: C.mute }}>No Tax</span>
-                        }
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: C.green, fontWeight: 700 }}>{fmt(p.sold)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtRs(p.grossRev)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: C.purple, whiteSpace: 'nowrap' }}>{fmtRs(p.taxAmt)}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: C.green, whiteSpace: 'nowrap' }}>{fmtRs(p.netRev)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Payment Method Breakdown ── */}
       <div>

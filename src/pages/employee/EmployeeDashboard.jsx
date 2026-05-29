@@ -12,6 +12,7 @@ import { getErrorMessage } from '../../api/client';
 import { settingsApi } from '../../api/settings';
 import { couponsApi } from '../../api/coupons';
 import { productsApi } from '../../api/products';
+import { attributesApi } from '../../api/catalog';
 import { useCatalog } from '../../context/CatalogContext';
 import AdminCatalogTab from '../admin/AdminCatalogTab';
 import AdminBannersTab from '../admin/AdminBannersTab';
@@ -867,7 +868,7 @@ function OrdersTab({ onViewReturns }) {
                         </div>
                       </div>
 
-                      {/* Price Breakdown — itemized totals + coupon + tax + delivery */}
+                      {/* Price Breakdown — itemized totals + coupon + delivery */}
                       <div style={{ marginBottom:14, border:`1px solid ${C.line}`, borderRadius:8, padding:'12px 14px', background:C.bg }}>
                         <div style={{ fontSize:11, fontWeight:700, color:C.mute, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:10 }}>Price Breakdown</div>
                         <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:12 }}>
@@ -875,12 +876,6 @@ function OrdersTab({ onViewReturns }) {
                             <span>Items subtotal</span>
                             <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.itemsPrice ?? 0)}</span>
                           </div>
-                          {(o.taxPrice ?? 0) > 0 && (
-                            <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
-                              <span>Tax {o.taxLabel ? `(${o.taxLabel})` : ''}</span>
-                              <span style={{ color:C.text, fontWeight:600 }}>{fmtRs(o.taxPrice)}</span>
-                            </div>
-                          )}
                           <div style={{ display:'flex', justifyContent:'space-between', color:C.sub }}>
                             <span>Delivery charge</span>
                             <span style={{ color: o.shippingPrice === 0 ? C.green : C.text, fontWeight:600 }}>
@@ -982,7 +977,7 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
     ? (typeof initial.employee === 'object' ? initial.employee?._id : initial.employee) || ''
     : '';
 
-  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'VAT',taxRate:0,employee:initEmployeeId };
+  const empty = { title:'',description:'',shortDescription:'',brand:'',sku:'',tags:'',price:'',discountPrice:'',stock:'',category:'',isFeatured:false,isPublished:true,returnable:true,returnWindow:7,taxLabel:'No Tax',taxRate:0,employee:initEmployeeId };
 
   // Derive initial parentCat from the initial category's parent field
   const initCatId = initial ? (typeof initial.category==='object' ? initial.category?._id : initial.category)||'' : '';
@@ -1002,7 +997,7 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
     category: initCatId, sku: initial.sku||'', tags: Array.isArray(initial.tags) ? initial.tags.join(', ') : (initial.tags||''),
     isFeatured: initial.isFeatured||false, isPublished: initial.isPublished!==false,
     returnable: initial.returnable !== false, returnWindow: initial.returnWindow || 7,
-    taxLabel: initial.taxLabel || 'VAT', taxRate: initial.taxRate ?? 0,
+    taxLabel: 'No Tax', taxRate: 0,
     employee: initEmployeeId,
   } : empty;
 
@@ -1028,6 +1023,18 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
   const [error,  setError]  = useState('');
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
+  /* ── category attributes (defined per sub-category in Catalog → Attributes) ── */
+  const [allAttrs, setAllAttrs] = useState([]);
+  const [attrVals, setAttrVals] = useState({});      // { [attributeName]: selectedOption }
+  const attrReconciled = useRef(false);
+  useEffect(() => {
+    attributesApi.getAll()
+      .then(r => setAllAttrs(r.data?.data?.attributes || []))
+      .catch(() => {});
+  }, []);
+  // Attributes whose sub-category matches the product's selected sub-category.
+  const subAttrs = allAttrs.filter(a => (a.subcategory?._id || a.subcategory) === form.category);
+
   const initSpecs = () => {
     if (!initial?.specifications) return [{ key:'', value:'' }];
     const m = initial.specifications instanceof Map ? Object.fromEntries(initial.specifications) : initial.specifications;
@@ -1040,6 +1047,26 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
   const addSpec    = () => setSpecs(s => [...s, { key:'', value:'' }]);
   const removeSpec = (i) => setSpecs(s => s.filter((_,j) => j !== i));
   const setSpec    = (i, field, val) => setSpecs(s => s.map((r,j) => j===i ? {...r,[field]:val} : r));
+
+  // Edit mode: once attributes load, pull any saved spec that matches an
+  // attribute name into the attribute dropdowns and drop it from the manual
+  // spec rows so it isn't shown (or saved) twice. Runs once.
+  useEffect(() => {
+    if (attrReconciled.current || !isEditMode || !allAttrs.length) return;
+    const names = new Set(subAttrs.map(a => a.name));
+    if (!names.size) { attrReconciled.current = true; return; }
+    const picked = {};
+    setSpecs(prev => {
+      const kept = prev.filter(r => {
+        const k = r.key?.trim();
+        if (k && names.has(k)) { picked[k] = r.value; return false; }
+        return true;
+      });
+      return kept.length ? kept : [{ key:'', value:'' }];
+    });
+    setAttrVals(v => ({ ...picked, ...v }));
+    attrReconciled.current = true;
+  }, [allAttrs, isEditMode, subAttrs]);
 
   const mrp    = Number(form.price)||0;
   const sale   = Number(form.discountPrice)||0;
@@ -1104,9 +1131,15 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
       existingImgs.forEach(url => fd.append('keepImages', url));
       // new uploads
       newFiles.forEach(f => fd.append('images', f));
-      // specifications
+      // specifications — manual key/value rows, then category-attribute
+      // selections (these win on key clashes). Only attributes belonging to
+      // the currently selected sub-category are saved.
       const specObj = {};
       specs.forEach(({ key, value }) => { if (key.trim()) specObj[key.trim()] = value.trim(); });
+      const subAttrNames = new Set(subAttrs.map(a => a.name));
+      Object.entries(attrVals).forEach(([k, v]) => {
+        if (subAttrNames.has(k) && v && v.trim()) specObj[k] = v.trim();
+      });
       if (Object.keys(specObj).length) fd.append('specifications', JSON.stringify(specObj));
       await onSave(fd);
       // Clear draft only after successful save in create mode
@@ -1199,6 +1232,24 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
           <textarea rows={6} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Detailed product description..."
             style={{ ...inpStyle, height:'auto', padding:'10px 12px', resize:'vertical' }} />
         </div>
+
+        {subAttrs.length > 0 && (
+          <>
+            <SectionHead title="Category Attributes" sub="Options defined for this sub-category in Catalog → Attributes" />
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+              {subAttrs.map(a => (
+                <div key={a._id}>
+                  <label style={LS}>{a.name}{a.unit ? ` (${a.unit})` : ''}</label>
+                  <select value={attrVals[a.name] || ''} onChange={e=>setAttrVals(v=>({ ...v, [a.name]: e.target.value }))}
+                    style={{ ...inpStyle, cursor:'pointer' }}>
+                    <option value="">— Select {a.name} —</option>
+                    {(a.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <SectionHead title="Product Specifications" sub="Key-value pairs shown in the spec table on the product page" />
         {/* Bulk paste mode */}
@@ -1375,29 +1426,7 @@ export function ProductForm({ initial, onSave, onCancel, employees }) {
           </div>
         </div>
 
-        {/* Tax Settings */}
-        <div style={{ marginTop:16, padding:'14px 16px', borderRadius:10, border:`1px solid ${C.line}`, background:C.card2 }}>
-          <div style={{ fontWeight:700, fontSize:13, marginBottom:10, color:C.text }}>Tax Settings</div>
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-end' }}>
-            <div style={{ flex:'1 1 160px' }}>
-              <label style={LS}>Tax Type</label>
-              <select value={form.taxLabel} onChange={e=>{ const v=e.target.value; setForm(f=>({...f,taxLabel:v,taxRate:v==='No Tax'?0:f.taxRate})); }} style={{ ...inpStyle, cursor:'pointer' }}>
-                {['GST','IGST','VAT','No Tax'].map(v=><option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-            <div style={{ flex:'1 1 160px' }}>
-              <label style={LS}>Tax Rate (%)</label>
-              <select value={form.taxRate} onChange={e=>set('taxRate',Number(e.target.value))} style={{ ...inpStyle, cursor:'pointer' }} disabled={form.taxLabel==='No Tax'}>
-                {[0,5,12,18,28].map(r=><option key={r} value={r}>{r}%</option>)}
-              </select>
-            </div>
-            <div style={{ fontSize:12, color:C.mute, alignSelf:'center', paddingBottom:2 }}>
-              Invoice: <strong style={{color:C.text}}>{form.taxLabel==='No Tax'?'No Tax':`${form.taxLabel} (${form.taxRate}%)`}</strong>
-            </div>
-          </div>
-        </div>
-
-        {error && <div style={{ marginTop:14, color:C.red, fontSize:13, fontWeight:600, background:C.red+'14', padding:'10px 14px', borderRadius:8, border:`1px solid ${C.red}33` }}>{error}</div>}
+        {error &&<div style={{ marginTop:14, color:C.red, fontSize:13, fontWeight:600, background:C.red+'14', padding:'10px 14px', borderRadius:8, border:`1px solid ${C.red}33` }}>{error}</div>}
 
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
           <Btn variant="primary" onClick={handleSubmit} disabled={saving}>

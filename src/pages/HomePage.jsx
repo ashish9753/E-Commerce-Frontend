@@ -878,8 +878,10 @@ export default function HomePage() {
           scroll-behavior: smooth;
         }
 
+        /* Keep the original card size: 5 across filling the row. Once there are
+           more than 5 items they overflow and the row scrolls sideways. */
         .myn-brand-row .myn-star-card {
-          flex: 0 0 clamp(190px, 18vw, 220px);
+          flex: 0 0 max(240px, calc((100% - 40px) / 5));
           scroll-snap-align: start;
         }
 

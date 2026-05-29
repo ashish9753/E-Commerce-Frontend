@@ -477,7 +477,6 @@ export default function OrderTrackingPage() {
                     ['Status',   order.paymentStatus],
                     ['Items',    formatPriceShort(order.itemsPrice)],
                     ['Shipping', order.shippingPrice===0 ? 'FREE' : formatPriceShort(order.shippingPrice)],
-                    [order.taxLabel || 'Tax', formatPriceShort(order.taxPrice)],
                     ...(order.discountAmount>0 ? [['Discount', `-${formatPriceShort(order.discountAmount)}`]] : []),
                   ].map(([label, val]) => (
                     <div key={label} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'5px 0', borderBottom:'1px solid #f5f5f5' }}>

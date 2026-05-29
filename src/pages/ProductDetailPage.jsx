@@ -502,7 +502,6 @@ export default function ProductDetailPage() {
                   </span>
                 )}
               </div>
-              <div style={{ fontSize:12, color:'#555', marginTop:2 }}>Inclusive of all taxes</div>
             </div>
 
             <div style={{ height:1, background:'#e7e7e7', margin:'12px 0' }} />
@@ -619,7 +618,6 @@ export default function ProductDetailPage() {
                     <span style={{ color:'#CC0C39', marginLeft:6 }}>-{discount}%</span>
                   </div>
                 )}
-                <div style={{ fontSize:12, color:'#555', marginTop:2 }}>Inclusive of all taxes</div>
               </div>
 
               {/* Delivery */}
