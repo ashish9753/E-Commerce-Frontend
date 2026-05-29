@@ -17,8 +17,31 @@ const SORT_OPTIONS = [
 export default function ProductListPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({ brands: [], prices: [], ratings: [] });
-  const [sort, setSort] = useState('popular');
+  // Seed the brand filter from ?brand=… so clicking a brand on /brands
+  // pre-ticks the matching checkbox in the FilterBar.
+  const urlBrand = searchParams.get('brand') || '';
+  const [filters, setFilters] = useState({
+    brands: urlBrand ? [urlBrand] : [],
+    prices: [],
+    ratings: [],
+  });
+  // Sort defaults to whatever the URL says (so /products?sort=newest works
+  // from the navbar). Falls back to 'popular' when no sort is given.
+  const urlSort = searchParams.get('sort') || 'popular';
+  const [sort, setSort] = useState(urlSort);
+  // Re-sync local sort when the URL changes (e.g. user clicks another nav link
+  // while already on the products page).
+  useEffect(() => { setSort(urlSort); }, [urlSort]);
+  // Re-sync the brand checkbox when ?brand=… changes (e.g. user navigates from
+  // Sony's brand page to Samsung's). Empty URL brand clears just the brand list
+  // so other filters the user picked manually stay intact.
+  useEffect(() => {
+    setFilters((f) => {
+      const next = urlBrand ? [urlBrand] : [];
+      const same = f.brands.length === next.length && f.brands.every((b, i) => b === next[i]);
+      return same ? f : { ...f, brands: next };
+    });
+  }, [urlBrand]);
   const [showFilter, setShowFilter] = useState(false);
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -27,6 +50,7 @@ export default function ProductListPage() {
 
   const category = searchParams.get('category') || '';
   const query = searchParams.get('q') || '';
+  const onSale = searchParams.get('onSale') === 'true';
   const limit = 18;
 
   const fetchProducts = useCallback(async () => {
@@ -35,6 +59,7 @@ export default function ProductListPage() {
       const params = { page, limit, sort };
       if (category) params.category = category;
       if (query) params.search = query;
+      if (onSale) params.onSale = 'true';
       if (filters.brands.length === 1) params.brand = filters.brands[0];
 
       // Price range: pick the widest span of selected ranges
@@ -69,14 +94,20 @@ export default function ProductListPage() {
     } finally {
       setLoading(false);
     }
-  }, [category, query, sort, filters, page]);
+  }, [category, query, sort, filters, page, onSale]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [category, query, sort, filters]);
+  useEffect(() => { setPage(1); }, [category, query, sort, filters, onSale]);
 
-  const title = query ? `Search: "${query}"` : category || 'All Products';
+  const title = query
+    ? `Search: "${query}"`
+    : category
+    ? category
+    : onSale
+    ? (sort === 'price_asc' ? 'Flash Sale' : 'Events & Offers')
+    : 'All Products';
 
   return (
     <div className="wrap">

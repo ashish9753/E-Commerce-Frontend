@@ -465,12 +465,11 @@ export default function Header() {
               </button>
               <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflowX: 'auto', scrollbarWidth: 'none', gap: 2 }}>
                 {[
-                  { label: 'Brands', path: '/products?sort=brand' },
-                  { label: 'Events & Offers', path: '/products?sort=events' },
-                  { label: 'Flash Sale', path: '/products?sort=discount' },
-                  { label: 'New Arrivals', path: '/products?sort=newest' },
-                  { label: 'Top Selling', path: '/products?sort=popular' },
-                  ...navCats.slice(0, 4).map(c => ({ label: c.name, path: `/products?category=${encodeURIComponent(c.name)}` })),
+                  { label: 'Brands',          path: '/brands' },
+                  { label: 'Events & Offers', path: '/events' },
+                  { label: 'Flash Sale',      path: '/products?onSale=true&sort=price_asc' },
+                  { label: 'New Arrivals',    path: '/products?sort=newest' },
+                  { label: 'Top Selling',     path: '/products?sort=popular' },
                 ].map(item => (
                   <button key={item.label} onClick={() => navigate(item.path)}
                     style={{ background: 'none', border: 'none', color: '#d1d5db', fontSize: 13, fontWeight: 500,
@@ -672,12 +671,13 @@ export default function Header() {
           <div className="te-drawer-body">
             <div className="te-drawer-sectionlabel">Shop</div>
             {[
-              { label: 'Home',         icon: HomeIcon,     path: '/',                       color: '#22d3ee' },
-              { label: 'All Products', icon: ShoppingCart, path: '/products',               color: '#c4b5fd' },
-              { label: 'Flash Sale',   icon: Zap,          path: '/products?sort=discount', color: '#fb923c' },
-              { label: 'New Arrivals', icon: Sparkles,     path: '/products?sort=newest',   color: '#60a5fa' },
-              { label: 'Top Selling',  icon: Flame,        path: '/products?sort=popular',  color: '#f97316' },
-              { label: 'Brands',       icon: Tags,         path: '/products?sort=brand',    color: '#fbbf24' },
+              { label: 'Home',            icon: HomeIcon,     path: '/',                                       color: '#22d3ee' },
+              { label: 'All Products',    icon: ShoppingCart, path: '/products',                               color: '#c4b5fd' },
+              { label: 'Brands',          icon: Tags,         path: '/brands',                                 color: '#fbbf24' },
+              { label: 'Events & Offers', icon: Sparkles,     path: '/events',                                 color: '#a78bfa' },
+              { label: 'Flash Sale',      icon: Zap,          path: '/products?onSale=true&sort=price_asc',    color: '#fb923c' },
+              { label: 'New Arrivals',    icon: Sparkles,     path: '/products?sort=newest',                   color: '#60a5fa' },
+              { label: 'Top Selling',     icon: Flame,        path: '/products?sort=popular',                  color: '#f97316' },
             ].map(item => {
               const Icon = item.icon;
               return (

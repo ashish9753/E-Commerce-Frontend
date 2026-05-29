@@ -1312,7 +1312,7 @@ function EmployeesTab({ globalSearch = '' }) {
           <div style={{ ...MB, maxWidth:400 }}>
             {MH('Remove Employee', ()=>setConfirmDel(null))}
             <div style={MP}>
-              <p style={{ color:C.sub, fontSize:14, margin:'0 0 18px' }}>Remove <strong>{confirmDel.user?.name}</strong>? Their account reverts to a regular customer and all salary records will be deleted.</p>
+              <p style={{ color:C.sub, fontSize:14, margin:'0 0 18px' }}>Archive <strong>{confirmDel.user?.name}</strong>? Their account reverts to a regular customer and they lose employee access. Their products, orders and salary history are preserved so you can still review them.</p>
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                 <Btn onClick={()=>setConfirmDel(null)}>Cancel</Btn>
                 <Btn variant="danger" onClick={handleDelete} disabled={busy===confirmDel._id}>{busy===confirmDel._id?'Removing…':'Remove'}</Btn>

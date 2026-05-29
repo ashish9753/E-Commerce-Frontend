@@ -27,27 +27,31 @@ import { useCatalog } from '../context/CatalogContext';
 import { cached } from '../utils/apiCache';
 import { normalizeProducts } from '../utils/normalizers';
 
+/* Fallback hero slides used until admin uploads real banners. Kept
+   intentionally clean — no discount pill, no dark photo overlay — so the
+   default storefront still feels polished without making promises the shop
+   hasn't actually staged yet. */
 const heroSlides = [
   {
     image: '/Banner1.png',
-    brand: 'Tech Carnival',
     title: 'Smartphones & audio essentials',
-    offer: 'Min. 40% Off',
-    path: '/products?category=Electronics',
+    subtitle: 'Curated picks for everyday tech',
+    cta:   'Shop now',
+    path:  '/products?category=Electronics',
   },
   {
     image: '/Banner2.png',
-    brand: 'Home Upgrade Fest',
     title: 'Appliances for every room',
-    offer: 'Min. 35% Off',
-    path: '/products',
+    subtitle: 'Upgrade your home, one room at a time',
+    cta:   'Browse appliances',
+    path:  '/products',
   },
   {
     image: '/Banner3.png',
-    brand: 'New Season Tech',
     title: 'Premium gadgets, better prices',
-    offer: 'No Cost EMI',
-    path: '/products?sort=popular',
+    subtitle: 'Discover what people are loving right now',
+    cta:   'See top picks',
+    path:  '/products?sort=popular',
   },
 ];
 
@@ -253,7 +257,10 @@ function HeroMyntraStyle({ banners = [] }) {
   const [index, setIndex] = useState(0);
   const navigate = useNavigate();
 
-  // Use admin-managed banners when present, else fall back to the bundled slides
+  // Use admin-managed banners when present, else fall back to the bundled
+  // slides. Fallback slides set `clean: true` so the JSX skips the dark
+  // photo overlay and offer pill — that decoration is for promotional
+  // admin-set banners, not the always-on default.
   const slides = banners.length > 0
     ? banners.map((b) => ({
         _id:        b._id,
@@ -271,20 +278,22 @@ function HeroMyntraStyle({ banners = [] }) {
         path:       b.product?._id
                       ? `/product/${b.product._id}`
                       : (b.link || '/products'),
+        clean:      false,
       }))
     : heroSlides.map((s) => ({
         image:        s.image,
         title:        s.title,
-        subtitle:     s.brand,
-        overlay:      s.offer,
-        cta:          'Explore',
-        textColor:    '#ffffff',
+        subtitle:     s.subtitle,
+        overlay:      '',                // no promo pill on defaults
+        cta:          s.cta || 'Shop now',
+        textColor:    '#0f172a',         // dark text on the (clean) photo
         textPosition: 'left',
         fontFamily:   'Syne',
         fontSize:     48,
         fontWeight:   '800',
         fontStyle:    'normal',
         path:         s.path,
+        clean:        true,
       }));
 
   const current = slides[index % slides.length];
@@ -309,7 +318,7 @@ function HeroMyntraStyle({ banners = [] }) {
               : 'flex-start';
 
   return (
-    <section className="myn-hero myn-hero-banner">
+    <section className={`myn-hero myn-hero-banner${current.clean ? ' myn-hero-clean' : ''}`}>
       <button className="myn-hero-arrow left" onClick={() => move(-1)} aria-label="Previous banner">
         <ArrowLeft size={22} />
       </button>
@@ -685,6 +694,20 @@ export default function HomePage() {
         }
         .myn-hero-banner .myn-hero-overlay[style*="flex-end"] .myn-hero-cta { align-self: flex-end; }
         .myn-hero-banner .myn-hero-overlay[style*="center"] .myn-hero-cta   { align-self: center; }
+
+        /* ── Clean default banner ──
+           When the storefront falls back to bundled slides (no admin banners
+           uploaded yet) we drop the dark photo gradient + text shadow so the
+           product photography reads as professional product imagery, not a
+           promo poster. Title gets a wider cap so a phrase like
+           "Smartphones & audio essentials" doesn't break mid-line. */
+        .myn-hero-clean .myn-hero-bgmedia::after { display: none; }
+        .myn-hero-clean .myn-hero-overlay        { text-shadow: none; gap: 10px; }
+        /* Cap the title to the left "safe zone" of the photo so it wraps
+           naturally instead of running into the product imagery on the right. */
+        .myn-hero-clean .myn-hero-overlay h1     { max-width: min(440px, 42%); letter-spacing: -0.01em; font-size: clamp(24px, 3.2vw, 44px); line-height: 1.08; }
+        .myn-hero-clean .myn-hero-overlay p      { max-width: min(380px, 38%); opacity: .78; }
+        .myn-hero-clean .myn-hero-cta            { box-shadow: 0 4px 12px rgba(249,115,22,.18); }
 
         .myn-hero-media {
           min-width: 0;

@@ -22,12 +22,16 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import EmployeeDashboard from './pages/employee/EmployeeDashboard';
 import NotificationsPage from './pages/NotificationsPage';
 import SupportPage from './pages/SupportPage';
+import BrandsPage from './pages/BrandsPage';
+import EventsPage from './pages/EventsPage';
 
 const SITE = 'Trade Engine';
 
 const PAGE_TITLES = {
   '/':                'Home',
   '/products':        'Products',
+  '/brands':          'Brands',
+  '/events':          'Events & Offers',
   '/compare':         'Compare Products',
   '/cart':            'Cart',
   '/checkout':        'Checkout',
@@ -139,6 +143,8 @@ export default function App() {
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         <Route path="/products" element={<Layout><ProductListPage /></Layout>} />
         <Route path="/product/:id" element={<Layout><ProductDetailPage /></Layout>} />
+        <Route path="/brands" element={<Layout><BrandsPage /></Layout>} />
+        <Route path="/events" element={<Layout><EventsPage /></Layout>} />
         <Route path="/compare" element={<Layout><ComparePage /></Layout>} />
 
         {/* Auth-optional pages */}
