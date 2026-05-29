@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://e-commerce-backend-meb1.onrender.com',
+        target: 'http://82.29.164.26',
         changeOrigin: true,
       },
     },

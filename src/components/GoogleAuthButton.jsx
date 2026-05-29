@@ -13,18 +13,10 @@ import { useToast } from '../context/ToastContext';
  *                       to /register (LoginPage path — Google is the only way
  *                       to create a new account, so we send them there).
  */
-// Map Google's button-text enum to the human label shown in our overlay.
-const LABEL_BY_TEXT = {
-  continue_with: 'Continue with Google',
-  signin_with:   'Sign in with Google',
-  signup_with:   'Sign up with Google',
-};
-
 export default function GoogleAuthButton({ text = 'continue_with', onNeedsRegistration }) {
   const navigate = useNavigate();
   const { googleLogin } = useAuth();
   const toast = useToast();
-  const overlayLabel = LABEL_BY_TEXT[text] || 'Continue with Google';
 
   const handleSuccess = async (credentialResponse) => {
     const idToken = credentialResponse?.credential;
@@ -62,17 +54,12 @@ export default function GoogleAuthButton({ text = 'continue_with', onNeedsRegist
     <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
       <div className="gauth-rainbow-wrap">
         <div className="gauth-rainbow-inner">
-          {/* Shimmer sweep — a faint coloured highlight slides across the
-              white interior so the button feels alive even though Google's
-              iframe text can't be animated directly. pointer-events: none
-              so it never blocks the underlying click. */}
+          {/* Subtle shimmer sweep behind the iframe. Google's widget itself
+              renders the label (standard "Sign in with Google" or the
+              personalised "Sign in as <name>" prompt when the user is
+              already logged into Google in this browser) — we don't overlay
+              our own text so it never fights with Google's content. */}
           <span className="gauth-shimmer" aria-hidden="true" />
-          {/* Our own animated label overlaid on the iframe. Google's widget
-              sometimes renders only the G icon at this width — this overlay
-              guarantees a visible label and lets us animate its colour
-              through the Google brand palette. pointer-events: none so the
-              click still reaches the iframe underneath. */}
-          <span className="gauth-label" aria-hidden="true">{overlayLabel}</span>
           <GoogleLogin
             onSuccess={handleSuccess}
             onError={() => toast('Google sign-in was cancelled', 'error')}
@@ -158,54 +145,10 @@ export default function GoogleAuthButton({ text = 'continue_with', onNeedsRegist
           z-index: 2;
           animation: gauth-shimmer-sweep 3.2s ease-in-out infinite;
         }
-        /* Animated label — sits over the empty area to the right of the G
-           icon. The gradient slides through Google's brand colours so the
-           text reads as moving. */
-        @keyframes gauth-label-shift {
-          0%   { background-position:   0% 50%; }
-          50%  { background-position: 100% 50%; }
-          100% { background-position:   0% 50%; }
-        }
-        .gauth-label {
-          position: absolute;
-          left: 56px;     /* clear the G icon */
-          right: 16px;
-          top: 0;
-          bottom: 0;
-          z-index: 3;
-          pointer-events: none;
-          /* Use flex centering so descenders ("g", "p", "y") have room
-             inside the line box instead of being clipped by the parent's
-             overflow: hidden border-radius mask. */
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
-          font-weight: 600;
-          font-size: 14px;
-          letter-spacing: .2px;
-          line-height: 1.4;
-          white-space: nowrap;
-          background: linear-gradient(
-            90deg,
-            #4285F4 0%,
-            #EA4335 25%,
-            #FBBC05 50%,
-            #34A853 75%,
-            #4285F4 100%
-          );
-          background-size: 200% 100%;
-          -webkit-background-clip: text;
-                  background-clip: text;
-          -webkit-text-fill-color: transparent;
-                  color: transparent;
-          animation: gauth-label-shift 4s linear infinite;
-        }
         /* Honour reduced-motion preference — freeze every animation */
         @media (prefers-reduced-motion: reduce) {
           .gauth-rainbow-wrap::before { animation: none; }
           .gauth-shimmer { animation: none; opacity: 0; }
-          .gauth-label   { animation: none; }
         }
       `}</style>
     </div>
