@@ -82,6 +82,8 @@ function getDiscountLabel(product, fallback = 'Min. 40% Off') {
   return fallback;
 }
 
+const fmtPrice = (n) => `Rs. ${Number(n || 0).toLocaleString('en-IN')}`;
+
 function SectionTitle({ children }) {
   return <h2 className="myn-section-title">{children}</h2>;
 }
@@ -395,6 +397,12 @@ function RisingStars({ products }) {
             <div className="myn-star-offer">
               <span>{product.brand || product.category || 'Featured Pick'}</span>
               <p>{product.name}</p>
+              {product.price > 0 && (
+                <div className="myn-star-price">
+                  {fmtPrice(product.price)}
+                  {product.was > product.price && <s>{fmtPrice(product.was)}</s>}
+                </div>
+              )}
               <strong>{getDiscountLabel(product)}</strong>
             </div>
           </button>
@@ -971,6 +979,23 @@ export default function HomePage() {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+        }
+
+        .myn-star-price {
+          margin: 2px 0 6px;
+          display: flex;
+          gap: 8px;
+          align-items: baseline;
+          justify-content: center;
+          font-size: 18px;
+          font-weight: 800;
+          color: #13161f;
+        }
+
+        .myn-star-price s {
+          font-size: 13px;
+          font-weight: 600;
+          color: #98a1ad;
         }
 
         .myn-star-offer strong,
